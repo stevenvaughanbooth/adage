@@ -4,14 +4,14 @@ expression: text
 ---
  adage watch  harbor-dispatch                          LIVE
 ─ now ──────────────────────────────────────────────────────
- 12:04:02 a11c cc  tools    → ◠ PRIME   That result lists t…
-                            ✓ bin/fetch-incident INC-2045
- 12:04:03 0b0b cc  tools    · 1 call, nothing to say
- 12:04:04 0b0b cc  failure  → ◠ INHIBIT   npm run check
- 12:04:05 0b0b cc  tools    ✗ lookup-incident
- 12:04:06 c4a1 cc  tools    ○ found bin/fetch-incident INC-…
- 12:04:07 0b0b cc  stop     ■ finish line: asked the agent …
- 12:04:08 a11c cc  tools    ✓ finish line met: codegen-afte…
+
+ ┄ Claude Code · 0b0b ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+ 12:04:03 0b0b ▪ tools    · 1 call, nothing to say
+ 12:04:04 0b0b ✗ failure  adage → ◠ INHIBIT   npm run check
+ 12:04:05 0b0b ▪ tools    ✗ lookup-incident
+ 12:04:06 c4a1 ▪ tools    ○ found bin/fetch-incident INC-20…
+ 12:04:07 0b0b □ stop     adage ■ finish line: asked the ag…
+ 12:04:08 a11c ▪ tools    ✓ finish line met: codegen-after-…
 ─ conditioning ─────────────────────────────────────────────
    ◠ lookup-incident           prime → fire       24/25 · l…
    ◠ dead-end-npm-test         new · inhibit      6/7
@@ -21,4 +21,4 @@ expression: text
  + hooks claude    + 4 reflexes    + auto-condition
  ! no model · adage models fetch
 ────────────────────────────────────────────────────────────
- : palette · p pause · f scope · / filter            q quit
+  :  palette   p  pause   f  scope   /  filter      q  quit

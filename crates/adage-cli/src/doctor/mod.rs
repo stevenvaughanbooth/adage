@@ -1252,29 +1252,36 @@ pub fn rewrites_check(paths: &Paths) -> Check {
 }
 
 /// Whether each registered harness's hooks have reached Adage in this repository: the receipt the
-/// hook writes on delivery (`adage_hook::receipt`). Registration alone does not prove it.
+/// hook writes on delivery (`adage_hook::receipt`). Registration alone does not prove it. Once one
+/// harness has delivered here, another that has not is a problem only if the person used it here
+/// since its hooks were registered ([`used_here_since`]); a harness they do not use here is not.
 fn hook_delivery_checks(paths: &Paths, root: Option<&Path>) -> Vec<Check> {
     let Some(root) = root else { return Vec::new() };
     let registered = detect::registrations(Some(root));
+    let harnesses = ["claude-code", "codex", "opencode"];
+    let any_delivered = harnesses.iter().any(|h| adage_hook::receipt::read(paths, root, h).is_some());
     let mut checks = Vec::new();
-    for harness in ["claude-code", "codex", "opencode"] {
-        if !registered.iter().any(|r| r.harness == harness) {
-            continue;
-        }
+    for harness in harnesses {
+        let Some(registration) = registered.iter().find(|r| r.harness == harness) else { continue };
         let name = format!("hook activity: {harness}");
         match adage_hook::receipt::read(paths, root, harness) {
             Some(receipt) => checks.push(pass(
                 &name,
                 format!(
-                    "Hook delivery observed here: last received {} (refreshed about once per minute); first received {} UTC. Registration and receipt do not prove a reflex fired.",
+                    "{} sends its hooks here: last received {} (refreshed about once per minute); first received {} UTC. Registration and receipt do not prove a reflex fired.",
+                    harness_name(harness),
                     ago(crate::learnlog::now_ms(), receipt.last_seen()),
                     review::civil_date((receipt.first_seen_ms / 86_400_000) as i64)
                 ),
             )),
+            None if any_delivered && !used_here_since(harness, root, modified_ms(&registration.location)) => {
+                checks.push(pass(&name, format!("{} is set up but not used in this repository yet; Adage starts when you use it here.", harness_name(harness))))
+            }
             // Only the person can make a hook fire: no adage command delivers one.
             None => checks.push(warn(
                 &name,
-                "Registered; no hook has been observed in this repository yet.",
+                // Plain words first: what is true, then (in the fix) what only the person can do.
+                format!("{} is set up but hasn't sent anything from this repository yet.", harness_name(harness)),
                 Fix::manual(if harness == "codex" {
                     "Open Codex in this repository, use /hooks to review and accept Adage's hooks, then send a prompt. This acceptance happens inside Codex; Adage cannot do it for you."
                 } else {
@@ -1284,6 +1291,43 @@ fn hook_delivery_checks(paths: &Paths, root: Option<&Path>) -> Vec<Check> {
         }
     }
     checks
+}
+
+/// Whether the person ran `harness` in this repository (any checkout of it) after `since_ms`: a
+/// session it recorded here, newer than the registration. Codex rollouts and Claude Code
+/// transcripts are read for their recorded working directory (only those written since); OpenCode
+/// keeps no per-session history Adage can read without an export, so it is never counted as used.
+fn used_here_since(harness: &str, root: &Path, since_ms: u64) -> bool {
+    use adage_learn::scope;
+    let roots = scope::checkouts(root);
+    let since = |p: &PathBuf| modified_ms(p) > since_ms;
+    match harness {
+        "codex" => detect::codex_dir().is_some_and(|d| {
+            let (files, _) = adage_learn::codex::discover(&d.join("sessions"));
+            !scope::recorded_inside(files.into_iter().filter(since).collect(), &roots).is_empty()
+        }),
+        "claude-code" => detect::claude_dir()
+            .is_some_and(|d| scope::claude_transcripts(&d.join("projects"), &roots).iter().any(since)),
+        _ => false,
+    }
+}
+
+fn harness_name(harness: &str) -> &str {
+    match harness {
+        "claude-code" => "Claude Code",
+        "codex" => "Codex",
+        "opencode" => "OpenCode",
+        other => other,
+    }
+}
+
+/// When a file was last written, in milliseconds since the Unix epoch (0 if unknown).
+fn modified_ms(p: &Path) -> u64 {
+    std::fs::metadata(p)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis() as u64)
 }
 
 /// Every check, in display order, for the repository at `repo_root` (if any). `adage watch` and

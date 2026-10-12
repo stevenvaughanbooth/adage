@@ -2,38 +2,38 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
- adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings   6 Home                                                   harbor-dispatch · LIVE
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- config  /home/me/.local/share/adage/config.toml
- the same settings as adage config; environment variables win over the file
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home                                                   harbor-dispatch · LIVE
+────────────────────────────────────────────────────────━━━━━━━━━━━━──────────────────────────────────────────────────────────────────────────────────
+ 24 settings · 1 changed · same as adage config · /home/me/.local/share/adage/config.toml
 
-▌learn.auto               false    (file)
-   condition automatically, in the background, when an agent session stops or ends
- learn.min_interval_secs  120      (default)
-   at most one automatic conditioning run per repository in this many seconds (0 to 86400)
- learn.thresholds         default  (default)
-   evidence bars for `adage condition` and automatic conditioning: default, or demo (lower)
- learn.claude_projects    ""       (default)
-   Claude Code traces to condition on ("" = ~/.claude/projects)
- learn.codex_sessions     auto     (default)
-   Codex rollouts to condition on: auto (once Codex hooks are registered), a directory, or "" (none)
- learn.opencode_exports   ""       (default)
-   a directory of `opencode export` files automatic conditioning reads ("" = none)
- learn.repos              all      (default)
-   repositories to condition on, comma-separated keys as `adage init` lists them, or all
- learn.parse_cache        true     (default)
-   keep parsed traces in cache/sessions so conditioning again parses only what changed
- learn.cards              true     (default)
-   learn procedure cards for families of similar tasks (with the installed or bundled model)
- learn.card_threshold     0.811    (default)
-   how similar a prompt must be to a family's prompts for its procedure card (0.5 to 0.99)
- instincts.enabled        true     (default)
-   bind Adage's built-in defaults (instincts) from each repository's declared files
- instincts.packs          auto     (default)
-   instinct packs to bind, comma-separated: auto (every installed instinct pack) or names, e.g. adage/python-env
- instincts.disabled       ""       (default)
-   instinct packs or ids never to bind, comma-separated, e.g. adage/lockfiles,U3 (see docs/instincts.md)
- ui.notices               daily    (default)
-   one-line notices at session start (Claude Code): daily, only when something is new; or off
+  Learning  7 · 1 changed                                     ─ Learn automatically · learn.auto ─────────────────────────────────────────────────────
+▌   Learn automatically      ○ off  • changed                  Learn from each agent session in the background, when the session stops or ends.
+    Pause between runs       2 min
+    Evidence needed          standard                          accepts  on or off
+    Repositories             all repositories                  default  ● on
+    Reuse parsed sessions    ● on                              now      set in config.toml
+    Procedure cards          ● on
+    Card match strictness    0.811                             enter    turns it on (asks first)
+                                                               same as  adage config set learn.auto true
+  History sources  3
+    Claude Code history      default (~/.claude/projects)
+    Codex history            auto, once Codex hooks are on
+    OpenCode exports         none
+
+  Instincts & packs  3
+    Built-in instincts       ● on
+    Instinct packs           auto, every installed pack
+    Always leave out         none
+
+  In Claude Code  4
+    Session-start notice     daily
+    Spinner note             ○ off
+    Turn summary             ○ off
+    Habit hints              ○ off
+
+  In adage ui  1
+    Start screen             ● on
+
+  Advanced  6
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- ? keys · : palette · enter edit · space toggle                                                                                                q quit
+  ?  keys   :  palette   enter  edit   space  toggle                                                                                          q  quit

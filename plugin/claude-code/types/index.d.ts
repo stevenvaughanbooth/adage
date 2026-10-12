@@ -15,6 +15,8 @@ export type AdageFired = {
   prompt?: number
   /** For `UserPromptSubmit`: the prompt as typed, so a line is never drawn under another prompt. */
   promptText?: string
+  /** For `PostToolBatch` and `PostToolUseFailure`: the tool calls it followed, to draw its line under them. */
+  ids?: string[]
 }
 
 /** One step Adage predicted in place of a model request (the `adage_` tool_use ids). */
@@ -129,6 +131,9 @@ export type AdageReflex = {
   signer: string
   trigger: string
   step: string
+  /** The trigger's and the step's kinds (`after_edit`, `prompt`, …; `run`, `advise`, …): the flow's box titles. */
+  triggerKind: string
+  stepKind: string
   support: number
   opportunities: number
   lowerBound: number | null
@@ -191,7 +196,9 @@ export type AdageUpdate = {
 
 /** What the person did in the pane. */
 export type AdageView = {
-  tab: 'live' | 'reflexes' | 'health'
+  tab: 'graph' | 'live' | 'reflexes' | 'health'
+  /** The Graph tab shows the whole session (the person scrolls) instead of following the newest node. */
+  history: boolean
   filter: string
   /** The Live row inspected (its `seq`), kept selected after the inspect pane closes. */
   selected: number | null
@@ -295,6 +302,25 @@ export type AdageSkill = {
 /** A candidate as `status --json` words it (plan D1): what it would tell the agent, never its id. */
 export type AdageCandidate = { id: string; say: string; sequence: boolean }
 
+/**
+ * One node of this session's graph (the pane's Graph tab, ux-design §6.0), as the command hooks saw
+ * it, in the order they saw it (dag.ts keeps them, capped): each `at` is the mod's clock when kept.
+ */
+export type AdageNode =
+  /** A prompt the person submitted: a turn's root (`n`: its place among this session's prompts). */
+  | { kind: 'prompt'; at: number; n: number; text: string }
+  /**
+   * A tool batch on the main loop: one tool name per call in order, their ids, a word on a lone call
+   * (its command, file or pattern), and when the hooks beneath began (`from`) and ended (`at`).
+   */
+  | { kind: 'tools'; at: number; from: number; tools: string[]; ids: string[]; detail: string }
+  /** A call that failed (`PostToolUseFailure`): the batch it belongs to arrives after it and counts it. */
+  | { kind: 'failed'; at: number; id: string }
+  /** A reflex a command hook delivered (`AdageFired`'s tag), at its event, after the calls `ids`. */
+  | { kind: 'reflex'; at: number; event: string; route: string; track: string; strength: string; ids: string[] }
+  /** The agent stopped: the turn's end, or the finish line asking it to continue once (`gate`). */
+  | { kind: 'stop'; at: number; gate: boolean }
+
 declare module 'claude-code' {
   interface PluginState {
     adage: {
@@ -320,6 +346,7 @@ declare module 'claude-code' {
       allow: AdageAllow | null
       skills: AdageSkill[]
       candidates: AdageCandidate[]
+      dag: AdageNode[]
     }
   }
 }

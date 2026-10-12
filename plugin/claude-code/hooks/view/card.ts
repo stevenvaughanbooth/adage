@@ -63,7 +63,7 @@ export function cardText(card: Card, only?: readonly string[]): string {
   }
   if (only === undefined) {
     card.next.forEach((n, k) => lines.push(`${(k === 0 ? 'next' : '').padEnd(KEY_WIDTH)}${n.command} · ${n.why}`))
-    lines.push(`${''.padEnd(KEY_WIDTH)}/adage watch · reflexes · health · why · map · pause · off · on`)
+    lines.push(`${''.padEnd(KEY_WIDTH)}/adage graph · watch · reflexes · health · why · map · pause · off · on`)
   }
   return lines.join('\n')
 }

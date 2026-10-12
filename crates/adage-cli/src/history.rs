@@ -52,23 +52,90 @@ pub fn remembered(paths: &adage_store::Paths, root: &Path) -> Vec<PathBuf> {
     adage_learn::scope::recorded_inside(files, &adage_learn::scope::checkouts(root))
 }
 
-pub fn summary(paths: &adage_store::Paths, root: Option<&Path>) -> Vec<String> {
-    let cfg = adage_store::config::load(paths).config;
-    let describe = |name: &str, path: Option<PathBuf>, absent: &str| match path {
-        Some(p) => {
-            format!("{name}: {}{}", crate::detect::tilde(&p), if p.is_dir() { "" } else { " (folder not found)" })
+/// One history source, as the conditioning preview names it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Source {
+    pub name: &'static str,
+    /// The folder, with `~` for the home folder; `None` when none is set or detected.
+    pub path: Option<String>,
+    /// The folder exists.
+    pub found: bool,
+    /// What to do when there is no folder.
+    pub hint: &'static str,
+}
+
+impl Source {
+    /// `Claude Code: ~/.claude/projects`, as `adage ui`'s History sources lists it.
+    pub fn line(&self) -> String {
+        match &self.path {
+            Some(p) => format!("{}: {p}{}", self.name, if self.found { "" } else { " (folder not found)" }),
+            None => format!("{}: {}", self.name, self.hint),
         }
-        None => format!("{name}: {absent}"),
+    }
+}
+
+/// The history sources conditioning reads for `root`'s repository.
+pub fn sources(paths: &adage_store::Paths, root: Option<&Path>) -> Vec<Source> {
+    let cfg = adage_store::config::load(paths).config;
+    let source = |name: &'static str, path: Option<PathBuf>, hint: &'static str| Source {
+        name,
+        found: path.as_ref().is_some_and(|p| p.is_dir()),
+        path: path.map(|p| crate::detect::tilde(&p)),
+        hint,
     };
     vec![
-        describe("Claude Code", claude_projects(&cfg), "no history folder detected"),
-        describe("Codex", codex_sessions(&cfg, root), "connect hooks or choose a history folder"),
-        describe("OpenCode", cfg.learn_opencode_exports, "import local history or choose an exports folder"),
-        "Only history recorded in this repository's checkouts is used. History commands are never executed.".into(),
+        source("Claude Code", claude_projects(&cfg), "no history folder detected"),
+        source("Codex", codex_sessions(&cfg, root), "connect hooks or choose a history folder"),
+        source("OpenCode", cfg.learn_opencode_exports, "import local history or choose an exports folder"),
     ]
 }
 
-pub fn preview(paths: &adage_store::Paths, root: &Path) -> anyhow::Result<Vec<String>> {
+/// What only reading history ever does, said wherever sources are listed.
+pub const LOCAL_ONLY: &str =
+    "Only history recorded in this repository's checkouts is used. History commands are never executed.";
+
+pub fn summary(paths: &adage_store::Paths, root: Option<&Path>) -> Vec<String> {
+    let mut lines: Vec<String> = sources(paths, root).iter().map(Source::line).collect();
+    lines.push(LOCAL_ONLY.into());
+    lines
+}
+
+/// What conditioning would read for a repository, counted before anything is learned.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Preview {
+    pub sources: Vec<Source>,
+    /// Trace files found in the sources for this repository.
+    pub files: usize,
+    /// Traces conditioning can learn from.
+    pub usable: usize,
+    /// Traces that received Adage's directives: what those named is not their evidence.
+    pub steered: usize,
+    /// Files with no session in them, or that could not be read.
+    pub unreadable: usize,
+    /// Nothing to learn from yet: conditioning binds instincts from the repository's files.
+    pub instincts_only: bool,
+}
+
+impl Preview {
+    /// The preview as lines of text.
+    pub fn lines(&self) -> Vec<String> {
+        let mut lines: Vec<String> = self.sources.iter().map(Source::line).collect();
+        lines.push(LOCAL_ONLY.into());
+        lines.push(format!(
+            "{} files found: {} unsteered sessions, {} already steered, {} empty or unreadable.",
+            self.files, self.usable, self.steered, self.unreadable
+        ));
+        if self.instincts_only {
+            lines.push(
+                "No unsteered history yet. Conditioning can still bind instincts from this repository's files.".into(),
+            );
+        }
+        lines.push("Conditioning reads these sources locally. Counts can change if a session is still running.".into());
+        lines
+    }
+}
+
+pub fn preview(paths: &adage_store::Paths, root: &Path) -> anyhow::Result<Preview> {
     let root = adage_core::repo::find_root(root).ok_or_else(|| anyhow::anyhow!("Choose a Git repository first."))?;
     let (files, _) =
         crate::sense::discover(&crate::sense::Options { root: Some(root.clone()), ..Default::default() }, paths);
@@ -86,22 +153,17 @@ pub fn preview(paths: &adage_store::Paths, root: &Path) -> anyhow::Result<Vec<St
             _ => unreadable += 1,
         }
     }
-    let mut lines = summary(paths, Some(&root));
-    lines.push(format!(
-        "{} files found: {usable} unsteered sessions, {steered} already steered, {unreadable} empty or unreadable.",
-        files.len()
-    ));
-    if usable == 0 {
-        if adage_store::config::load(paths).config.instincts_enabled {
-            lines.push(
-                "No unsteered history yet. Conditioning can still bind instincts from this repository's files.".into(),
-            );
-        } else {
-            anyhow::bail!("No unsteered history found and instincts are disabled. Configure a history source or enable instincts in Settings.");
-        }
+    if usable == 0 && !adage_store::config::load(paths).config.instincts_enabled {
+        anyhow::bail!("No unsteered history found and instincts are disabled. Configure a history source or enable instincts in Settings.");
     }
-    lines.push("Conditioning reads these sources locally. Counts can change if a session is still running.".into());
-    Ok(lines)
+    Ok(Preview {
+        sources: sources(paths, Some(&root)),
+        files: files.len(),
+        usable,
+        steered,
+        unreadable,
+        instincts_only: usable == 0,
+    })
 }
 
 pub fn set_source(paths: &adage_store::Paths, harness: &str, directory: &Path) -> anyhow::Result<Vec<String>> {

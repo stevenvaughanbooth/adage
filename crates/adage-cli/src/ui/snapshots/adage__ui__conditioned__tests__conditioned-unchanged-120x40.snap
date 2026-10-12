@@ -1,0 +1,36 @@
+---
+source: crates/adage-cli/src/ui/conditioned.rs
+expression: text
+---
+
+
+
+
+
+
+
+
+          ╭─ Conditioned adage ──────────────────────────────────────────────────────────────────────────────╮
+          │ Read 122 traces · kept 7 reflexes · nothing changed                                        9.4 s │
+          │                                                                                                  │
+          │   ████████████████████████████████████████████  122 traces read                                  │
+          │      █████████████████████████████████████      103 used                                         │
+          │                  ██████████████                  39 patterns found                               │
+          │                       ███                         9 compiled                                     │
+          │                        ██                         5 reflexes learned                             │
+          │                                                                                                  │
+          │ Nothing changed: every reflex kept its strength.                                                 │
+          │                                                                                                  │
+          │ ◠ Learned here · v17.0.12   5 reflexes   unchanged                                               │
+          │ ◉ Instincts · v3.0.0        2 reflexes   unchanged · 2 in use as advice                          │
+          │                                                                                                  │
+          │ 3 overlaps settled: these now suggest instead of firing, so one reflex fires at a time           │
+          │   FIRE → PRIME  cargo fmt --all                                                                  │
+          │   FIRE → PRIME  cargo build -p adage-cli                                                         │
+          │   FIRE → PRIME  cargo test -p {part}                                                             │
+          │                                                                                                  │
+          │ ! 1 reflex not learned: its trigger matches too many different commands                          │
+          │ ──────────────────────────────────────────────────────────────────────────────────────────────── │
+          │  enter  Review in Reflexes · 7 to look over                                                      │
+          │  v  details   j/k ↑↓  scroll   esc  close                                                        │
+          ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

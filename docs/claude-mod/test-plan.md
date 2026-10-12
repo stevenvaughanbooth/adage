@@ -90,7 +90,7 @@ the cross-cutting set.
 | One plugin, both binaries (§3.12) | A8 | T-A8-01 … 05 |
 | Module, bridge, activation, CI (§2) | B1 | T-B1-01 … 06 |
 | Observe and draw (§3.1, §4) | B2 | T-B2-01 … 11 |
-| Pane and commands (§4.1, §5) | B3 | T-B3-01 … 10 |
+| Pane and commands (§4.1, §5) | B3 | T-B3-01 … 15 |
 | Asking in the dialog, presses, `Explore in browser` (§3.12) | B4 | T-B4-01 … 09 |
 | `TurnStep` (§3.2) | C1 | T-C1-01 … 13 |
 | `predict` grant (§3.2) | C2 | T-C2-01 … 09 |
@@ -757,11 +757,15 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
 - **T-B2-11 · ASCII twins and motion.** With `ADAGE_ASCII=1` stubbed in `$.env`, every glyph is
   its twin and key names are words; with `ADAGE_REDUCED_MOTION=1`, no `invalidate` pulse is
   scheduled.
+- **T-B2-12 · The line after a tool batch (`tool.fired`).** A `PostToolBatch` answer carrying a
+  reflex block draws `◠ adage: {summary}` once: under the batch's last `ToolUse` row, or under the
+  `ToolGroup` line while the group is folded (never under both); an earlier call of the batch
+  draws the engine row alone.
 
 ### B3 · Pane and commands
 
-- **T-B3-01 · tabs and hotkeys.** The tab Buttons carry hotkeys `l`, `r`, `t` (lowercase, no
-  `h`); pressing each tab's `onPress` switches `$.state.tab`; `/adage` opens the pane with
+- **T-B3-01 · tabs and hotkeys.** The tab Buttons carry hotkeys `g`, `l`, `r`, `t` (lowercase, no
+  `h`), the Graph first; pressing each tab's `onPress` switches `$.state.tab`; `/adage` opens the pane with
   `focus`, `closeOnEscape`, `holdToasts`, `rows: 20` (the recorded `$.ui.open` call).
 - **T-B3-02 · Live rows and inspect.** Rows from fixture feed lines; a row's `onPress` opens
   `adage-inspect` with the directive text (the recorded `$.ui.open`); the row stays selected in
@@ -791,6 +795,53 @@ handlers directly and checking `$.state` and the recorded `$.ui.*` calls.
 - **T-B3-10 · settings reload.** `register(on, { band: false })` registers no `AbovePrompt` hook;
   `noticed: false` draws no noticed line; `pane: 'auto'` opens at `viewport.columns ≥ 144` only;
   `skills_invoke` defaults to false.
+- **T-B3-11 · the Reflexes flow.** Each reflex row draws stimulus → reflex → response as the
+  map does: at 74 columns and wider three rounded boxes (`╭─ AFTER EDIT ─╮ ───▶ ╭─ ● FIRE ─╮ ───▶
+  ╭─ RUN ─╮`), titled by the trigger's and step's kinds, never wider than the pane, the reflex
+  box's body the row's Button; narrower, one line (`after editing schema/*.json ──▶ ◠ ──▶ make
+  gen`), the stimulus cut first; ASCII twins under `ADAGE_ASCII=1`. A reflex that fired in this
+  session (this session's `directed`/`predicted` feed rows, or `$.state.fired`) lights its
+  borders and first arrow in the fire role with `◆ fired <time>`, its response and second arrow
+  once a `followed` or `met` row came after; another session's rows light nothing; a fire-role
+  line above the tracks counts them. No reflex id is drawn in the flow. The desktop draws the
+  one-line flow at every width. In the Live tab each directive of a known reflex has the flow in
+  small beneath its act (`╰ after editing schema/*.json ──▶ ◠ ──▶ make gen`, arrows in the lamp's
+  role), never wider than the pane, left out with under 40 columns beside the row's head.
+- **T-B3-12 · the session graph, laid out** (`view/graph.ts`). From fixture nodes, feed rows,
+  predicted steps and marks: at 100 columns each prompt a full-width box (`╭─ PROMPT 1 ─ … <time>
+  ─╮`, `╰─┬─┬──╯`), each tool batch one line on the trunk (`├── Read ×2 · Grep`, a lone call with
+  its command or file, `├─┬` when something hangs off it, the time flush right), each reflex a
+  `◆ adage · ● FIRE` box in its strength's role off the rail of the step whose calls it followed
+  (`╰─▶`), captioned where and when it fired, `───▶` to its response box (`RUN` / the command the
+  feed named), lit in the fire role with `✓ followed` (an inhibit's `✓ headed off`) once this
+  session's `followed`/`met` row came after, and the step it was followed in tagged `✓ followed
+  adage`; a failed call counted on its batch (`✗ 1 failed`, the inhibit role); a predicted step,
+  a rewrite, a substitution, a dead end headed off and a receipt each one line that says `adage`;
+  three or more quiet steps fold into `┊ n steps, nothing fired` (never the newest); the turn's
+  end `╰── ✓ done`, the finish line `├── ◆ adage finish line · the agent continues once`. The
+  exact lines at 100 and 59 columns; at 80 and 60 the same boxes narrower (the strength word kept
+  whole, the time before the event's words), no times under 80; under 60, or with boxes off (the
+  desktop), one line per node down a trunk in column 1. Never wider than the pane (40 … 220
+  columns); every glyph its ASCII twin under `ADAGE_ASCII=1`. With a height, only the newest
+  blocks that fit and `┊ ↑ earlier: 1 prompt · 3 steps`. The newest node glows (`now`, the accent)
+  for `PULSE_MS`, then is only bold; under reduced motion only bold. The summary line leads with
+  what Adage did. No reflex id is drawn.
+- **T-B3-13 · the graph's nodes** (`dag.ts`, `observe.ts`). The observers append, for a person
+  at the prompt only: the prompt (with its place), the reflexes at it, a main-loop batch (one
+  name per call, a lone call's word) and the reflexes after it with their calls, a failed call
+  before its batch, the stop (`gate` when the finish line blocked) before the reflexes it
+  delivered; a subagent's batch and its reflexes are not drawn (still counted in `fired`); a
+  `/clear` empties it. Capped at 300, the oldest first; one redraw after the newest's glow (a
+  later node moves it on), none under reduced motion.
+- **T-B3-14 · the Graph tab through the engine.** It grows on the mounted pane as the hooks fire
+  (the prompt's box and its reflex, then the step and the reflex after it, `◆ adage` in the fire
+  role, the summary's `adage fired 2 reflexes`); every colour a role; with more than the pane's
+  rows it follows the newest with `┊ ↑ earlier: …`, and `a` (`whole session` / `follow the
+  newest`) draws all of it and back; the desktop draws the list at any width with no Button in a
+  line; `ADAGE_ASCII=1` draws only ASCII.
+- **T-B3-15 · the Graph is the pane's default.** `/adage` opens the pane on Graph (`open:graph`),
+  `/adage graph` too; a pane opened unasked or by the person shows Graph first; empty, it says
+  `pane.graph.empty`.
 
 ### B4 · Asking in the dialog, presses in the pane
 

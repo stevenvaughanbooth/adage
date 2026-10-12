@@ -21,8 +21,10 @@
 use crate::words;
 use adage_learn::diff::{Change, ChangeKind, Snapshot};
 use adage_learn::instincts::InstinctReport;
+use adage_learn::progress::{Event, Progress, Stage};
 use adage_term::{Glyph, Line, Out, Role};
 use adage_tracks::RouteState;
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::io::{self, Write};
 
@@ -222,8 +224,70 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
     Ok(())
 }
 
+/// What `adage condition --json` prints: the learner's report as it always was, and beside it what
+/// the text output says from the tracks on disk (added fields; the report's own are unchanged).
+#[derive(Serialize)]
+pub struct Json<'a> {
+    #[serde(flatten)]
+    pub report: &'a adage_learn::Report,
+    /// How long the run took.
+    pub elapsed_ms: u64,
+    /// Per repository, what the run changed, one entry per reflex (`adage_learn::diff`), each
+    /// with what the reflex tells the agent (`gist`), as the text output names it.
+    pub changes: BTreeMap<&'a str, Vec<ChangeJson<'a>>>,
+    /// What `adage review` has after this run.
+    pub waiting: Waiting,
+}
+
+#[derive(Serialize)]
+pub struct ChangeJson<'a> {
+    #[serde(flatten)]
+    pub change: &'a Change,
+    #[serde(skip_serializing_if = "str::is_empty")]
+    pub gist: &'a str,
+}
+
+#[derive(Serialize)]
+pub struct Waiting {
+    pub needs_you: usize,
+    pub to_look_over: usize,
+}
+
+/// The `--json` form of a run.
+pub fn json<'a>(run: &'a Run) -> Json<'a> {
+    Json {
+        report: run.report,
+        elapsed_ms: run.elapsed_ms,
+        changes: run
+            .changes
+            .iter()
+            .map(|(repo, cs)| (repo.as_str(), cs.iter().map(|c| ChangeJson { change: c, gist: &c.gist }).collect()))
+            .collect(),
+        waiting: Waiting { needs_you: run.waiting.0, to_look_over: run.waiting.1 },
+    }
+}
+
+/// `--progress`: each stage as one JSON line on stderr (`{"progress":"read","done":12,"total":262}`),
+/// reading at most once per percent, so a long history never floods the reader.
+pub fn progress_to_stderr() -> Progress {
+    let last = std::sync::Mutex::new(None::<(Stage, usize)>);
+    Progress::new(move |e: Event| {
+        let step = (e.done * 100).checked_div(e.total).unwrap_or(0);
+        let mut last = last.lock().unwrap_or_else(|p| p.into_inner());
+        if *last == Some((e.progress, step)) && e.done < e.total {
+            return;
+        }
+        *last = Some((e.progress, step));
+        if let Ok(line) = serde_json::to_string(&e) {
+            let mut err = io::stderr().lock();
+            let _ = writeln!(err, "{line}");
+            let _ = err.flush();
+        }
+    })
+}
+
 /// `1 from a mined pattern`, `2 procedure cards`: one source of the reflexes a run kept.
-fn kept_from(kind: &str, n: usize) -> String {
+pub(crate) fn kept_from(kind: &str, n: usize) -> String {
     match kind {
         "procedure card" => words::count(n, "procedure card"),
         "mined pattern" => format!("{n} from {}", if n == 1 { "a mined pattern" } else { "mined patterns" }),
@@ -269,7 +333,7 @@ pub(crate) fn instinct_lines<W: Write>(o: &mut Out<W>, routes: &[adage_tracks::R
 
 /// The evidence bars in the lexicon's words: `min_support=3 fire_lower_bound=0.5
 /// prime_rate=0.5` (or the older `green_lower_bound`, `yellow_rate`) → `support ≥ 3 · fire at lb ≥ 0.5 · prime at rate ≥ 0.5`.
-fn thresholds(s: &str) -> String {
+pub(crate) fn thresholds(s: &str) -> String {
     s.split_whitespace()
         .map(|kv| match kv.split_once('=') {
             Some(("min_support", v)) => format!("support ≥ {v}"),
@@ -356,6 +420,50 @@ mod tests {
             "support ≥ 3 · fire at lb ≥ 0.5 · prime at rate ≥ 0.5",
             "older learn.log lines"
         );
+    }
+
+    #[test]
+    fn the_json_report_keeps_its_fields_and_adds_the_run() {
+        let mut rep = adage_learn::Report { sessions_read: 3, sessions_used: 2, ..Default::default() };
+        rep.repos.insert("acme".into(), Default::default());
+        let key = "acme".to_string();
+        let change = Change {
+            route: "run-1".into(),
+            track: "acme/learned".into(),
+            change: ChangeKind::New,
+            from: None,
+            to: Some(adage_tracks::Strength::Fire),
+            summary: "new fire reflex".into(),
+            gist: "after editing src/*.rs, run make test".into(),
+            support: None,
+            s_min: None,
+            sessions: None,
+        };
+        let changes = BTreeMap::from([(&key, vec![change])]);
+        let after = BTreeMap::new();
+        let run = Run {
+            command: "condition",
+            report: &rep,
+            after: &after,
+            changes: &changes,
+            elapsed_ms: 1234,
+            waiting: (1, 2),
+            next: true,
+        };
+        let v = serde_json::to_value(json(&run)).unwrap();
+        // Every field the report had, as it was.
+        let plain = serde_json::to_value(&rep).unwrap();
+        for (k, field) in plain.as_object().unwrap() {
+            assert_eq!(&v[k], field, "{k}");
+        }
+        assert_eq!(v["elapsed_ms"], 1234);
+        assert_eq!(v["waiting"], serde_json::json!({ "needs_you": 1, "to_look_over": 2 }));
+        let c = &v["changes"]["acme"][0];
+        assert_eq!(
+            (c["route"].as_str(), c["change"].as_str(), c["to"].as_str()),
+            (Some("run-1"), Some("new"), Some("fire"))
+        );
+        assert_eq!(c["gist"], "after editing src/*.rs, run make test", "the gist, which learn.log never holds");
     }
 
     #[test]

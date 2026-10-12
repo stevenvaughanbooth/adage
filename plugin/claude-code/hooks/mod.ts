@@ -106,9 +106,10 @@ export type Runtime = {
   feedGen: number
   paused: boolean
   child: Stoppable | undefined
-  /** The redraw timers (the learner's countdown, `learned` fading). */
+  /** The redraw timers (the learner's countdown, `learned` fading, the Graph tab's newest node settling). */
   countdown: Timer | undefined
   fading: Timer | undefined
+  pulse: Timer | undefined
   /** When the `--json` reads were last made, and `status --json` for the candidates' words. */
   lastRefresh: number
   lastCandidates: number
@@ -165,6 +166,7 @@ export function runtime(): Runtime {
     child: undefined,
     countdown: undefined,
     fading: undefined,
+    pulse: undefined,
     lastRefresh: -Infinity,
     lastCandidates: -Infinity,
     failures: 0,

@@ -17,6 +17,7 @@ pub mod import;
 pub mod instincts;
 pub mod ledger;
 pub mod outcome;
+pub mod progress;
 pub mod store;
 pub mod testmap;
 pub mod value;
@@ -81,7 +82,11 @@ pub struct TrackReport {
     pub name: String,
     pub version: String,
     pub change: String,
+    /// One line per reflex, then notes (a pinned reflex's proposed change, an instinct
+    /// extinguished this run): not a count of the reflexes.
     pub routes: Vec<String>,
+    /// How many reflexes the track holds as written, whatever their state.
+    pub reflexes: usize,
 }
 
 #[derive(Default)]
@@ -186,10 +191,14 @@ pub use adage_tracks::layout::{follow_weights_path, read_follow_weights, slug};
 
 /// `adage condition`: ingest the traces, then learn from their sessions ([`learn_sessions`]).
 pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &LearnConfig) -> Result<Report> {
+    let progress = cfg.progress.clone();
     let opts = adage_ingest::batch::Options {
         repo_override: inputs.repo_override.clone(),
         only_repo: inputs.only_repo.clone(),
         cache: inputs.cache.clone(),
+        progress: progress
+            .is_on()
+            .then(|| std::sync::Arc::new(move |done, total| progress.report(progress::Stage::Read, done, total)) as _),
         ..Default::default()
     };
     let mut batch = adage_ingest::batch::read(&inputs.transcripts, &opts);
@@ -213,7 +222,9 @@ pub fn learn_sessions(
     index_path: &Path,
     cfg: &LearnConfig,
 ) -> Result<Report> {
-    learn_sessions_into(batch, only, models, &store::Files::new(tracks_root, index_path), cfg)
+    let mut files = store::Files::new(tracks_root, index_path);
+    files.progress = cfg.progress.clone();
+    learn_sessions_into(batch, only, models, &files, cfg)
 }
 
 /// [`learn_sessions`], against `store` ([`store::Store`]): what was learned before is read from
@@ -300,6 +311,52 @@ fn follow_weights(sessions: &[Session]) -> BTreeMap<String, adage_core::judge::W
         }
     }
     by.into_iter().map(|(r, pairs)| (r.to_string(), adage_core::judge::Weights::fit(pairs))).collect()
+}
+
+/// Why validation refused `id`, without the `route <id> in <track>: ` its message starts with.
+pub(crate) fn reason(e: &anyhow::Error, id: &str, track: &str) -> String {
+    let full = format!("{e:#}");
+    full.strip_prefix(&format!("route {id} in {track}: ")).map_or_else(|| full.clone(), String::from)
+}
+
+/// What a run left out (`what` "reflex", `how` "not learned"), one line per reason: a count, the
+/// reason in plain words, and the ids:
+///
+/// ```text
+/// 1 reflex not learned: its trigger matches too many different commands (20; the limit is 16): claude plugin test {path}, claude --help, claude doctor and 17 more (run-ce9cdb)
+/// 2 reflexes not learned: its trigger matches too many different commands (run-ce9cdb, run-77a0b1)
+/// ```
+///
+/// Reasons group by what they say before their details (the text before ` (` or `: `); a group
+/// of one keeps its details, a larger one names up to three ids.
+pub fn left_out(what: &str, how: &str, dropped: &[(String, String)]) -> Vec<String> {
+    let headline = |r: &str| -> String {
+        let cut = [r.find(" ("), r.find(": ")].into_iter().flatten().min().unwrap_or(r.len());
+        r[..cut].to_string()
+    };
+    let mut groups: Vec<(String, Vec<&(String, String)>)> = Vec::new();
+    for d in dropped {
+        let h = headline(&d.1);
+        match groups.iter_mut().find(|(k, _)| *k == h) {
+            Some((_, v)) => v.push(d),
+            None => groups.push((h, vec![d])),
+        }
+    }
+    groups
+        .into_iter()
+        .map(|(h, ds)| match ds.as_slice() {
+            [(id, reason)] => format!("1 {what} {how}: {reason} ({id})"),
+            _ => {
+                let plural = if what.ends_with('x') { format!("{what}es") } else { format!("{what}s") };
+                let ids: Vec<&str> = ds.iter().take(3).map(|(id, _)| id.as_str()).collect();
+                let named = match ds.len() - ids.len() {
+                    0 => ids.join(", "),
+                    more => format!("{} and {more} more", ids.join(", ")),
+                };
+                format!("{} {plural} {how}: {h} ({named})", ds.len())
+            }
+        })
+        .collect()
 }
 
 fn thresholds(cfg: &LearnConfig) -> String {
@@ -442,6 +499,7 @@ pub(crate) fn plan_repository(
             // Learned routes are built from untrusted session content. One that fails validation
             // (a quoted argument, an unrenderable signature) is dropped on its own; it must not
             // stop the rest of the repository from being learned.
+            let mut not_learned: Vec<(String, String)> = Vec::new();
             routes.retain(|r| {
                 let probe = Track {
                     manifest: Manifest {
@@ -459,11 +517,14 @@ pub(crate) fn plan_repository(
                 match io::validate(&probe) {
                     Ok(()) => true,
                     Err(e) => {
-                        eprintln!("adage: not learning a route: {e:#}");
+                        not_learned.push((r.id.clone(), reason(&e, &r.id, &name)));
                         false
                     }
                 }
             });
+            for line in left_out("reflex", "not learned", &not_learned) {
+                eprintln!("adage: {line}");
+            }
             if !(routes.is_empty() && prev.is_none()) {
                 let (version, change) = bump(prev.as_ref(), &routes);
                 // What explains each route that is still here (one kept dormant: its last one).
@@ -493,7 +554,8 @@ pub(crate) fn plan_repository(
                 lines.extend(
                     proposals.routes.keys().map(|id| format!("{id}: pinned; a change is proposed in `adage review`")),
                 );
-                rr.tracks.push(TrackReport { name: name.clone(), version, change, routes: lines });
+                let reflexes = track.routes.len();
+                rr.tracks.push(TrackReport { name: name.clone(), version, change, routes: lines, reflexes });
                 planned.push(Planned { name: name.clone(), track, proposals, reviews: None, why: Some(why), replaces });
             }
         }
@@ -820,5 +882,36 @@ mod tests {
         let line = route_line("clinic/work-items", &r);
         assert!(line.contains("[execution only]") && line.contains("5/5 supported continuations"), "{line}");
         assert!(line.contains("adage review delegate clinic/work-items lookup-work-item --level e2"), "{line}");
+    }
+
+    #[test]
+    fn what_a_run_left_out_reads_as_a_count_and_a_reason() {
+        let too_many = "its trigger matches too many different commands (20; the limit is 16): a, b, c and 17 more";
+        assert_eq!(
+            left_out("reflex", "not learned", &[("run-ce9cdb".into(), too_many.into())]),
+            vec![format!("1 reflex not learned: {too_many} (run-ce9cdb)")]
+        );
+        let other = "its trigger matches too many different commands (18; the limit is 16): d, e, f and 15 more";
+        let quoted = "command \"x\" contains characters a directed command may not";
+        let dropped: Vec<(String, String)> =
+            [("a", too_many), ("b", other), ("c", too_many), ("d", too_many), ("e", too_many), ("f", quoted)]
+                .into_iter()
+                .map(|(id, r)| (id.to_string(), r.to_string()))
+                .collect();
+        assert_eq!(
+            left_out("reflex", "not learned", &dropped),
+            vec![
+                "5 reflexes not learned: its trigger matches too many different commands (a, b, c and 2 more)"
+                    .to_string(),
+                format!("1 reflex not learned: {quoted} (f)"),
+            ]
+        );
+        assert_eq!(
+            left_out("instinct", "not bound", &[("u1".into(), "x: y".into()), ("u2".into(), "x: z".into())]),
+            vec!["2 instincts not bound: x (u1, u2)"]
+        );
+        let e = anyhow::anyhow!("route run-1 in acme/learned: its trigger names none of the commands it follows");
+        assert_eq!(reason(&e, "run-1", "acme/learned"), "its trigger names none of the commands it follows");
+        assert_eq!(reason(&anyhow::anyhow!("other"), "run-1", "acme/learned"), "other");
     }
 }

@@ -128,6 +128,9 @@ pub struct LearnConfig {
     /// traces than a reflex needs, in a pass of their own that never changes the reflexes. On in
     /// both presets; off only to measure the reflexes' pass alone.
     pub candidates: bool,
+    /// Where the run reports how far it has got ([`crate::progress`]); nowhere by default. It
+    /// never changes what is learned.
+    pub progress: crate::progress::Progress,
 }
 
 impl Default for LearnConfig {
@@ -196,6 +199,7 @@ impl LearnConfig {
             uplift_min: p.uplift_min,
             cards: None,
             candidates: true,
+            progress: Default::default(),
         }
     }
 }

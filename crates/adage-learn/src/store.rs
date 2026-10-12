@@ -99,11 +99,17 @@ pub trait Store {
 pub struct Files {
     pub tracks_root: PathBuf,
     pub index_path: PathBuf,
+    /// Told as compiling the index settles overlaps and writes it ([`crate::progress`]).
+    pub progress: crate::progress::Progress,
 }
 
 impl Files {
     pub fn new(tracks_root: &Path, index_path: &Path) -> Files {
-        Files { tracks_root: tracks_root.to_path_buf(), index_path: index_path.to_path_buf() }
+        Files {
+            tracks_root: tracks_root.to_path_buf(),
+            index_path: index_path.to_path_buf(),
+            progress: Default::default(),
+        }
     }
 }
 
@@ -333,8 +339,10 @@ impl Store for Files {
     }
 
     fn compile_index(&self) -> Result<Compiled> {
+        self.progress.report(crate::progress::Stage::Settle, 0, 0);
         let all = io::read_all(&self.tracks_root)?;
         let (index, conflicts) = Index::compile_root(&self.tracks_root, &all);
+        self.progress.report(crate::progress::Stage::Index, 0, 0);
         index.write_atomic(&self.index_path)?;
         Ok(Compiled { generation: index.generation, conflicts })
     }

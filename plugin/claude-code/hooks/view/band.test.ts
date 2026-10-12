@@ -7,7 +7,7 @@ import type { Fired, Health } from '../plugin'
 import { reflexesOf } from '../reads'
 import { band, firedThisSession, newer, updateLine, versionLine, withheldLine } from './band'
 import type { BandInput } from './band'
-import { markText, promptLines } from './lines'
+import { markText, firedLines } from './lines'
 
 const REFLEXES = reflexesOf(GRAPH)
 const fired = (route: string, prompt = 1): Fired => ({ event: 'UserPromptSubmit', route, track: 'acme/learned@1', kind: 'run', strength: 'fire', prompt, promptText: 'fix W-2042' })
@@ -91,7 +91,7 @@ describe('T-B2-07 … T-B2-09 · the band', () => {
   test('T-B2-11: every glyph its ASCII twin', () => {
     expect(line1({ ...BASE, reflexes: 1, ascii: true, learner: { state: 'running', nextAt: null, ranAt: null } })).toBe('~ adage  1 reflex this session · * healthy · learning...')
     expect(markText({ kind: 'predicted' }, true)).toBe('~ adage chose this step - no model request')
-    expect(promptLines([fired('codegen-after-schema')], REFLEXES, [], 80, true)).toEqual(['~ run make gen after a schema edit'])
+    expect(firedLines([fired('codegen-after-schema')], REFLEXES, [], 80, true)).toEqual(['~ adage: run make gen after a schema edit'])
   })
 
   test('learning: the countdown, then running, then learned for 10 s', () => {

@@ -3,7 +3,7 @@
 // run, the spinner suffix and the turn line, on both surfaces.
 import { describe, expect, test } from 'claude-code/testing'
 
-import { BANNED, CARD, LINE, PREDICT, PREDICTED_ID, RESULT, STEP, SURFACES, TOOL, USER, block, drain, prompt, start, texts, world } from '../fixtures/kit'
+import { BANNED, CARD, GROUP, LINE, PREDICT, PREDICTED_ID, RESULT, STEP, SURFACES, TOOL, USER, block, drain, prompt, start, texts, world } from '../fixtures/kit'
 
 describe('T-B2-02, T-B2-03 · the line under a prompt', () => {
   test('T-B2-02: three reflexes, three lines under the engine row, no strength word; none: the engine alone', async ($, on) => {
@@ -13,7 +13,7 @@ describe('T-B2-02, T-B2-03 · the line under a prompt', () => {
     for (const surface of SURFACES) {
       const ui = await $.ui.mount({ plugin: 'adage', surface, component: 'UserMessage', requestId: 'u1', props: USER('fix W-2042'), viewport: { columns: 120, rows: 40 } })
       const lines = await texts(ui)
-      expect(lines).toEqual(['ENGINE UserMessage: fix W-2042', '◠ look up the work item with scripts/wi-lookup', '◠ run make gen after a schema edit', '◠ avoid python3 -m unittest here; use make test'])
+      expect(lines).toEqual(['ENGINE UserMessage: fix W-2042', '◠ adage: look up the work item with scripts/wi-lookup', '◠ adage: run make gen after a schema edit', '◠ adage: avoid python3 -m unittest here; use make test'])
       for (const l of lines.slice(1)) expect(l).not.toMatch(BANNED)
       await ui.unmount()
       const expanded = await $.ui.mount({ plugin: 'adage', surface, component: 'UserMessage', requestId: 'u1', props: USER('fix W-2042', true) })
@@ -40,12 +40,39 @@ describe('T-B2-02, T-B2-03 · the line under a prompt', () => {
     await start($, w)
     await prompt($, 'fix W-2042')
     const wide = await $.ui.mount({ plugin: 'adage', surface: 'terminal', component: 'UserMessage', requestId: 'u1', props: USER('fix W-2042'), viewport: { columns: 120, rows: 40 } })
-    expect((await texts(wide))[1]).toBe('◠ look up the work item with scripts/wi-lookup · scripts/wi-lookup W-2042 --json')
+    expect((await texts(wide))[1]).toBe('◠ adage: look up the work item with scripts/wi-lookup · scripts/wi-lookup W-2042 --json')
     await wide.unmount()
     const narrow = await $.ui.mount({ plugin: 'adage', surface: 'terminal', component: 'UserMessage', requestId: 'u1', props: USER('fix W-2042'), viewport: { columns: 40, rows: 40 } })
     const [, line] = await narrow.findAll({ type: 'Text' })
-    expect(line?.text).toBe('◠ look up the work item with scripts/wi…')
+    expect(line?.text).toBe('◠ adage: look up the work item with scr…')
     expect(line?.props.wrap).toBe('truncate-end')
+  })
+})
+
+describe('T-B2-12 · what Adage told the agent after a tool batch (tool.fired)', () => {
+  test('one line per reflex, under the batch\'s last call, or its group\'s line while folded; never twice', async ($, on) => {
+    const w = world(on, { feed: [LINE.learnerIdle], classic: { PostToolBatch: { additionalContext: [block('codegen-after-schema')] } } })
+    await start($, w)
+    const call = (id: string) => ({ tool_name: 'Edit', tool_input: {}, tool_use_id: id })
+    await $.classic.PostToolBatch({ tool_calls: [call('t4'), call('t5')] } as never)
+    for (const surface of SURFACES) {
+      const row = async (id: string) => {
+        const ui = await $.ui.mount({ plugin: 'adage', surface, component: 'ToolUse', requestId: id, props: TOOL(id) })
+        const lines = await texts(ui)
+        await ui.unmount()
+        return lines
+      }
+      expect(await row('t5')).toEqual(['ENGINE ToolUse', '◠ adage: run make gen after a schema edit'])
+      expect(await row('t4')).toEqual(['ENGINE ToolUse'])
+      const group = async (expanded: boolean) => {
+        const ui = await $.ui.mount({ plugin: 'adage', surface, component: 'ToolGroup', requestId: 't4', props: { ...GROUP(['t4', 't5']), isExpanded: expanded } })
+        const lines = await texts(ui)
+        await ui.unmount()
+        return lines
+      }
+      expect(await group(false)).toEqual(['ENGINE ToolGroup', '◠ adage: run make gen after a schema edit'])
+      expect(await group(true)).toEqual(['ENGINE ToolGroup'])
+    }
   })
 })
 

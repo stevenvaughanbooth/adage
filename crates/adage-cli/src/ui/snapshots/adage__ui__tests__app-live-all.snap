@@ -1,0 +1,34 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home                ◆ all repositories ▾ · LIVE
+─────────━━━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────
+─ now · all repositories ───────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+
+
+
+ ┄ Claude Code · 00a11c · harbor-dispatch ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+ 12:04:00  00a11c  harbor-dispatch  ▪ tools    · 2 calls, nothing to say
+ ┄ Claude Code · n-0001 · adage ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+ 12:04:01  n-0001  adage            ▪ tools    · 1 call, nothing to say
+ 12:04:04          harbor-dispatch  ▪ tools    · 3 tool batches · 2 traces · 8 calls, nothing to say
+ 12:04:05  000b0b  harbor-dispatch  ▪ tools    adage → ◠ INHIBIT    npm run check
+ 12:04:06  000b0b  harbor-dispatch  ▪ tools    · 2 calls, nothing to say
+ ┄ Claude Code · n-0002 · acme-billing ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+ 12:04:07  n-0002  acme-billing     ▪ tools    · 1 call, nothing to say
+ 12:04:08  00a11c  harbor-dispatch  ▪ tools    · 1 call, nothing to say
+
+─ conditioning ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Nothing conditioned yet. Runs appear here as they finish · adage condition
+   ○ 1 to look over · adage review
+
+
+
+─ health ───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ + hooks claude    + 4 reflexes    + auto-condition    ! no model · adage models fetch
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   p  pause   f  repository   /  filter   enter  inspect                                  q  quit

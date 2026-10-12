@@ -452,22 +452,44 @@ fn lamp(l: Lamp) -> &'static str {
 }
 
 /// The health line: the lamps `adage watch` shows, the worst check as the status card words it,
-/// and whether Adage is off here.
-pub fn health_json(h: &Health, root: Option<&Path>) -> Value {
+/// and whether Adage is off here. Followed from inside an agent session (`viewer`), the worst
+/// check leaves out the checks about another harness: a Codex check is not a problem with the
+/// Claude Code session that draws the lamp. The lamps keep every check.
+pub fn health_json(h: &Health, root: Option<&Path>, viewer: Option<&str>) -> Value {
     use crate::doctor::Status;
     let lights: Vec<Value> =
         h.lights.iter().map(|l| json!({ "label": l.label, "lamp": lamp(l.lamp), "hint": l.hint })).collect();
+    let concerns = |c: &&crate::doctor::Check| match (viewer, check_harness(&c.check)) {
+        (Some(v), Some(h)) => v == h,
+        _ => true,
+    };
     let worst = h
         .checks
         .iter()
+        .filter(concerns)
         .find(|c| c.status == Status::Fail)
-        .or_else(|| h.checks.iter().find(|c| c.status == Status::Warn));
+        .or_else(|| h.checks.iter().filter(concerns).find(|c| c.status == Status::Warn));
     let state = match worst {
         None => json!({ "word": "healthy", "lamp": "fire" }),
         Some(c) if c.status == Status::Fail => json!({ "word": "problem", "lamp": "inhibit", "check": c.label }),
         Some(c) => json!({ "word": "check", "lamp": "prime", "check": c.label }),
     };
     json!({ "kind": "health", "lights": lights, "state": state, "off": crate::switch::is_off(root) })
+}
+
+/// The harness a doctor check is about (`hooks: codex`, `hook activity: codex`, `claude-code
+/// plugin binary`), or `None` for a check about Adage itself.
+fn check_harness(check: &str) -> Option<&str> {
+    check
+        .strip_prefix("hooks: ")
+        .or_else(|| check.strip_prefix("hook activity: "))
+        .or_else(|| check.starts_with("claude-code plugin").then_some("claude-code"))
+}
+
+/// The harness whose session runs this process, by the marker it sets (`CLAUDECODE=1`; the
+/// Claude Code mod sets it on every verb it runs), or `None` at a terminal.
+fn viewing_harness() -> Option<&'static str> {
+    std::env::var_os("CLAUDECODE").is_some_and(|v| v == "1").then_some("claude-code")
 }
 
 /// The learner for `repo`: `waiting` until `next_at`, `running` while it holds the lock, `idle`.
@@ -593,7 +615,7 @@ pub fn run(
         // Health and the learner say where things stand; they move no position.
         while let Ok(m) = loader.rx.try_recv() {
             if let Loaded::Health(h) = m {
-                let v = health_json(&h, root.as_deref());
+                let v = health_json(&h, root.as_deref(), viewing_harness());
                 if last_health.as_ref() != Some(&v) {
                     last_health = Some(v.clone());
                     lines.push(with_cursor(v, &tail.cursor(now_ms())));
@@ -677,6 +699,39 @@ fn with_cursor(mut v: Value, c: &Cursor) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_lamp_in_an_agent_session_leaves_out_another_harnesss_checks() {
+        use crate::doctor::{Check, Status};
+        let check =
+            |id: &str, status| Check { check: id.into(), label: id.into(), status, detail: String::new(), fix: None };
+        let h = Health {
+            checks: vec![
+                check("hooks: claude-code", Status::Pass),
+                check("hook activity: codex", Status::Warn),
+                check("index", Status::Pass),
+            ],
+            ..Health::default()
+        };
+        let at_terminal = health_json(&h, None, None);
+        assert_eq!(at_terminal["state"], json!({ "word": "check", "lamp": "prime", "check": "hook activity: codex" }));
+        let in_claude = health_json(&h, None, Some("claude-code"));
+        assert_eq!(
+            in_claude["state"],
+            json!({ "word": "healthy", "lamp": "fire" }),
+            "Codex is not this session's problem"
+        );
+        let mut own = h.clone();
+        own.checks.push(check("hook activity: claude-code", Status::Warn));
+        own.checks.push(check("index", Status::Fail));
+        assert_eq!(
+            health_json(&own, None, Some("claude-code"))["state"]["check"],
+            "index",
+            "Adage's own checks still count"
+        );
+        own.checks.pop();
+        assert_eq!(health_json(&own, None, Some("claude-code"))["state"]["check"], "hook activity: claude-code");
+    }
 
     #[test]
     fn cursors_round_trip_and_refuse_what_they_did_not_write() {

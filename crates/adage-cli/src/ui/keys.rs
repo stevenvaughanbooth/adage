@@ -56,7 +56,7 @@ pub const HOME: &[Key] = &[
 
 pub const LIVE: &[Key] = &[
     k("p", "pause", "pause or resume the feed", true),
-    k("f", "scope", "this repository or all repositories", true),
+    k("f", "repository", "choose the repository Live, Reflexes and Map show, or all of them", true),
     k("/", "filter", "filter the feed", true),
     k("enter", "inspect", "what the agent saw at the newest event shown", true),
     k("j/k ↑↓", "scroll", "scroll the feed (G: back to the newest)", false),
@@ -66,8 +66,9 @@ pub const LIVE: &[Key] = &[
 
 pub const REFLEXES: &[Key] = &[
     k("/", "filter", "fuzzy filter reflexes by id, trigger, command or track", true),
+    k("f", "repository", "choose the repository whose reflexes are shown, or all of them", true),
     k("j/k", "move", "move through the tree", true),
-    k("enter", "expand", "open or close a group", true),
+    k("enter", "expand", "open or close a group, or a reflex's details", true),
     k("tab", "next tab", "next tab", true),
     k("s", "strengthen", "strengthen: prime → fire (adage review strengthen)", false),
     k("w", "weaken", "weaken: fire → prime (adage review weaken)", false),
@@ -78,10 +79,11 @@ pub const REFLEXES: &[Key] = &[
     k("d", "delegate", "review execution authority in a guided form", false),
     k("t", "traces", "the traces it fired in", false),
     k("o", "open in map", "the same reflex in the web map (adage map --focus)", false),
+    k("r", "raw", "what the agent sees, exactly as delivered (tags and all)", false),
     k("F P I", "strengths", "show or hide fire, prime, inhibit", false),
     k("S", "states", "cycle the lifecycle filter", false),
     k("esc", "reset filters", "reset the search, strength and lifecycle filters", false),
-    k("PgUp PgDn", "scroll", "scroll the detail", false),
+    k("PgUp PgDn", "scroll", "scroll the card", false),
     k("R", "reload", "reload the reflexes", false),
 ];
 
@@ -96,7 +98,8 @@ pub const MAP: &[Key] = &[
 pub const HEALTH: &[Key] = &[
     k("enter", "fix", "fix the selected check, or read its full explanation and next steps", true),
     k("R", "recheck", "run the checks again", true),
-    k("j/k", "move", "select a check", false),
+    k("j/k", "move", "select a check, in the order shown", false),
+    k("g/G", "first/last", "the first or last check", false),
     k("i", "install hooks", "install hooks for a harness", false),
     k("m", "fetch model", "fetch the intent model (adage models fetch)", false),
     k("c", "condition now", "condition this repository now (adage condition)", false),
@@ -106,8 +109,19 @@ pub const HEALTH: &[Key] = &[
 
 pub const SETTINGS: &[Key] = &[
     k("enter", "edit", "edit (toggles on/off)", true),
-    k("space", "toggle", "toggle on/off, or switch thresholds", true),
-    k("j/k", "move", "select a setting", false),
+    k("space", "toggle", "toggle on/off, or switch thresholds, notices and the update check", true),
+    k("j/k ↑↓", "move", "select a setting", false),
+    k("[ ]", "section", "the previous or next section (also page up and down)", false),
+    k("g/G", "first/last", "the first or last setting", false),
+    k("d", "default", "put the selected setting back to its default (asks first for a typed value)", false),
+];
+
+/// The conditioning result card (`ui::conditioned`); `enter` is drawn as the card's button.
+pub const CONDITIONED: &[Key] = &[
+    k("enter", "next step", "take the step the card names: review in Reflexes, or the history sources", false),
+    k("v", "details", "show or hide the details: thresholds, the index, ids, and the notes as written", true),
+    k("j/k ↑↓", "scroll", "scroll the card", true),
+    k("esc", "close", "close the card", true),
 ];
 
 pub const PALETTE: &[Key] = &[
@@ -117,25 +131,12 @@ pub const PALETTE: &[Key] = &[
     k("esc", "close", "close", true),
 ];
 
-/// The bar entries as spans (`p pause · f scope`), as many as fit in `width` columns.
+/// The bar entries as spans, each key in a keycap (`kit::hints`: ` p  pause   f  scope`), as
+/// many as fit in `width` columns.
 pub fn bar(tables: &[&[Key]], t: &Theme, width: usize) -> Vec<Span<'static>> {
-    let mut spans: Vec<Span<'static>> = Vec::new();
-    let mut used = 0;
-    for key in tables.iter().flat_map(|k| k.iter()).filter(|k| k.bar) {
-        let sep = if spans.is_empty() { 0 } else { 3 };
-        let keys = t.text(key.keys);
-        let w = keys.chars().count() + 1 + key.label.chars().count();
-        if used + sep + w > width {
-            break;
-        }
-        if sep > 0 {
-            spans.push(Span::styled(t.sep(), t.dim()));
-        }
-        spans.push(Span::styled(keys, t.key()));
-        spans.push(Span::styled(format!(" {}", key.label), t.dim()));
-        used += sep + w;
-    }
-    spans
+    let pairs: Vec<(&str, &str)> =
+        tables.iter().flat_map(|k| k.iter()).filter(|k| k.bar).map(|k| (k.keys, k.label)).collect();
+    super::kit::hints(&pairs, t, width)
 }
 
 /// The `?` overlay: each section's keys, aligned.

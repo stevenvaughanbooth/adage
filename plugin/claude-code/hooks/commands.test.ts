@@ -33,17 +33,17 @@ describe('T-B3-09 · the verb', () => {
     expect(verbOf('')).toBe('card')
     expect(verbOf('  Review now')).toBe('review')
     expect(verbOf('frobnicate')).toBe('card')
-    expect(['watch', 'reflexes', 'review', 'health', 'doctor', 'why', 'off', 'on', 'pause', 'map', 'status', 'savings'].map(v => verbOf(v))).toEqual(['watch', 'reflexes', 'review', 'health', 'doctor', 'why', 'off', 'on', 'pause', 'map', 'status', 'savings'])
-    expect([tabOf('watch'), tabOf('reflexes'), tabOf('review'), tabOf('health'), tabOf('doctor'), tabOf('why')]).toEqual(['live', 'reflexes', 'reflexes', 'health', 'health', undefined])
+    expect(['graph', 'watch', 'reflexes', 'review', 'health', 'doctor', 'why', 'off', 'on', 'pause', 'map', 'status', 'savings'].map(v => verbOf(v))).toEqual(['graph', 'watch', 'reflexes', 'review', 'health', 'doctor', 'why', 'off', 'on', 'pause', 'map', 'status', 'savings'])
+    expect([tabOf('card'), tabOf('graph'), tabOf('watch'), tabOf('reflexes'), tabOf('review'), tabOf('health'), tabOf('doctor'), tabOf('why')]).toEqual(['graph', 'graph', 'live', 'reflexes', 'reflexes', 'health', 'health', undefined])
   })
 })
 
 describe('T-B3-09, T-B4-04 · what each verb answers (ux-design §7)', () => {
-  test('/adage: the card, and the pane opens on Live', async () => {
+  test('/adage: the card, and the pane opens on the Graph (T-B3-15)', async () => {
     const { d, calls } = deps()
     const r = await runCommand('', d)
     expect(r.text?.split('\n')[0]).toBe(CARD.header)
-    expect(calls).toEqual(['open:live'])
+    expect(calls).toEqual(['open:graph'])
   })
 
   test('an unknown verb prints the card and opens nothing; status prints the card', async () => {
@@ -53,10 +53,10 @@ describe('T-B3-09, T-B4-04 · what each verb answers (ux-design §7)', () => {
     expect(calls).toEqual([])
   })
 
-  test('watch, reflexes, review, health and doctor open the pane and print nothing', async () => {
+  test('graph, watch, reflexes, review, health and doctor open the pane and print nothing', async () => {
     const { d, calls } = deps()
-    for (const v of ['watch', 'reflexes', 'review', 'health', 'doctor']) expect(await runCommand(v, d)).toEqual({})
-    expect(calls).toEqual(['open:live', 'open:reflexes', 'open:reflexes', 'open:health', 'open:health'])
+    for (const v of ['graph', 'watch', 'reflexes', 'review', 'health', 'doctor']) expect(await runCommand(v, d)).toEqual({})
+    expect(calls).toEqual(['open:graph', 'open:live', 'open:reflexes', 'open:reflexes', 'open:health', 'open:health'])
   })
 
   test('off runs the switch and says how to turn it back on; outside a repository the binary line', async () => {
@@ -124,7 +124,7 @@ describe('T-B3-09, T-B3-10, T-B4-08 · /adage through the engine', () => {
     expect(await run('pause')).toBe(RESUMED)
     expect(await run('why')).toContain('◠ look up the work item with scripts/wi-lookup')
     w.opened.length = 0
-    for (const [verb, tab] of [['watch', 'live'], ['reflexes', 'reflexes'], ['review', 'reflexes'], ['health', 'health'], ['doctor', 'health']] as const) {
+    for (const [verb, tab] of [['graph', 'graph'], ['watch', 'live'], ['reflexes', 'reflexes'], ['review', 'reflexes'], ['health', 'health'], ['doctor', 'health']] as const) {
       expect(await run(verb)).toBeUndefined()
       expect(w.opened.at(-1)).toEqual({ id: 'adage', title: 'adage', focus: true, closeOnEscape: true, holdToasts: true, rows: 20 })
       const ui = await mountPane($, 'terminal')

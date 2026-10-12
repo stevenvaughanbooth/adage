@@ -2,8 +2,8 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
- adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings   6 Home           harbor-dispatch · LIVE
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home       ◆ harbor-dispatch ▾ · LIVE
+──────────────────────────────────━━━━━━━─────────────────────────────────────────────────────────────────────
  focus off    zoom boxes (max)    layout stimulus → reflex → response     4 reflexes · 1 instinct · 54 traces
 
    STIMULUS                               REFLEX                                 RESPONSE
@@ -31,4 +31,4 @@ expression: text
  ▸ lookup-incident  fire · firm · 24/25 traces · 8 turns saved
  o open in browser: adage map --focus lookup-incident   enter inspect in Reflexes
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
- ? keys · : palette · enter inspect · f focus · +/- zoom · j/k move · o open in browser                q quit
+  ?  keys   :  palette   enter  inspect   f  focus   +/-  zoom   j/k  move   o  open in browser       q  quit

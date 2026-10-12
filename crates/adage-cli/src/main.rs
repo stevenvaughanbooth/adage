@@ -278,7 +278,8 @@ fn run(args: &[String]) -> Result<()> {
 }
 
 /// `adage condition [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
-///               [--repo-root <dir> | --all] [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--no-instincts] [--json]`
+///               [--repo-root <dir> | --all] [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--no-instincts] [--json]
+///               [--progress]`
 ///
 /// One repository is conditioned: `--repo-root <dir>`'s, else the one this runs in. Only traces
 /// recorded in one of its checkouts are read, its instincts bind from that root, and with no such
@@ -488,6 +489,9 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         cfg.instincts = Some(ic);
     }
     cfg.cards = autolearn::card_params(&settings, paths);
+    if args.iter().any(|a| a == "--progress") {
+        cfg.progress = condition_out::progress_to_stderr();
+    }
     let cache =
         (settings.learn_parse_cache && !args.iter().any(|a| a == "--no-cache")).then(|| paths.cache().join("sessions"));
     cfg.computation_cache = !args.iter().any(|a| a == "--no-cache");
@@ -528,18 +532,18 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
     if let Err(e) = log_learn(paths, &rep, &changes, started.elapsed().as_millis() as u64) {
         let _ = adage_term::Out::stderr().warn(&format!("could not write {}: {e}", paths.learn_log().display()));
     }
+    let run = condition_out::Run {
+        command: "condition",
+        report: &rep,
+        after: &after,
+        changes: &changes,
+        elapsed_ms: started.elapsed().as_millis() as u64,
+        waiting: waiting(paths),
+        next: true,
+    };
     if args.iter().any(|a| a == "--json") {
-        println!("{}", serde_json::to_string_pretty(&rep)?);
+        println!("{}", serde_json::to_string_pretty(&condition_out::json(&run))?);
     } else {
-        let run = condition_out::Run {
-            command: "condition",
-            report: &rep,
-            after: &after,
-            changes: &changes,
-            elapsed_ms: started.elapsed().as_millis() as u64,
-            waiting: waiting(paths),
-            next: true,
-        };
         condition_out::render(&mut adage_term::Out::stdout(), &run)?;
     }
     Ok(())
@@ -582,10 +586,6 @@ pub(crate) fn instincts_only_then(args: &[String], paths: &Paths, next: bool) ->
     if let Err(e) = log_learn(paths, &rep, &changes, started.elapsed().as_millis() as u64) {
         let _ = adage_term::Out::stderr().warn(&format!("could not write {}: {e}", paths.learn_log().display()));
     }
-    if args.iter().any(|a| a == "--json") {
-        println!("{}", serde_json::to_string_pretty(&rep)?);
-        return Ok(());
-    }
     let after: BTreeMap<String, adage_learn::diff::Snapshot> = BTreeMap::from([(repo.clone(), after)]);
     let run = condition_out::Run {
         command: "condition --instincts-only",
@@ -596,6 +596,10 @@ pub(crate) fn instincts_only_then(args: &[String], paths: &Paths, next: bool) ->
         waiting: waiting(paths),
         next,
     };
+    if args.iter().any(|a| a == "--json") {
+        println!("{}", serde_json::to_string_pretty(&condition_out::json(&run))?);
+        return Ok(());
+    }
     condition_out::render(&mut adage_term::Out::stdout(), &run)?;
     Ok(())
 }

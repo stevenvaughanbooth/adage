@@ -21,6 +21,7 @@ import type {
   AdageMap,
   AdageMark,
   AdageMode,
+  AdageNode,
   AdagePack,
   AdagePredicted,
   AdagePress,
@@ -79,6 +80,7 @@ export type Stage = AdageStage
 export type Skill = AdageSkill
 export type Candidate = AdageCandidate
 export type Update = AdageUpdate
+export type GraphNode = AdageNode
 
 /** Every `$.state` value of the plugin, by key, as types/index.d.ts declares them. */
 export type AdageState = PluginState['adage']
@@ -101,7 +103,9 @@ const MODE0: Mode = {
 }
 
 const VIEW0: View = {
-  tab: 'live',
+  // The pane opens on this session's graph (ux-design §6.0), following its newest node.
+  tab: 'graph',
+  history: false,
   filter: '',
   selected: null,
   // Rows where Adage decided nothing (`· 3 calls seen`) are most rows; they are hidden until `v`.
@@ -148,6 +152,7 @@ export const STATE0: AdageState = {
   allow: null,
   skills: [],
   candidates: [],
+  dag: [],
 }
 
 /**

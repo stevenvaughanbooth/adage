@@ -2,7 +2,8 @@
 //! stimulus → reflex → response, drawn with box characters. Stimuli and responses that several
 //! reflexes share are drawn once, and their edges converge. `f` focuses on the selection (the
 //! reflexes two hops away: those sharing its stimulus or response); `+`/`-` switch between boxes
-//! and compact rows; `o` names the command that opens the same node in the web map.
+//! and compact rows; `o` names the command that opens the same node in the web map. It shows the
+//! repository Live and Reflexes show (the palette's Choose repository switches it).
 
 use super::empty;
 use crate::ui::app::{AppState, Cmd, Tab, WantKind};
@@ -84,7 +85,9 @@ fn response(r: &RouteRow) -> (&'static str, String) {
 /// instincts; with focus, only those sharing the selection's stimulus or response.
 pub fn graph(s: &AppState) -> Graph {
     let rows = s.route_rows();
-    let mut idx: Vec<usize> = (0..rows.len()).filter(|&i| !rows[i].nascent() && !rows[i].extinguished()).collect();
+    // The repository shown (as in Live and Reflexes).
+    let mut idx: Vec<usize> =
+        (0..rows.len()).filter(|&i| s.in_scope(&rows[i]) && !rows[i].nascent() && !rows[i].extinguished()).collect();
     idx.sort_by_key(|&i| rows[i].instinct);
     let sel = selected_index(s, &idx);
     if s.map.focus {

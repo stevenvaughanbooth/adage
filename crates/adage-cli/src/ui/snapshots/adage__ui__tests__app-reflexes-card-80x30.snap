@@ -1,0 +1,34 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes   3 Map   4 Health  2   5 Settings   6 Home
+──────────────────━━━━━━━━━━━━──────────────────────────────────────────────────
+ / filter reflexes, commands, files
+ FIRE 2  PRIME 1  INHIBIT 0  all states ▾
+
+  ▾ Learned here · v17.0.12 ──────────────────────────────────────── 2 reflexes
+  F edit crates/**/*.rs       → cargo fmt --all                    ▰▰▰▱▱▱ 22/39
+▌ F edit …/adage-cli/src/*.rs → cargo build -p adage-cli           ▰▰▰▰▱▱ 22/35
+
+  ▾ Instincts · v3.0.0 ───────────────────────────────────────────── 1 instinct
+  P edit Cargo.lock           → let cargo update it; do…  forming      built in
+────────────────────────────────────────────────────────────────────────────────
+ ◠ After editing crates/adage-cli/src/*.rs, run cargo build -p adage-cli
+    FIRE    Suggests   ○ nascent ── ● forming ── ● firm
+
+ when an edit touches crates/adage-cli/src/*.rs ──▶ ◠ ──▶
+   do cargo build -p adage-cli
+
+ Evidence ────────────────────────────────────────────────────────────────────
+ Learned from     ━━━━━━━━━━━━━━━━╸─────────  22 of 35 traces
+ Confidence       ━━━━━━━━━━━━──────────────  0.46 lower bound
+ Since installed  4 fired  3 followed  1 not observed  2 finish line met
+ Uplift           when told  ━━━━━━━━━━━━━──  0.88
+                  unaided    ━━━━━━━━━──────  0.60
+                  uplift +0.28 · lower bound +0.13
+ Finish line      adage asks for it once if the agent stops without running it
+
+ ▾ 14 more lines below · PgDn
+────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   /  filter   f  repository   j/k  move          q  quit

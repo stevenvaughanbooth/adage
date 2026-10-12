@@ -51,6 +51,7 @@ const ASKED = atom({ plugin: 'adage', key: 'asked' } as const, STATE0.asked)
 const ALLOW = atom({ plugin: 'adage', key: 'allow' } as const, STATE0.allow)
 const SKILLS = atom({ plugin: 'adage', key: 'skills' } as const, STATE0.skills)
 const CANDIDATES = atom({ plugin: 'adage', key: 'candidates' } as const, STATE0.candidates)
+const DAG = atom({ plugin: 'adage', key: 'dag' } as const, STATE0.dag)
 
 /** What one load of the module keeps between hooks (mod.ts `Runtime`). */
 const rt = runtime()
@@ -83,6 +84,7 @@ function mod($: EngineInterface, options: Options): Mod {
       allow: { read: () => read($, ALLOW), update: f => update($, ALLOW, f) },
       skills: { read: () => read($, SKILLS), update: f => update($, SKILLS, f) },
       candidates: { read: () => read($, CANDIDATES), update: f => update($, CANDIDATES, f) },
+      dag: { read: () => read($, DAG), update: f => update($, DAG, f) },
     },
     // The store table (plugin.ts `STORE_KEYS`): one cell per `$.store` key.
     store: {

@@ -38,7 +38,7 @@ impl Sources {
         live.push_records(self.spool.poll());
         live.push_log(self.log.poll());
         if self.polls.is_multiple_of(LOCK_EVERY) {
-            live.learning = health::learning_now(&self.paths, if live.all_repos { None } else { repo });
+            live.learning = health::learning_now(&self.paths, live.scope(repo));
         }
         self.polls += 1;
     }
@@ -145,6 +145,11 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
             }
         }
         sources.poll(&mut live, health.as_ref().and_then(|h| h.repo_key.as_deref()));
+        // Outside a repository, the pane settles on the most recently active one (once health has
+        // said where it was opened).
+        if let Some(h) = &health {
+            live.settle(h.repo_key.as_deref());
+        }
         live.tick_pulse(Instant::now(), ctx.theme.motion);
         t.terminal.draw(|f| view::draw_live(f, f.area(), &live, health.as_ref(), &ctx, true))?;
         if let Some(k) = term::next_key_within(wait(&live))? {

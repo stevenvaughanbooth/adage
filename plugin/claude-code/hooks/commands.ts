@@ -17,7 +17,7 @@ import { SAVINGS_ROWS, cardText, whyText } from './view/card'
 import { upToDate, updateHeadless } from './ask'
 
 /** The verbs `/adage` takes; anything else prints the card (ux-design §7). */
-const VERBS = ['status', 'watch', 'reflexes', 'health', 'doctor', 'review', 'why', 'off', 'on', 'pause', 'map', 'savings', 'update'] as const
+const VERBS = ['status', 'graph', 'watch', 'reflexes', 'health', 'doctor', 'review', 'why', 'off', 'on', 'pause', 'map', 'savings', 'update'] as const
 export type Verb = (typeof VERBS)[number] | 'card'
 
 /** The hint after the name: the two verbs a person needs (ux-design §7). */
@@ -33,6 +33,9 @@ export function verbOf(args: string): Verb {
 /** The pane's tab a verb opens, if it opens one. */
 export function tabOf(verb: Verb): View['tab'] | undefined {
   switch (verb) {
+    case 'graph':
+    case 'card':
+      return 'graph'
     case 'watch':
       return 'live'
     case 'reflexes':
@@ -41,8 +44,6 @@ export function tabOf(verb: Verb): View['tab'] | undefined {
     case 'health':
     case 'doctor':
       return 'health'
-    case 'card':
-      return 'live'
     default:
       return undefined
   }
@@ -82,19 +83,20 @@ export async function runCommand(args: string, deps: CommandDeps): Promise<{ tex
     case 'card':
     case 'status': {
       const card = await deps.card()
-      if (verb === 'card' && args.trim() === '') await deps.open('live')
+      if (verb === 'card' && args.trim() === '') await deps.open('graph')
       return { text: card === undefined ? NO_CARD : cardText(card) }
     }
     case 'savings': {
       const card = await deps.card()
       return { text: card === undefined ? NO_CARD : cardText(card, SAVINGS_ROWS) }
     }
+    case 'graph':
     case 'watch':
     case 'reflexes':
     case 'review':
     case 'health':
     case 'doctor':
-      await deps.open(tabOf(verb) ?? 'live')
+      await deps.open(tabOf(verb) ?? 'graph')
       return {}
     case 'why':
       return { text: await deps.why() }

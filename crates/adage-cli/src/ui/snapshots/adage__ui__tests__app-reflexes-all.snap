@@ -1,0 +1,44 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes   2   3 Map   4 Health  2   5 Settings   6 Home                                             ◆ all repositories ▾ · LIVE
+──────────────────━━━━━━━━━━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ / filter reflexes, commands, files                                         │ ◠ The gist of lookup-incident
+ FIRE 3  PRIME 4  INHIBIT 1  all states ▾                                   │    FIRE    Suggests   ○ nascent ── ● forming ── ● firm
+                                                                            │   ○ waits for review: new · conditioned and never reviewed
+  ▾ incidents · harbor-dispatch · v0.3.0 ────────────────────── 3 reflexes  │
+▌ F a prompt names a tic… → the gist of lookup-incident       ▰▰▰▰▰▱ 24/25  │ ╭─ WHEN ──────────────────╮         ╭─ DO ──────────────────────╮
+  F bin/fetch-incident {… → the gist of read-linked-files     ▰▰▰▰▰▱ 13/17  │ │ a prompt names a ticket │─── ◠ ──▶│ bin/fetch-incident {item} │
+  I npm test fails: HARB… → the gist of dead-end-npm-test     ▰▰▱▱▱▱ 11/43  │ ╰─────────────────────────╯         ╰───────────────────────────╯
+                                                                            │
+  ▾ intents · harbor-dispatch · v0.3.0 ────────────────────────── 1 reflex  │ Evidence ──────────────────────────────────────────────────────────────
+  P a prompt means: run … → the gist of start-with…  forming  ▰▰▰▰▱▱   6/9  │ Learned from     ━━━━━━━━━━━━━━━━━━━━━━━━━─  24 of 25 traces
+                                                                            │ Confidence       ━━━━━━━━━━━━━━━━━━━━━─────  0.80 lower bound
+  ▾ From pack · work-items · acme-billing · v0.1.0 ────────────── 1 reflex  │ Saves            ~8 turns per trace
+  P a prompt names a wor… → the gist of close-work-item       ▰▰▰▰▱▱   5/7  │ Since installed  3 fired  2 followed  1 not observed  0 finish line met
+                                                                            │ Took the step    told       ━━━━━━━━━━━━╸──  10/12
+  ▾ Learned in adage · v17.0.4 ────────────────────────────────── 1 reflex  │                  held back  ━━━────────────  1/5
+  F edit crates/**/*.rs   → the gist of cargo-test-after-ed…  ▰▰▰▰▰▱ 30/33  │
+                                                                            │ What the agent sees · example values ──────────────────────────  r  raw
+  ▾ Waiting for review ────────────────────────────────────────── 1 reflex  │ ▎ Incidents here are looked up with a script. A known next step here is:
+  ○ edit api/*.yaml       → the gist of regen-openapi-client  ▰▰▰▰▰▱   3/4  │ ▎   bin/fetch-incident INC-2045. Ignore this if the user is asking for
+                                                                            │ ▎   something else.
+  ▾ Instincts · v0.1.0 ──────────────────────────────────────── 1 instinct  │ ▎ Learned by Adage from this repository's earlier agent sessions; not
+  P edit registry/*.csv   → the gist of finish-line/regener…      built in  │ ▎ requested by the user.
+                                                                            │
+  ▸ Extinguished ──────────────────────────────────────────────── 1 reflex  │ Review ────────────────────────────────────────────────────────────────
+                                                                            │  w  weaken    x  extinguish    a  approve    n  pin    d  delegate
+                                                                            │  t  traces (0)    o  open in map
+                                                                            │
+                                                                            │ ▸ Details ────────────────────────────────────────────────  enter  open
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+───────────────────────────────────────────────────────────────────────────────────────────────────── ✓ Live, Reflexes and Map show every repository ─
+  ?  keys   :  palette   /  filter   f  repository   j/k  move   enter  expand   tab  next tab                                                q  quit

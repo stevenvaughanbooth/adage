@@ -15,11 +15,6 @@ pub mod settings;
 use super::theme::Theme;
 use ratatui::text::{Line, Span};
 
-/// A section heading in a detail pane: `WHAT THE AGENT SEES`.
-pub fn head(title: &str, t: &Theme) -> Line<'static> {
-    Line::from(Span::styled(title.to_string(), t.dim().patch(t.bold())))
-}
-
 /// An empty state: what is missing, and the command that fills it.
 pub fn empty(what: &str, next: &str, command: &str, t: &Theme) -> Vec<Line<'static>> {
     vec![

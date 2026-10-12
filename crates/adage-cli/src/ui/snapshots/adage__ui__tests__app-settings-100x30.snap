@@ -1,0 +1,34 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home
+────────────────────────────────────────────────────────━━━━━━━━━━━━────────────────────────────────
+ 24 settings · 2 changed · same as adage config · /home/me/.local/share/adage/config.toml
+ ! 1 setting is set by environment variables, which win over the file
+
+    Instinct packs           auto, every installed pack
+    Always leave out         none
+
+  In Claude Code  4
+    Session-start notice     daily
+    Spinner note             ○ off
+    Turn summary             ○ off
+    Habit hints              ○ off
+
+  In adage ui  1
+    Start screen             ● on
+
+  Advanced  6 · 1 changed
+    Fix Python test runs     ● on
+▌   Measure savings          10% of sessions held out  env ADAGE_CONTROL
+    Model for routine steps  the session's own model
+─ Measure savings · runtime.control ────────────────────────────────────────────────────────────────
+ Hold out a share of sessions where Adage stays silent, so adage savings can compare them with the
+ rest.
+ accepts 0 (off: every session gets Adage) to 1; 0.1 measures with one session in ten · default off
+ · now set by the environment (ADAGE_CONTROL)
+ enter edits; checked before it is saved · same as adage config set runtime.control <value>
+ ! ADAGE_CONTROL wins over config.toml: a change here takes effect once it is unset
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   enter  edit   space  toggle                                        q  quit

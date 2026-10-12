@@ -80,6 +80,31 @@ describe('T-B2-02, T-B2-04 · the observers over the fake', () => {
     expect(f.toasts).toEqual(['adage: finish line · the agent continues once'])
   })
 
+  test('T-B3-13: the graph grows as the hooks fire: the prompt, its reflexes, a batch and the reflex after it, a failure, the stop before its reflexes; a subagent\'s calls are not drawn', async () => {
+    const f = fake()
+    f.m.rt.bin = '/data/bin/hook'
+    f.m.rt.interactive = true
+    await onPrompt(f.m, { prompt: 'fix W-2042', source: 'user' } as never, answered({ additionalContext: [block('lookup-work-item')] }) as never)
+    await onToolBatch(f.m, { tool_calls: [{ tool_name: 'Edit', tool_input: { file_path: '/w/schema/invoice.json' }, tool_use_id: 'e1' }] } as never, answered({ additionalContext: [block('codegen-after-schema')] }) as never)
+    await onToolBatch(f.m, { agent_id: 'a1', tool_calls: [{ tool_name: 'Read', tool_use_id: 'r1' }] } as never, answered({ additionalContext: [block('x')] }) as never)
+    await onToolFailure(f.m, { tool_name: 'Bash', tool_use_id: 'b1' } as never, answered({ additionalContext: [block('dead-end-unittest', 'inhibit')] }) as never)
+    await onToolBatch(f.m, { tool_calls: [{ tool_name: 'Bash', tool_input: { command: 'python3 -m unittest' }, tool_use_id: 'b1' }] } as never, answered({}) as never)
+    await onStop(f.m, {} as never, answered({ block: block('codegen-after-schema') }) as never)
+    expect(f.state.dag.map(n => (n.kind === 'reflex' ? `reflex ${n.event} ${n.route} [${n.ids.join()}]` : n.kind === 'tools' ? `tools ${n.tools.join()} ${n.detail}` : n.kind === 'stop' ? `stop gate=${n.gate}` : n.kind === 'failed' ? `failed ${n.id}` : `prompt ${n.n} ${n.text}`))).toEqual([
+      'prompt 1 fix W-2042',
+      'reflex UserPromptSubmit lookup-work-item []',
+      'tools Edit schema/invoice.json',
+      'reflex PostToolBatch codegen-after-schema [e1]',
+      'failed b1',
+      'reflex PostToolUseFailure dead-end-unittest [b1]',
+      'tools Bash python3 -m unittest',
+      'stop gate=true',
+      'reflex Stop codegen-after-schema []',
+    ])
+    // The subagent's reflex is still counted where the band counts (`fired`), just not drawn in the graph.
+    expect(f.state.fired.map(x => x.route)).toContain('x')
+  })
+
   test('PreToolUse: a rewrite and a receipt beside a Bash call are kept as its markers; another tool is not looked at', async () => {
     const f = fake()
     f.m.rt.bin = '/data/bin/hook'

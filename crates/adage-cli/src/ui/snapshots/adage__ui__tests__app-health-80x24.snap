@@ -1,0 +1,28 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health   2   5 Settings   6 Home
+──────────────────────────────────────────━━━━━━━━━━────────────────────────────
+  ▄███▄   Healthy · 4 checks passed · 2 to look at
+  ██!██   ━━━━━━━━━━━━━━━━━━━━━━━━────────────  4 of 6 pass
+  ▀███▀   The same checks as adage doctor, rechecked live · R checks now
+
+ Needs a look  2 · fix them here ──────────────────────────────────────────────
+ ╭─ ! Embedding model ────────────────────────────────────────── worth a look ─╮
+ │ No embedding model, so the hashed fallback is in use; intent reflexes       │
+ │ cannot fire                                                                 │
+ │                                                                             │
+ │ fix     run adage models fetch                                              │
+ │ doctor  embedding model                                                     │
+ ╰───────────────────────────────  enter  fetch the intent model   R  recheck ─╯
+ ╭─ ! Codex hooks ─────────────────────────────────────────────────────────────╮
+ │ Codex is installed, but Adage's hooks are not registered with it            │
+ │ next  adage install codex --write                                           │
+ ╰───────────────────────────────────────────────────  i  install codex hooks ─╯
+
+ Hooks & delivery  2 ──────────────────────────────────────────────────────────
+  + Claude Code hooks  set up in settings.local.json
+  + Hook errors        none in the last 7 days
+────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   enter  fix   R  recheck                        q  quit

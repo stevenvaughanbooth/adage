@@ -145,13 +145,13 @@ Q7). The permission prompt is not a render site and is never touched.
 | --- | --- | --- |
 | `InfoNotice` (terminal; a toast on Desktop) | The engine's own notice for the hook's `systemMessage`, redrawn with the glyph | Whenever the binary's notice gate printed one: the first session, then at most daily (`ui.notices`); never on `/clear` or `/resume` |
 | `UserMessage` | One line per reflex fired at that prompt | Per prompt, at most 3 lines (the decision cap, `params.rs`) |
-| `ToolUse` | A marker under a rewritten, predicted, or dead-end-avoided call; a skill loaded or verified | Per call it applies to |
+| `ToolUse` | A marker under a rewritten, predicted, or dead-end-avoided call; a skill loaded or verified; the reflexes delivered after the batch it ends (`tool.fired`) | Per call it applies to; `tool.fired` at most 3 lines |
 | `ToolResult` | The receipt card, only when the receipt was the result | Per receipt answered |
 | `ToolGroup` / last `ToolUse` of a batch | The noticed line (`ui.noticed`, off by default) | Once per candidate per session |
 | `Spinner` | `· adage ◠ n…` suffix (`ui.spinner`, off by default) | While a reflex was delivered this turn |
 | `TurnDuration` (terminal) | `· adage: …` summary (`ui.turn_line`, off by default) | Per turn with Adage activity |
 | `AbovePrompt` | The band, one line (two while something needs attention) | When any cell has something to say; otherwise `next(e)` |
-| `Pane` | `/adage` with Live, Reflexes, Health | On demand; unasked only at ≥144 columns with `pane: auto` |
+| `Pane` | `/adage` with Graph (this session's DAG, live), Live, Reflexes, Health | On demand; unasked only at ≥144 columns with `pane: auto` |
 | `CommandOutput` | `/adage`, `/adage why` drawn as a card | Per command |
 | Toast | The learner finished with a change; a grant lapsed; the finish line continuing; a copy confirmation | One per learn; one per lapse per session; one per gate; one per copy |
 | `$.ui.status` | Warnings only (the engine prefixes it `⚠ adage:`, so the text carries no prefix) | Until cleared |
@@ -474,15 +474,98 @@ true → `next(e)` (the engine's survey has the band; verify the prop in Q3).
 
 ## 6. The pane
 
-Opened by `/adage` (and `/adage watch|reflexes|health|review`) with `focus: true, closeOnEscape:
+Opened by `/adage` (and `/adage graph|watch|reflexes|health|review`) with `focus: true, closeOnEscape:
 true, holdToasts: true, rows: 20`; unasked only with `pane: auto` and a 144-column fullscreen
-terminal. Three tabs as `plain` Buttons with hotkeys `l` (Live), `r` (Reflexes), `t` (Health): a
-`Button` hotkey is one digit or one lowercase letter, and `h` is `adage watch`'s help key, which
-persona (b) knows. The open tab is in the accent, the others dim. Every tab's footer ends with one
+terminal. Four tabs as `plain` Buttons with hotkeys `g` (Graph), `l` (Live), `r` (Reflexes), `t`
+(Health): a `Button` hotkey is one digit or one lowercase letter, and `h` is `adage watch`'s help
+key, which persona (b) knows. The pane opens on **Graph**, this session drawn live (§6.0); the
+person's last tab is remembered across sessions. The open tab is in the accent, the others dim. Every tab's footer ends with one
 `Link`, **`Explore in browser`**, which starts `adage map` if it is not running and opens
 `http://localhost:<port>`: the whole graph, the live events and health, read-only, for when a
 pane is too small. Decisions in the pane are presses (§4.17): a press runs the one verb it names
 with the session's press token, and nothing in the pane runs `install` or a `config set`.
+
+### 6.0 Graph
+
+This session as a DAG that grows while the agent works, newest at the bottom, so expanding the
+pane shows Adage at work in real time. Built from what the command hooks saw (`$.state.dag`,
+`hooks/dag.ts`): each prompt the person submitted, each tool batch on the main loop, each reflex a
+hook delivered, each stop; joined with the feed's `followed`/`met` rows, the predicted steps and
+the tool-row markers. A subagent's own calls are its transcript's and are not drawn.
+
+```text
+ g: Graph   l: Live   r: Reflexes   t: Health                                         esc: close
+ ◆ this session · adage fired 3 reflexes · 2 followed · 1 step without a model request · 2 prompts
+╭─ PROMPT 1 ──────────────────────────────────────────────────────────────────────────── 14:02:01 ─╮
+│ fix W-2042 and add the currency field                                                            │
+╰─┬─┬──────────────────────────────────────────────────────────────────────────────────────────────╯
+  │ │  ╭─ ◆ adage · ● FIRE ──────────────────────╮      ╭─ RUN ───────────────────────────────────╮
+  │ ╰─▶│ look up the work item with scripts/wi-… │ ───▶ │ scripts/wi-lookup W-2042 --json         │
+  │    ╰─ at your prompt · 14:02:01 ─────────────╯      ╰─ ✓ followed ────────────────────────────╯
+  ├── Bash  scripts/wi-lookup W-2042 --json                            ✓ followed adage  14:02:03
+  ├── Read ×2 · Grep                                                                     14:02:04
+  ├─┬ Edit  schema/invoice.json                                                          14:02:05
+  │ │  ╭─ ◆ adage · ● FIRE ──────────────────────╮      ╭─ RUN ───────────────────────────────────╮
+  │ ╰─▶│ run make gen after a schema edit        │ ───▶ │ make gen                                │
+  │    ╰─ after this step · 14:02:05 ────────────╯      ╰─ ✓ followed ────────────────────────────╯
+  ├─┬ Bash  make gen                                                   ✓ followed adage  14:02:07
+  │ ╰─ ↪ adage pointed this test run at .venv/bin/python
+  ┊   3 steps, nothing fired  Read · Edit ×2 · Bash
+  ├─┬ Bash  python3 -m unittest                                              ✗ 1 failed  14:02:11
+  │ │  ╭─ ◆ adage · ● INHIBIT ───────────────────╮      ╭─ RUN INSTEAD ───────────────────────────╮
+  │ ╰─▶│ avoid python3 -m unittest here; use ma… │ ───▶ │ make test                               │
+  │    ╰─ after a failure · 14:02:11 ────────────╯      ╰─────────────────────────────────────────╯
+  ├─┬ Bash  make test                                                                    14:02:13
+  │ ╰─ ◆ adage chose this step · no model request
+  ╰── ✓ done                                                                             14:02:15
+
+╭─ PROMPT 2 ──────────────────────────────────────────────────────────────────────────── 14:02:21 ─╮
+│ now ship it                                                                                      │
+╰─┬────────────────────────────────────────────────────────────────────────────────────────────────╯
+  ├── Bash  git status                                                                        now
+ a: whole session
+```
+
+Each prompt is a box (`PROMPT n`, its time in the border), the root of its turn; the agent's tool
+batches hang off the trunk beneath it, one line each (`Bash ×3 · Edit`, a lone call with its
+command, file or pattern; `├─┬` when something hangs off it), the time flush right from 80
+columns. Each reflex a hook delivered branches off the rail of the step whose calls it followed
+(the prompt, for a reflex at the prompt) as the map's picture in small: a `◆ adage · ● FIRE` box
+in its strength's role (fire green, prime amber, inhibit red) saying what it tells the agent,
+captioned where and when it fired, then `───▶` to its response box (`RUN`, `RUN INSTEAD`,
+`ADVICE`, the command the feed named), lit in the fire role with `✓ followed` (a dead end's
+`✓ headed off`) once the agent did it, and the step it did it in tagged `✓ followed adage`.
+Everything else Adage did at a step is one line that says `adage`: `◆ adage chose this step · no
+model request`, `↪ adage pointed this test run at …`, `↪ adage ran … instead`, `✓ adage headed off
+a dead end`, `✓ adage answered from receipt … · it did not run`; the finish line is a step of its
+own (`├── ◆ adage finish line · the agent continues once`). A failed call is counted on its batch
+(`✗ 1 failed`, red). Three or more steps in a row where nothing happened fold into `┊ n steps,
+nothing fired` with their tools; the newest step never folds. The turn's end is `╰── ✓ done`.
+
+The summary line above leads with what Adage did (`adage fired 3 reflexes · 2 followed · 1 step
+without a model request`), then the prompts and steps, dropped from the right to fit. The graph
+follows the newest node within the pane's rows: older blocks scroll off the top under `┊ ↑
+earlier: 1 prompt · 3 steps`; `a: whole session` draws all of it for the engine to scroll, and
+`a: follow the newest` goes back. The newest node glows for 3 s (its time reads `now`, in the
+accent) and then settles bold; under `ADAGE_REDUCED_MOTION=1` it is only bold and no redraw is
+scheduled. From 60 columns on the terminal it draws the boxes, narrower as the pane narrows (the
+strength word kept whole, the time over the event's words); under 60 columns, and always on the
+desktop (whose native elements would break a box's borders), one line per node down a trunk:
+
+```text
+ › PROMPT 1  fix W-2042 and add the currency field
+ │ ◆ adage ● FIRE · look up the work item with scripts/wi-…
+ │   ──▶ scripts/wi-lookup W-2042 --json  ✓ followed
+ ├ Bash  scripts/wi-lookup W-2042 --json  ✓ followed adage
+ ├ Edit  schema/invoice.json
+ │ ◆ adage ● FIRE · run make gen after a schema edit
+ │   ──▶ make gen  ✓ followed
+ ╰ ✓ done
+```
+
+`ADAGE_ASCII=1` draws `+- PROMPT 1 -+`, `|`, `+--`, `` `-> ``, ` ---> `, `:`. No reflex id is drawn
+(§1.10); strength words are allowed here (§1.3). Nodes are kept for a person at the prompt only,
+the newest 300, and a `/clear` starts the graph again.
 
 ### 6.1 Live
 
@@ -490,6 +573,7 @@ with the session's press token, and nothing in the pane runs `install` or a `con
  l: Live   r: Reflexes   t: Health                                          esc: close
  Filter: lookup                                                            enter: apply
  04:22:53 bc0c7d cc tools   → ◠ codegen-after-schema   FIRE     make gen
+                            ╰ after editing schema/*.json ──▶ ◠ ──▶ make gen
  04:22:53 bc0c7d cc failure → ◠ dead-end-unittest      INHIBIT  python3 -m unittest
  04:22:53 bc0c7d cc tools   ✓ finish line met codegen-after-schema
  04:21:10 7a01e2 cc prompt  → ◠ lookup-work-item       FIRE     scripts/wi-lookup W-2041
@@ -510,6 +594,11 @@ by §1.3, and are spelled out so no colour is needed. The health strip quotes th
 (`health.rs`: `hooks <harness>`, `n reflexes`, `auto-condition`, `model` / `bundled model` /
 `no model`, and a fail-open light only when the count is positive) with `theme.rs`'s shapes.
 
+Under each directive, the Reflexes tab's flow in small (§6.2): `╰ {stimulus} ──▶ ◠ ──▶
+{response}`, the stimulus dim, the arrows and the reflex glyph in its lamp's role, the response as
+the directive named it; the two ends share the room, and with under 40 columns beside the row's
+head it is left out (the act line says enough). `ADAGE_ASCII=1` draws `` ` `` and ` --> `.
+
 Each row is a `plain` Button: `enter` opens the inspect pane (`adage-inspect`, `focus`,
 `closeOnEscape`, `rows: 12`) with the record's directive text and evidence as `Markdown`. Arrows
 and page keys scroll (engine-owned); `p`, `v`, `n` are hotkeys on footer buttons, live while the
@@ -525,8 +614,31 @@ group first (every pending ask, §4.17), one dim heading per kind (a team's pack
 enable, steps Adage could run itself, steps without a model request, quiet reflexes), each
 sentence whole and wrapped with its answers beneath and `command` to show the terminal command;
 then a tree by track, learned first and instincts last, each headed in plain words (`learned in
-this repository`): instinct `◉`, learned `◠`, imported `◠` with the signer dim; each row: id,
-strength lamp and word, lifecycle word, trigger → step, support `13/17 · lb 0.53`. `enter`
+this repository`): instinct `◉`, learned `◠`, imported `◠` with the signer dim; each row is the
+map's picture (`adage ui`'s Map tab), stimulus → reflex → response:
+
+```text
+ ◆ 2 reflexes fired in this session · last at 14:02:11
+ learned in this repository
+   ╭─ AFTER EDIT ─────────────╮      ╭─ ● FIRE ─────────────────╮      ╭─ RUN ────────────────────╮
+   │ crates/**/*.rs changed   │ ───▶ │ ◠ firm · 19/36 · lb 0.37 │ ───▶ │ cargo fmt --all          │
+   ╰──────────────────────────╯      ╰─ ◆ fired 14:02:11 ───────╯      ╰─ ✓ followed ─────────────╯
+   ╭─ PROMPT ─────────────────╮      ╭─ ● PRIME ────────────────╮      ╭─ RUN ────────────────────╮
+   │ names a work item        │ ───▶ │ ◠ firm · 13/17 · lb 0.53 │ ───▶ │ scripts/wi-lookup {item} │
+   ╰──────────────────────────╯      ╰──────────────────────────╯      ╰──────────────────────────╯
+```
+
+The boxes are titled by the trigger's kind (`AFTER EDIT`, `PROMPT`, `INTENT`, `AFTER COMMAND`,
+`AFTER FAILURE`, `SESSION START`, `SEQUENCE`) and the step's (`RUN`, `READ TOGETHER`, `RUN
+INSTEAD`, `ADVICE`); the reflex box carries the strength lamp and word, the lifecycle word and the
+support `19/36 · lb 0.37`, never the id (§1.10), and its body is the row's Button. Borders are
+dim (`ink3`), the expanded row's the accent. A reflex that fired in this session lights its
+stimulus, first arrow and box in the fire role with `◆ fired <time>`; once the agent followed it,
+the second arrow and the response too, so the pane shows Adage acting while you work; a fire-role
+line above the tracks counts them. Under 74 columns each row is one line, the stimulus cut first:
+`● ◆ 14:02 after editing crates/**/*.rs ──▶ ◠ ──▶ cargo fmt --all  FIRE · firm`; the desktop
+draws this line at every width (its native Button inside a box line would break the borders).
+`ADAGE_ASCII=1` draws `+- RUN -+`, `|`, ` ---> `. `enter`
 expands to the directive text, evidence and uplift line (`Uplift::line`, emitted as
 `evidence.uplift.line`). Filters: an `Input` (fuzzy on id, trigger, command, track), a `Select`
 for strength (`all · fire · prime · inhibit`) and a `Select` for lifecycle. The graph's
@@ -549,7 +661,9 @@ A `Link` to the map when `adage map` is serving (`http://localhost:<port>`).
 
 ### 6.4 Empty states
 
-Live with no rows: `Nothing yet in this repository. Reflexes appear here as Adage uses them.`
+Graph with nothing yet: `Nothing yet. This graph grows as the agent works: each prompt, each step,
+and every reflex Adage fires.` (on a Desktop without `$.process`: `the graph needs the terminal ·
+adage watch`). Live with no rows: `Nothing yet in this repository. Reflexes appear here as Adage uses them.`
 Reflexes with no learned reflex: `No learned reflexes yet · 0 of ~5 sessions needed · 4 instincts
 active meanwhile` (the status card's wording and counts). Health with the binary missing: the
 warning from §9.1. Live on a Desktop without `$.process`: §4.12's line.
@@ -558,8 +672,8 @@ warning from §9.1. Live on a Desktop without `$.process`: §4.12's line.
 
 | Command | Output (`CommandOutput`) | Context for the model |
 | --- | --- | --- |
-| `/adage` | The status card, drawn: header, key column, `next` (as `adage` prints it, with `adage ui …` swapped for `/adage watch` because `adage ui` refuses inside a session, and the terminal-only commands behind `Copy`) | none (`{}` after drawing) |
-| `/adage watch`, `/adage reflexes`, `/adage health` | Opens the pane on that tab; prints nothing | none |
+| `/adage` | The status card, drawn: header, key column, `next` (as `adage` prints it, with `adage ui …` swapped for `/adage watch` because `adage ui` refuses inside a session, and the terminal-only commands behind `Copy`); opens the pane on **Graph** | none (`{}` after drawing) |
+| `/adage graph`, `/adage watch`, `/adage reflexes`, `/adage health` | Opens the pane on that tab (`watch` is Live, as `adage watch` is); prints nothing | none |
 | `/adage why` | The last directive this session: its text as the model read it, route, track, evidence line, followed or not; for a skill, the verified steps; with nothing fired (either arm): `No reflex has spoken in this session yet.` | none |
 | `/adage off` | Runs `adage off` (plan A6): `adage is off for this repository (.adage/disabled). /adage on turns it back on.` | none |
 | `/adage on` | Opens the ask `adage is off in this repository · turn it on / leave it off`; the answer runs `adage on` through the press; then `adage is on for this repository.` | none |
@@ -568,7 +682,7 @@ warning from §9.1. Live on a Desktop without `$.process`: §4.12's line.
 | `/adage pause` | `adage is paused for this session · /adage pause resumes` / `adage resumed` | none |
 
 One registration, `/adage`, with the argument hint `[review]` (the two verbs a person needs:
-`/adage` for the card, `/adage review` for what waits); the others (`watch`, `reflexes`,
+`/adage` for the card, `/adage review` for what waits); the others (`graph`, `watch`, `reflexes`,
 `health`, `why`, `off`, `on`, `map`, `pause`) are parsed from the arguments too and listed on
 the card's last line, not in the hint. An unknown verb prints the card. `immediate: true` (they run mid-turn). No command handler runs
 a person-only verb; `/adage on` opens the ask. Nothing else is registered: no `install`, no
@@ -623,7 +737,8 @@ lines of about 40 columns.
 | Id | Template | Cap |
 | --- | --- | --- |
 | `open.notice` | `◠ adage · {the binary's notice text, prefix stripped}` (`ready_notice`, `first_notice`, or the day's notice) | bodyColumns |
-| `prompt.fired` | `◠ {summary}` (`run make test after editing acme/**`); for an avoid reflex `◠ avoid {command} here · {instead}` | bodyColumns |
+| `prompt.fired` | `◠ adage: {summary}` (`run make test after editing acme/**`); for an avoid reflex `◠ adage: avoid {command} here · {instead}` | bodyColumns |
+| `tool.fired` | the same line, under the last call of the tool batch it followed (or its folded group's line) | bodyColumns |
 | `tool.rewrite` | `↪ adage: pointed this {test run\|Python run} at {interpreter}` (also the `$.ui.notice` line) | bodyColumns |
 | `tool.predicted` | `◠ adage chose this step · no model request` (also the `$.ui.notice` line, without the tail) | bodyColumns |
 | `tool.avoided` | `◠ adage: dead end headed off` | bodyColumns |
@@ -678,7 +793,11 @@ lines of about 40 columns.
 | `status.binary` | `{the shim's reason from $DATA/status}` | 1 line |
 | `status.unanswering` | `hooks are not answering; run adage doctor` | 1 line |
 | `status.recovery` | `an action was interrupted; inspect the worktree, then run {recover command} in a terminal` | 1 line |
-| `pane.tabs` | `l: Live   r: Reflexes   t: Health` / `esc: close` | |
+| `pane.tabs` | `g: Graph   l: Live   r: Reflexes   t: Health` / `esc: close` | |
+| `pane.graph.empty` | `Nothing yet. This graph grows as the agent works: each prompt, each step, and every reflex Adage fires.` | |
+| `pane.graph.desktop` | `the graph needs the terminal · adage watch` | |
+| `pane.graph.footer` | `a: whole session` / `a: follow the newest` | |
+| `pane.graph.earlier` | `┊ ↑ earlier: {n} prompts · {k} steps` | |
 | `pane.footer` | `p: pause · v: show quiet rows` (`hide quiet rows` once shown) `· n: newest` | |
 | `pane.filter` | `Filter` (the engine adds the colon, as it does a `Select`'s) / `enter: apply` | |
 | `pane.live.empty` | `Nothing yet in this repository. Reflexes appear here as Adage uses them.` | |

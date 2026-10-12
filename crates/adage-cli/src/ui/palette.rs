@@ -47,6 +47,10 @@ pub enum Run {
     /// Select a reflex in the Reflexes tab: `(reference, id)`.
     Reflex(String, String),
     Tab(Tab),
+    /// Open the repository switcher.
+    Repos,
+    /// Show one repository (`Some(key)`) or every one (`None`) in Live, Reflexes and Map.
+    Scope(Option<String>),
     /// Select a setting.
     Setting(usize),
 }
@@ -129,9 +133,11 @@ pub fn entries(s: &AppState) -> Vec<Entry> {
         action("Pause or resume the live feed", "", "p", Run::Key(Tab::Live, 'p')),
         action("Filter the live feed", "", "/", Run::Key(Tab::Live, '/')),
         action("Focus the map on the selection", "", "f", Run::Key(Tab::Map, 'f')),
+        action("Choose a repository", "Which repository Live, Reflexes and Map show", "f", Run::Repos),
     ];
     if let Some(Ok(r)) = &s.routes {
-        for row in &r.rows {
+        // The reflexes of the repository shown, as in the Reflexes tab.
+        for row in r.rows.iter().filter(|r| s.in_scope(r)) {
             v.push(Entry {
                 section: Section::Reflexes,
                 title: row.id.clone(),
@@ -167,6 +173,14 @@ pub fn entries(s: &AppState) -> Vec<Entry> {
         v.push(goto(name.to_string(), note, Some(k), Run::Tab(tab)));
     }
     v.push(goto("Open the map in the browser".into(), "adage map", Some("o"), Run::Web { traces: false }));
+    // Each repository, to show it in Live, Reflexes and Map; and every repository.
+    let shown = s.scope_key().map(String::from);
+    for k in s.known_repos() {
+        let note = if shown.as_deref() == Some(k.key.as_str()) { "shown now" } else { "show in Live, Reflexes, Map" };
+        v.push(goto(format!("Repository · {}", k.name), note, None, Run::Scope(Some(k.key))));
+    }
+    let note = if shown.is_none() { "shown now" } else { "show every repository's activity" };
+    v.push(goto("Repository · all repositories".into(), note, None, Run::Scope(None)));
     for (i, row) in s.settings.iter().enumerate() {
         v.push(goto(
             format!("Settings · {}", row.key),

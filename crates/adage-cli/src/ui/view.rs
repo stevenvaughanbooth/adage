@@ -147,8 +147,11 @@ pub struct Live {
     pub held: Vec<FeedItem>,
     pub ticks: VecDeque<Tick>,
     pub paused: bool,
-    /// Show every repository's activity, not only this one's.
+    /// Show every repository's activity, not only one's.
     pub all_repos: bool,
+    /// The repository chosen to show (`adage ui`'s switcher); `None` follows the one the screen
+    /// was opened in ([`Live::scope`]).
+    pub repo: Option<String>,
     /// Hide events where Adage said and judged nothing.
     pub hide_quiet: bool,
     /// Lines scrolled back from the newest (0 follows the feed).
@@ -248,22 +251,49 @@ impl Live {
         }
     }
 
+    /// The repository shown: `None` for every repository. The one chosen, else `here` (the one
+    /// the screen was opened in), else every one.
+    pub fn scope<'a>(&'a self, here: Option<&'a str>) -> Option<&'a str> {
+        if self.all_repos {
+            None
+        } else {
+            self.repo.as_deref().or(here)
+        }
+    }
+
+    /// Opened outside any repository (`here` is `None`), the screens settle on the most recently
+    /// active one, once there is one: a scope that moved with every new event would be no scope.
+    pub fn settle(&mut self, here: Option<&str>) {
+        if self.all_repos || self.repo.is_some() || here.is_some() {
+            return;
+        }
+        let newest = self.feed.iter().chain(&self.held).filter(|i| !i.repo.is_empty()).max_by_key(|i| (i.ts, i.seq));
+        self.repo = newest.map(|i| i.repo.clone());
+    }
+
     /// The items shown, oldest first.
     pub fn visible<'a>(&'a self, repo_key: Option<&'a str>) -> Vec<&'a FeedItem> {
         let needle = self.filter.to_lowercase();
+        let scope = self.scope(repo_key);
         self.feed
             .iter()
-            .filter(|i| self.all_repos || repo_key.is_none_or(|k| i.repo == k))
+            .filter(|i| scope.is_none_or(|k| i.repo == k))
             .filter(|i| !self.hide_quiet || !i.quiet())
             .filter(|i| needle.is_empty() || i.haystack().to_lowercase().contains(&needle))
             .collect()
     }
 
     pub fn visible_ticks<'a>(&'a self, repo_key: Option<&'a str>) -> Vec<&'a Tick> {
-        self.ticks
-            .iter()
-            .filter(|t| self.all_repos || repo_key.is_none_or(|k| t.repo.as_deref().is_none_or(|r| r == k)))
-            .collect()
+        let scope = self.scope(repo_key);
+        self.ticks.iter().filter(|t| scope.is_none_or(|k| t.repo.as_deref().is_none_or(|r| r == k))).collect()
+    }
+
+    /// The feed's lines as the pane draws them: a run of quiet events in one line, and with every
+    /// repository shown, each row's repository.
+    pub fn lines(&self, repo_key: Option<&str>, ctx: &Ctx, width: u16) -> Vec<(u64, Line<'static>)> {
+        let items = self.visible(repo_key);
+        let rows = Rows { repo: self.scope(repo_key).is_none(), collapse: true, breaks: true };
+        feed_rows(&items, ctx, width, &self.pulse, &self.gists, rows)
     }
 
     /// Firings among the items shown, by strength: (fire, prime, inhibit).
@@ -302,7 +332,7 @@ impl Live {
     /// The item the inspector opens: the newest shown (under the scroll) that did something.
     pub fn current<'a>(&'a self, repo_key: Option<&'a str>, ctx: &Ctx, width: u16) -> Option<&'a FeedItem> {
         let items = self.visible(repo_key);
-        let lines = feed_lines(&items, ctx, width, &self.pulse, &self.gists);
+        let lines = self.lines(repo_key, ctx, width);
         let end = lines.len().saturating_sub(self.scroll.min(lines.len()));
         let last_seq = lines.get(end.checked_sub(1)?).map(|(s, _)| *s)?;
         let upto: Vec<&FeedItem> = items.into_iter().filter(|i| i.seq <= last_seq).collect();
@@ -463,7 +493,12 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8, name: &dyn Fn(
             let mut v = vec![
                 Span::styled(format!("{} ", t.ch("○", "o")), t.dim()),
                 Span::styled(verb("noticed"), t.ink2()),
-                Span::raw(name(candidate)),
+                // A candidate is not a reflex yet, so it often has no gist: say what it is, not
+                // its id (`enter` shows the id).
+                Span::raw(match name(candidate) {
+                    n if n == *candidate => "a pattern forming".to_string(),
+                    n => n,
+                }),
                 Span::styled(format!(" · seen in {seen}"), t.dim()),
             ];
             if *review {
@@ -527,13 +562,65 @@ fn pretool_words(rewrite: bool, kind: &str, interpreter: &str) -> String {
     }
 }
 
+/// How the feed lays its rows out beyond the width.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Rows {
+    /// A column naming each row's repository (every repository shown).
+    pub repo: bool,
+    /// Consecutive events where Adage said nothing as one line: `· 14 tool batches, nothing to say`.
+    pub collapse: bool,
+    /// A thin labelled rule where a trace first shows, a turn starts (a prompt), or another trace
+    /// takes over after a pause: `┄ Claude Code · 00a11c · new turn ┄┄┄`.
+    pub breaks: bool,
+}
+
+/// A pause after which another trace's activity starts a new section of the feed.
+const BREAK_GAP_MS: u64 = 5 * 60 * 1000;
+
+/// Whether an act is something Adage itself did (said, rewrote, asked, answered): the feed tags
+/// those `adage`, so attribution is visible where it happened.
+fn adage_did(a: &Act) -> bool {
+    match a {
+        Act::Directed { .. } | Act::StopRequest | Act::Answered { .. } | Act::Recovery { .. } => true,
+        Act::Pretool { withheld, .. } => !withheld,
+        _ => false,
+    }
+}
+
+/// An event's icon (and its ASCII stand-in, one column each way) and the icon's style.
+fn event_icon(event: &str, t: &Theme) -> (&'static str, Style) {
+    match event {
+        "prompt" => (t.ch("❯", ">"), t.accent().patch(t.bold())),
+        "tools" => (t.ch("▪", "*"), t.dim()),
+        "failure" => (t.ch("✗", "x"), t.red()),
+        "stop" => (t.ch("□", "#"), t.yellow()),
+        "start" => (t.ch("▸", "+"), t.dim()),
+        "end" => (t.ch("∎", "."), t.dim()),
+        _ => (t.ch("·", "."), t.dim()),
+    }
+}
+
 /// Each item as lines (one per act), tagged with the item's `seq`.
+#[cfg(test)]
 pub fn feed_lines(
     items: &[&FeedItem],
     ctx: &Ctx,
     width: u16,
     pulse: &Pulse,
     gists: &std::collections::BTreeMap<String, String>,
+) -> Vec<(u64, Line<'static>)> {
+    feed_rows(items, ctx, width, pulse, gists, Rows::default())
+}
+
+/// [`feed_lines`], laid out as `rows` says. A collapsed run is tagged with its newest item's
+/// `seq`, and a section's rule with the `seq` of the item under it.
+pub fn feed_rows(
+    items: &[&FeedItem],
+    ctx: &Ctx,
+    width: u16,
+    pulse: &Pulse,
+    gists: &std::collections::BTreeMap<String, String>,
+    rows: Rows,
 ) -> Vec<(u64, Line<'static>)> {
     let t = &ctx.theme;
     let f = fit_for(width);
@@ -552,29 +639,144 @@ pub fn feed_lines(
             said.entry((i.session.as_str(), route.as_str())).or_insert_with(|| feed::detail_of(text));
         }
     }
-    let mut out = Vec::new();
-    for i in items {
-        let dimmed = i.control;
-        let st = |s: Style| if dimmed { t.control() } else { s };
-        let (sid_n, harness) = match f {
-            Fit::Wide => (6, t.pad(feed::harness_name(&i.harness), 9)),
-            Fit::Mid => (6, t.pad(feed::harness_short(&i.harness), 3)),
-            Fit::Narrow => (4, t.pad(feed::harness_short(&i.harness), 3)),
-        };
-        let gap = if f == Fit::Wide { "  " } else { " " };
-        let hot = if pulse.seq == i.seq { pulse.level } else { 0 };
-        let lead = if hot > 0 { Span::styled(t.ch("▌", "|"), t.accent()) } else { Span::raw(" ") };
-        let prefix = vec![
+    let sid_n = if f == Fit::Narrow { 4 } else { 6 };
+    let gap = if f == Fit::Wide { "  " } else { " " };
+    // The repository column, when every repository is shown and there is room for it.
+    let repo_w = match (rows.repo, f) {
+        (false, _) | (_, Fit::Narrow) => 0,
+        (true, Fit::Wide) => 17,
+        (true, Fit::Mid) => 10,
+    };
+    // The cells before what Adage did: the time (dim), the trace, the repository, and the event
+    // with its icon. The harness is named on the section's rule above.
+    let prefix = |lead: Span<'static>, ts: u64, session: String, repo: &str, event: &str, dim: bool| {
+        let st = if dim { t.control() } else { t.ink2() };
+        let (icon, icon_style) = event_icon(event, t);
+        let mut v = vec![
             lead,
-            Span::styled(clock(i.ts, ctx.tz, true), t.dim()),
+            Span::styled(clock(ts, ctx.tz, true), t.dim()),
             Span::raw(gap),
-            Span::styled(feed::short_session(&i.session, sid_n), st(t.ink2())),
+            // A short session id is padded, never cut (it is cut to its tail already).
+            Span::styled(format!("{session:<sid_n$}"), st),
             Span::raw(gap),
-            Span::styled(harness, st(t.ink2())),
-            Span::raw(gap),
-            Span::styled(t.pad(&i.event, 8), st(Style::default())),
+        ];
+        if repo_w > 0 {
+            v.push(Span::styled(t.pad(&t.fit(&super::scope::short(repo), repo_w - 1), repo_w), t.dim()));
+        }
+        v.extend([
+            Span::styled(format!("{icon} "), if dim { t.control() } else { icon_style }),
+            Span::styled(t.pad(event, 8), if dim { t.control() } else { Style::default() }),
+            Span::raw(" "),
+        ]);
+        v
+    };
+    // A section's rule: the harness, the trace (or how many, over a fold of several), and why a
+    // section starts here.
+    let rule_line = |i: &FeedItem, traces: usize, why: Option<&str>| -> Line<'static> {
+        let dash = t.ch("┄", "-");
+        let harness = adage_trace::Harness::parse(&i.harness).map_or(i.harness.as_str(), |h| h.display());
+        let trace = if traces > 1 { format!("{traces} traces") } else { feed::short_session(&i.session, sid_n) };
+        let mut label = vec![harness.to_string(), trace];
+        if rows.repo && !i.repo.is_empty() {
+            label.push(super::scope::short(&i.repo));
+        }
+        if let Some(w) = why {
+            label.push(w.to_string());
+        }
+        if i.control {
+            label.push("control: Adage holds back".to_string());
+        }
+        let mut spans = vec![
+            Span::styled(format!(" {dash} "), t.rule()),
+            Span::styled(label.join(&t.sep()), if i.control { t.control() } else { t.ink2() }),
             Span::raw(" "),
         ];
+        // Every rule ends at one column (short of the pane's edge on a wide one): a seam, not a wall.
+        let end = (width as usize).saturating_sub(1).min(88);
+        let used: usize = spans.iter().map(|s| s.width()).sum();
+        spans.push(Span::styled(dash.repeat(end.saturating_sub(used).max(2)), t.rule()));
+        Line::from(super::kit::clip_spans(spans, width as usize, t))
+    };
+    let mut out = Vec::new();
+    let mut seen: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    let mut prev: Option<&FeedItem> = None;
+    let mut k = 0;
+    while k < items.len() {
+        let i = items[k];
+        // A run of quiet events (the same kind of quiet), none of them pulsing.
+        let run = if rows.collapse && i.quiet() {
+            // With every repository shown, one repository's run at a time.
+            items[k..]
+                .iter()
+                .take_while(|j| {
+                    j.quiet() && j.unrouted == i.unrouted && pulse.seq != j.seq && (!rows.repo || j.repo == i.repo)
+                })
+                .count()
+        } else {
+            0
+        };
+        // A section starts where a trace first shows, a turn starts, or another trace takes over
+        // after a pause; a fold is one unit, never split by a rule.
+        if rows.breaks {
+            let unit = &items[k..k + run.max(1)];
+            let first = !seen.contains(i.session.as_str());
+            let turn = i.event == "prompt";
+            let other = prev.is_some_and(|p| p.session != i.session && i.ts.saturating_sub(p.ts) >= BREAK_GAP_MS);
+            if first || turn || other {
+                let traces = unit.iter().map(|j| j.session.as_str()).collect::<std::collections::BTreeSet<_>>().len();
+                let why = if turn { Some("new turn") } else { None };
+                out.push((unit[unit.len() - 1].seq, rule_line(i, traces, why)));
+            }
+            seen.extend(unit.iter().map(|j| j.session.as_str()));
+        }
+        if run >= 2 {
+            let group = &items[k..k + run];
+            let last = group[run - 1];
+            let one = |v: Vec<&str>| -> Option<String> {
+                let first = v[0];
+                v.iter().all(|x| *x == first).then(|| first.to_string())
+            };
+            let session = one(group.iter().map(|j| j.session.as_str()).collect());
+            let event = one(group.iter().map(|j| j.event.as_str()).collect());
+            let repo = one(group.iter().map(|j| j.repo.as_str()).collect()).unwrap_or_default();
+            let traces = group.iter().map(|j| j.session.as_str()).collect::<std::collections::BTreeSet<_>>().len();
+            let calls: usize = group.iter().map(|j| j.observed).sum();
+            let what = match event.as_deref() {
+                Some("tools") => format!("{run} tool batches"),
+                Some(e) => format!("{run} {e} events"),
+                None => format!("{run} events"),
+            };
+            let mut facts = vec![what];
+            if traces > 1 {
+                facts.push(format!("{traces} traces"));
+            }
+            if calls > 0 {
+                facts.push(format!("{calls} call{}", if calls == 1 { "" } else { "s" }));
+            }
+            let quiet = if i.unrouted { "watching, no reflexes here yet" } else { "nothing to say" };
+            let mut spans = prefix(
+                Span::raw(" "),
+                last.ts,
+                session.map_or_else(String::new, |s| feed::short_session(&s, sid_n)),
+                &repo,
+                // A fold of several kinds of event is labelled by what they share: quiet.
+                event.as_deref().unwrap_or("quiet"),
+                group.iter().all(|j| j.control),
+            );
+            let indent: usize = spans.iter().map(|s| s.width()).sum();
+            let lead = if event.is_some() { format!("{} ", t.glyph(Glyph::Sep)) } else { String::new() };
+            let text = format!("{lead}{}, {quiet}", facts.join(&t.sep()));
+            spans.push(Span::styled(t.fit(&text, (width as usize).saturating_sub(indent)), t.dim()));
+            out.push((last.seq, Line::from(spans)));
+            prev = Some(last);
+            k += run;
+            continue;
+        }
+        k += 1;
+        prev = Some(i);
+        let hot = if pulse.seq == i.seq { pulse.level } else { 0 };
+        let lead = if hot > 0 { Span::styled(t.ch("▌", "|"), t.accent()) } else { Span::raw(" ") };
+        let prefix = prefix(lead, i.ts, feed::short_session(&i.session, sid_n), &i.repo, &i.event, i.control);
         let indent: usize = prefix.iter().map(|s| s.width()).sum();
         let room = (width as usize).saturating_sub(indent);
         if i.acts.is_empty() {
@@ -602,6 +804,12 @@ pub fn feed_lines(
                     .or_else(|| gists.get(r))
                     .map_or_else(|| r.to_string(), |d| d.to_string())
             };
+            // What Adage itself did is tagged `adage`, in the accent, where it happened.
+            let mut room = room;
+            if adage_did(a) && room > 24 {
+                spans.push(Span::styled("adage ", t.accent().patch(t.bold())));
+                room -= 6;
+            }
             spans.extend(act_spans(a, t, f, room, act_hot, &name));
             out.push((i.seq, Line::from(spans)));
         }
@@ -622,6 +830,22 @@ pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16, gists: &std::collections::BTre
                 t.red(),
             ),
         ]),
+        (Tone::Change, Some(c), _) if c.what == "forming" => {
+            // Candidates, counted on one line: patterns seen, not yet reflexes.
+            let mut spans = vec![
+                Span::raw("   "),
+                Span::styled(format!("{} ", t.glyph(Glyph::Off)), t.dim()),
+                Span::styled(c.name().to_string(), t.ink2()),
+            ];
+            if !c.numbers.is_empty() {
+                let used: usize = spans.iter().map(|s| s.width()).sum::<usize>() + 3;
+                spans.push(Span::styled(
+                    format!("{}{}", t.sep(), t.fit(&t.text(&c.numbers), (width as usize).saturating_sub(used))),
+                    t.dim(),
+                ));
+            }
+            Line::from(spans)
+        }
         (Tone::Change, Some(c), _) => {
             // The reflex by what it tells the agent (its id in lines written before gists).
             let id_w = if wide { 44 } else { 26 };
@@ -665,11 +889,13 @@ pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16, gists: &std::collections::BTre
                 let used: usize = spans.iter().map(|s| s.width()).sum();
                 spans.push(Span::styled(t.fit(&t.text(&c.numbers), (width as usize).saturating_sub(used)), t.ink2()));
             }
-            if wide && !c.track.is_empty() && c.what != "written" {
+            // Which collection, in words, when it is not the reflexes learned here (the usual one).
+            let collection = super::scope::collection(&c.track, k.repo.as_deref().unwrap_or(""), false, true);
+            if wide && !c.track.is_empty() && c.what != "written" && collection != "Learned here" {
                 let used: usize = spans.iter().map(|s| s.width()).sum();
                 let room = (width as usize).saturating_sub(used + 4);
                 if room > 8 {
-                    spans.push(Span::styled(format!("   {}", t.fit(&c.track, room)), t.dim()));
+                    spans.push(Span::styled(format!("   {}", t.fit(&collection, room)), t.dim()));
                 }
             }
             Line::from(spans)
@@ -689,6 +915,9 @@ pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16, gists: &std::collections::BTre
                     Some(1) => facts.push("1 change".into()),
                     Some(n) => facts.push(format!("{n} changes")),
                     None => {}
+                }
+                if r.forming > 0 {
+                    facts.push(learnlog::forming_words(r.forming));
                 }
                 if wide {
                     if let Some(g) = &r.generation {
@@ -1086,20 +1315,22 @@ fn header(live: &Live, health: Option<&Health>, key: Option<&str>, ctx: &Ctx, wi
 
 fn footer(live: &Live, t: &Theme, width: u16) -> Line<'static> {
     if live.filtering {
-        return Line::from(vec![
+        let mut v = vec![
             Span::styled(" / ", t.key()),
             Span::raw(live.filter.clone()),
             Span::styled(t.ch("▌", "_"), t.accent()),
-            Span::styled(format!("   enter keep{}esc clear", t.sep()), t.dim()),
-        ]);
+            Span::raw("   "),
+        ];
+        v.extend(super::kit::hints(&[("enter", "keep"), ("esc", "clear")], t, width as usize));
+        return Line::from(v);
     }
-    let quit = [Span::styled("q", t.key()), Span::styled(" quit ", t.dim())];
-    let room = (width as usize).saturating_sub(9);
+    let room = (width as usize).saturating_sub(11);
     let mut spans = vec![Span::raw(" ")];
     spans.extend(keys::bar(&[keys::WATCH], t, room));
     let used: usize = spans.iter().map(|s| s.width()).sum();
-    spans.push(Span::raw(" ".repeat((width as usize).saturating_sub(used + 7))));
-    spans.extend(quit);
+    spans.push(Span::raw(" ".repeat((width as usize).saturating_sub(used + 9))));
+    spans.extend(super::kit::hints(&[("q", "quit")], t, 8));
+    spans.push(Span::raw(" "));
     Line::from(spans)
 }
 
@@ -1114,7 +1345,7 @@ fn draw_feed(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &Ct
                 t.dim(),
             ))]
         } else {
-            let scope = if live.all_repos || key.is_none() { "any repository".to_string() } else { ctx.label.clone() };
+            let scope = live.scope(key).map_or_else(|| "any repository".to_string(), super::scope::friendly);
             let title = Line::from(Span::styled(format!(" No traces yet for {scope}."), t.dim()));
             let next = |why: &'static str| {
                 Line::from(vec![Span::styled(why, t.dim()), Span::styled("adage init", t.command())])
@@ -1137,7 +1368,7 @@ fn draw_feed(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &Ct
         f.render_widget(Paragraph::new(wrap_lines(lines, area.width)), area);
         return;
     }
-    let lines = feed_lines(&items, ctx, area.width, &live.pulse, &live.gists);
+    let lines = live.lines(key, ctx, area.width);
     let h = area.height as usize;
     let scroll = live.scroll.min(lines.len().saturating_sub(h));
     let end = lines.len() - scroll;
@@ -1203,6 +1434,20 @@ fn draw_ticker(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &
 /// The live view: now, conditioning, health. `chrome` adds the watch pane's own header and key
 /// line (the full app has its own tab bar and status bar).
 pub fn draw_live(f: &mut Frame, area: Rect, live: &Live, health: Option<&Health>, ctx: &Ctx, chrome: bool) {
+    draw_live_in(f, area, live, health, health.and_then(|h| h.repo_key.as_deref()), ctx, chrome)
+}
+
+/// [`draw_live`], with `here` the repository the screen was opened in (the scope, unless another
+/// one, or every one, was chosen: [`Live::scope`]).
+pub fn draw_live_in(
+    f: &mut Frame,
+    area: Rect,
+    live: &Live,
+    health: Option<&Health>,
+    here: Option<&str>,
+    ctx: &Ctx,
+    chrome: bool,
+) {
     let t = &ctx.theme;
     if area.width < 30 || area.height < 8 {
         f.render_widget(
@@ -1211,7 +1456,7 @@ pub fn draw_live(f: &mut Frame, area: Rect, live: &Live, health: Option<&Health>
         );
         return;
     }
-    let key = health.and_then(|h| h.repo_key.as_deref());
+    let key = here;
     let mut lights = lights_lines(health, t, area.width);
     // The savings estimate sits under the lamps: what Adage has measured here.
     if let Some(s) = health.and_then(|h| h.savings.as_ref()) {
@@ -1268,8 +1513,11 @@ pub fn draw_live(f: &mut Frame, area: Rect, live: &Live, health: Option<&Health>
         f.render_widget(Paragraph::new(header(live, health, key, ctx, area.width)), header_a);
     }
     let mut notes = Vec::new();
-    if live.all_repos || key.is_none() {
-        notes.push("all repositories".to_string());
+    match live.scope(key) {
+        None => notes.push("all repositories".to_string()),
+        // Another repository than the one opened here (chosen, or the most recently active).
+        Some(k) if Some(k) != key => notes.push(super::scope::friendly(k)),
+        Some(_) => {}
     }
     if !live.filter.is_empty() {
         notes.push(format!("filter {}", t.quote(&live.filter)));

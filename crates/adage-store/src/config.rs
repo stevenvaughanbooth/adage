@@ -13,6 +13,7 @@
 //!
 //! [ui]
 //! notices = "daily"          # one-line notices at session start (Claude Code), at most daily; or "off"
+//! start_screen = true        # adage ui opens on Adage's brain, turning, for two seconds (any key skips)
 //!
 //! [runtime]
 //! control = 0                # share of sessions held out to measure Adage (off; 0.1 measures)
@@ -31,10 +32,10 @@
 //!
 //! Every key has a default, so a missing file is the default configuration. Environment
 //! variables win over the file: `ADAGE_CONTROL` for `runtime.control`, `ADAGE_AUTO_LEARN`
-//! (`0`/`1`) for `learn.auto` and `ADAGE_UPDATE_CHECK` (`0`/`1`, or `off`/`daily`) for
-//! `update.check`. A file that cannot be parsed, an unknown key, or a value that fails
-//! validation is reported (`adage config`, `adage doctor`) and that key keeps its default: hooks
-//! never fail because of the configuration.
+//! (`0`/`1`) for `learn.auto`, `ADAGE_UPDATE_CHECK` (`0`/`1`, or `off`/`daily`) for
+//! `update.check` and `ADAGE_START_SCREEN` (`0`/`1`) for `ui.start_screen`. A file that cannot
+//! be parsed, an unknown key, or a value that fails validation is reported (`adage config`,
+//! `adage doctor`) and that key keeps its default: hooks never fail because of the configuration.
 //!
 //! `adage config set` validates the value and rewrites the file atomically (a temporary file
 //! renamed into place), keeping every other key; comments are not kept.
@@ -105,6 +106,10 @@ pub struct Config {
     pub ui_spinner: bool,
     pub ui_turn_line: bool,
     pub ui_noticed: bool,
+    /// `ui.start_screen`: `adage ui` opens on Adage's brain, turning, for about two seconds before
+    /// the app (any key skips it). On by default; never shown away from a terminal or in an agent's
+    /// session.
+    pub ui_start_screen: bool,
     /// Bind instincts (prebuilt routes) from each repository's declared files when learning.
     /// Learn procedure cards for families of similar tasks (`learn.cards`), and how similar a
     /// prompt must be to a family for its card (`learn.card_threshold`).
@@ -322,6 +327,14 @@ pub const KEYS: &[Key] = &[
         default: "false",
         env: None,
         doc: "Claude Code mod: a line under a tool batch when Adage notices a habit it is still counting",
+        guarded: false,
+    },
+    Key {
+        name: "ui.start_screen",
+        kind: Kind::Bool,
+        default: "true",
+        env: Some("ADAGE_START_SCREEN"),
+        doc: "adage ui opens on Adage's brain, turning, for about two seconds (any key skips it); false opens straight on the app",
         guarded: false,
     },
     Key {
@@ -627,6 +640,7 @@ fn from_values<'v>(text: &dyn Fn(&str) -> &'v str) -> Config {
         ui_spinner: bool_of(text, "ui.spinner"),
         ui_turn_line: bool_of(text, "ui.turn_line"),
         ui_noticed: bool_of(text, "ui.noticed"),
+        ui_start_screen: bool_of(text, "ui.start_screen"),
         learn_cards: bool_of(text, "learn.cards"),
         learn_card_threshold: number_of(text, "learn.card_threshold"),
         instincts_enabled: bool_of(text, "instincts.enabled"),
@@ -717,6 +731,7 @@ mod tests {
         let c = Config::default();
         assert_eq!((c.runtime_predict_cap, c.learn_card_threshold), (6, 0.811));
         assert!(c.runtime_rewrite && c.learn_cards && !c.skills_invoke && !c.ui_spinner);
+        assert!(c.ui_start_screen, "adage ui opens on its start screen unless a person turns it off");
     }
 
     #[test]
@@ -744,6 +759,12 @@ mod tests {
             assert_eq!(l.config.update_check, on, "ADAGE_UPDATE_CHECK={raw}");
             assert_eq!(l.get("update.check").unwrap().1, Source::Env("ADAGE_UPDATE_CHECK"));
         }
+        // `ADAGE_START_SCREEN=0` opens `adage ui` straight on the app, whatever the file says.
+        std::fs::write(d.path().join("on.toml"), "[ui]\nstart_screen = true\n").unwrap();
+        let off = |v: &str| (v == "ADAGE_START_SCREEN").then(|| "0".to_string());
+        let screen = load_from(&d.path().join("on.toml"), &off);
+        assert!(!screen.config.ui_start_screen);
+        assert_eq!(screen.get("ui.start_screen").unwrap().1, Source::Env("ADAGE_START_SCREEN"));
         let bad = |v: &str| (v == "ADAGE_UPDATE_CHECK").then(|| "hourly".to_string());
         assert!(load_from(&f, &bad).config.update_check, "an invalid value keeps the default");
         assert_eq!(l.config.runtime_control, 1.0, "ADAGE_CONTROL keeps shadow mode");

@@ -523,16 +523,20 @@ pub fn plan_repo(
         }
     }
     routes.sort_by(|a, b| a.id.cmp(&b.id));
+    let mut not_bound: Vec<(String, String)> = Vec::new();
     routes.retain(|r| {
         let probe = track(&name, repo, "0.0.0", &cat.provenance(), vec![r.clone()]);
         match io::validate(&probe) {
             Ok(()) => true,
             Err(e) => {
-                eprintln!("adage: not binding an instinct route: {e:#}");
+                not_bound.push((r.id.clone(), crate::reason(&e, &r.id, &name)));
                 false
             }
         }
     });
+    for line in crate::left_out("instinct", "not bound", &not_bound) {
+        eprintln!("adage: {line}");
+    }
     for r in routes.iter().filter(|r| r.state.is_live()) {
         if matches!(r.step, adage_tracks::Step::Advise { .. }) {
             rep.advice += 1;
@@ -561,7 +565,8 @@ pub fn plan_repo(
         })
         .collect();
     lines.extend(extinguished_now.iter().map(|(id, why)| format!("{id}: extinguished automatically ({why})")));
-    let tr = TrackReport { name, version, change, routes: lines };
+    let reflexes = t.routes.len();
+    let tr = TrackReport { name, version, change, routes: lines, reflexes };
     let planned = Planned {
         name: track_name(repo),
         track: t,
