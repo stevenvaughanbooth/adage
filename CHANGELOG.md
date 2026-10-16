@@ -10,6 +10,12 @@ The development history is recorded in Git and the design documents under `docs/
 
 ## Unreleased
 
+### Fixed
+
+- Release publishers read large manifests from files, avoiding the process-size limit that
+  blocked npm and marketplace publishing after the first GitHub Release. Recovery workflows
+  verify and reuse the existing tag, source and binary assets without rebuilding the release.
+
 ### Documentation
 
 - Installation guides link the verified 0.1.0 npm packages and release downloads. The legacy

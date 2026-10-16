@@ -12,6 +12,12 @@
 name: Publish npm
 
 on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing published release tag to recover (for example v0.1.0)
+        required: true
+        type: string
   workflow_call:
     inputs:
       plan:
@@ -27,7 +33,9 @@ jobs:
     runs-on: ubuntu-24.04
     if: ${{ vars.ADAGE_NPM_PUBLISH == 'true' }}
     env:
-      PLAN: ${{ inputs.plan }}
+      # Keep the reusable plan input for cargo-dist compatibility, but never export its large JSON.
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+      RELEASE_MODE: ${{ github.event_name == 'workflow_dispatch' && 'recovery' || 'automatic' }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -37,20 +45,49 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-      - name: Fetch release artifacts
+      - name: Resolve the published release and preserve its validator
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp scripts/release-publish.mjs "$RUNNER_TEMP/release-publish.mjs"
+          node "$RUNNER_TEMP/release-publish.mjs" resolve "$RUNNER_TEMP/release-identity.json"
+      - name: Check out the exact release source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.release.outputs.source_sha }}
+          persist-credentials: false
+      - name: Fetch artifacts from this release run
+        if: github.event_name != 'workflow_dispatch'
         uses: actions/download-artifact@v8
         with:
           pattern: artifacts-*
           path: artifacts/
           merge-multiple: true
+      - name: Fetch existing public release assets for recovery
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir artifacts \
+            --pattern 'adage-*.tar.xz' --pattern 'adage-*.zip' --pattern 'adage-*.sha256' \
+            --pattern 'dist-manifest.json'
+      - name: Verify release identity and versions from the manifest file
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=artifacts/plan-dist-manifest.json
+          if [ "$RELEASE_MODE" = recovery ]; then manifest=artifacts/dist-manifest.json; fi
+          node "$RUNNER_TEMP/release-publish.mjs" validate "$RUNNER_TEMP/release-identity.json" "$manifest"
       - name: Stage packages
         shell: bash
         run: |
           set -euo pipefail
-          version=$(echo "$PLAN" | jq -r '[.releases[] | select(.app_name == "adage-cli") | .app_version][0]')
-          test -n "$version" && test "$version" != null
-          echo "VERSION=$version" >> "$GITHUB_ENV"
-          node npm/scripts/stage.mjs --version "$version" --artifacts artifacts --out npm-out
+          node npm/scripts/stage.mjs --version "$VERSION" --artifacts artifacts --out npm-out
       - name: Smoke-test the staged linux-x64 package through the launcher
         shell: bash
         run: |
