@@ -12,6 +12,8 @@ The development history is recorded in Git and the design documents under `docs/
 
 ### Fixed
 
+- The Claude Code marketplace downloads the bundled plugin over HTTPS, so a fresh install
+  does not require GitHub SSH keys or host trust.
 - Release publishers read large manifests from files, avoiding the process-size limit that
   blocked npm and marketplace publishing after the first GitHub Release. Recovery workflows
   verify and reuse the existing tag, source and binary assets without rebuilding the release.
