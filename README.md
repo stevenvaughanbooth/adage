@@ -42,7 +42,7 @@ guidance without enabling automatic execution.
 
 ### Install
 
-The intended download path is **npm**, with no Rust build or Git checkout:
+Install from **npm**, with no Rust build or Git checkout:
 
 ```sh
 npm install -g @adage-sh/cli
@@ -50,9 +50,9 @@ cd /path/to/your/repository
 adage init
 ```
 
-**Publication status:** the first npm package and release downloads are being prepared. The
-command above becomes usable when `@adage-sh/cli` is published. Until then, the
-[source install](docs/usage.md#install) is the available path and requires repository access.
+Get [@adage-sh/cli on npm](https://www.npmjs.com/package/@adage-sh/cli), or download standalone
+binaries and installers from the [v0.1.0 GitHub release](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0).
+See the [installation guide](docs/usage.md#install) for other options.
 
 The npm package includes `adage`, the skill compiler, and the execution companion on macOS and
 Linux. After installation, `adage init` connects the agents it finds, shows its proposed changes, and offers to

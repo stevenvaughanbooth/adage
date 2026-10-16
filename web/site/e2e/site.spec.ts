@@ -90,12 +90,14 @@ test("the hero draws its scene", async ({ page }) => {
   await expect(page.locator(".lbl", { hasText: /fire.*make gen$/ })).toHaveCSS("opacity", "1", { timeout: 15_000 });
 });
 
-test("early access: success, a closed list, and a bad address", async ({ page }) => {
+test("release updates: success, a closed list, and a bad address", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await films(page, "fail");
   let open = true;
   await page.route("**/api/waitlist", (r) => r.fulfill(r.request().method() === "GET" ? { status: 200, json: { available: true } } : open ? { status: 200, json: { ok: true } } : { status: 503, json: { error: "closed" } }));
   await page.goto("/early-access");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Get release updates");
+  await expect(page.getByRole("link", { name: "Install the experiment" })).toHaveAttribute("href", "/get-started");
   const email = page.getByRole("textbox", { name: "Email address" });
   const status = page.locator("#signup-status");
   await email.fill("not-an-email");
@@ -103,7 +105,7 @@ test("early access: success, a closed list, and a bad address", async ({ page })
   await expect(status).toContainText("Enter an email address");
   await email.fill("dev@example.com");
   await page.getByRole("button", { name: "Join the list" }).click();
-  await expect(status).toContainText("You're on the list");
+  await expect(status).toHaveText("You're on the list. We'll email you once, when the next release is ready.");
   open = false;
   await email.fill("dev@example.com");
   await page.getByRole("button", { name: "Join the list" }).click();

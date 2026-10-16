@@ -10,20 +10,18 @@ second keeps all of them current.
 
 ### Install
 
-The recommended download path is `@adage-sh/cli` on npm. It contains the native Adage binaries;
-you do not need Rust or a checkout:
+The recommended download path is [@adage-sh/cli on npm](https://www.npmjs.com/package/@adage-sh/cli).
+It contains the native Adage binaries; you do not need Rust or a checkout:
 
 ```sh
 npm install -g @adage-sh/cli
 adage init
 ```
 
-**First publication is pending.** The npm command and release downloads below are ready to use
-only after their artifacts are published. Until then, install from source with Rust, a C compiler
-and access to this repository:
+**From source:** to build version 0.1.0 yourself, use Rust and a C compiler:
 
 ```sh
-cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli adage-exec adage-train
+cargo install --locked --git https://github.com/stevenvaughanbooth/adage --tag v0.1.0 adage-cli adage-exec adage-train
 ```
 
 For a Windows source install, omit `adage-exec` from the command above.
@@ -33,7 +31,7 @@ On macOS and Linux, packages include all three commands: `adage` for setup, lear
 steps. Windows packages include `adage` and `adage-train`; execution is unsupported.
 `adage` finds its companions beside it. Source installs place them in `~/.cargo/bin`.
 
-A published [GitHub release](https://github.com/stevenvaughanbooth/adage/releases) also provides
+The [v0.1.0 GitHub release](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0) also provides
 standalone binaries and installers. The shell installer installs `adage`; `adage init` offers to
 fetch matching companions and checks their published checksums:
 
@@ -207,10 +205,8 @@ update, leaves the kept binaries where they are and names `adage update --rollba
 them back byte for byte (each checked against its recorded SHA-256 first) and re-points the
 registrations to them.
 
-**Before the first release.** Until v0.1.0 is tagged no release can be found (the check records
-`unavailable`), so a source install stops with `cannot check now` and names
-`adage update --branch main`, which builds the main branch instead. A checkout build needs no
-release.
+**Development versions.** `adage update --branch main` builds the main branch instead of a
+published release. A checkout build needs no release.
 
 **The published plugin.** A plugin installed with `/plugin install adage@adage` is updated by
 Claude Code: from its binary, `adage update` runs `claude plugin marketplace update` and

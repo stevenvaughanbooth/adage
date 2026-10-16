@@ -8,6 +8,13 @@ version as the GitHub Release notes.
 The first version brings together local learning, agent integrations and shareable reflex packs.
 The development history is recorded in Git and the design documents under `docs/`.
 
+## Unreleased
+
+### Documentation
+
+- Installation guides link the verified 0.1.0 npm packages and release downloads. The legacy
+  early-access page points to installation and describes updates for the next release.
+
 ## 0.1.0 - 2026-10-15
 
 **Agent traces become reflexes.** Adage reads the traces coding agents leave behind, finds the

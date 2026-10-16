@@ -4,8 +4,9 @@ Adage is an early experiment. A release should make it easy to try, state what h
 been tested, and leave people a way to report failures. It does not need to claim a general
 speedup or replace the agent's reasoning.
 
-The first planned release is `0.1.0`. Until a public release and npm package have been
-verified, keep the README and website clear that downloads are pending.
+Version `0.1.0` is available through [npm](https://www.npmjs.com/package/@adage-sh/cli) and
+[GitHub Releases](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0). For each later
+release, verify its public artifacts and a fresh installation before updating download links.
 
 ## The install path
 
