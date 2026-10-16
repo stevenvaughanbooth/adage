@@ -10,35 +10,25 @@ second keeps all of them current.
 
 ### Install
 
-The recommended download path is [@adage-sh/cli on npm](https://www.npmjs.com/package/@adage-sh/cli).
-It contains the native Adage binaries; you do not need Rust or a checkout:
+Download prebuilt binaries from the
+[v0.1.0 GitHub release](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0).
+You do not need Rust or a checkout. On macOS or Linux, the shell installer installs `adage`;
+`adage init` offers to fetch matching companions and checks their published checksums:
 
 ```sh
-npm install -g @adage-sh/cli
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/download/v0.1.0/adage-cli-installer.sh | sh
+```
+
+Follow any PATH instructions printed by the installer, then run:
+
+```sh
 adage init
 ```
 
-**From source:** to build version 0.1.0 yourself, use Rust and a C compiler:
-
-```sh
-cargo install --locked --git https://github.com/stevenvaughanbooth/adage --tag v0.1.0 adage-cli adage-exec adage-train
-```
-
-For a Windows source install, omit `adage-exec` from the command above.
-
-On macOS and Linux, packages include all three commands: `adage` for setup, learning and review;
+On macOS and Linux, the three commands are `adage` for setup, learning and review;
 `adage-exec` for separately approved execution; and `adage-train` for compiling supported skill
 steps. Windows packages include `adage` and `adage-train`; execution is unsupported.
-`adage` finds its companions beside it. Source installs place them in `~/.cargo/bin`.
-
-The [v0.1.0 GitHub release](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0) also provides
-standalone binaries and installers. The shell installer installs `adage`; `adage init` offers to
-fetch matching companions and checks their published checksums:
-
-```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
-adage init
-```
+`adage` finds its companions beside it.
 
 The release's Claude Code plugin bundles the same platform binaries. Install it inside Claude
 Code with:
@@ -50,6 +40,18 @@ Code with:
 
 Windows release artifacts provide advisory operation only. Automatic execution is unsupported,
 and Windows hook invocation has not been verified. See [harness support](harnesses.md).
+
+**npm publication is pending.** The prepared `@adage-sh/cli` package selects the matching
+platform binaries without an install-time download script. Once published, its install command
+will be `npm install -g @adage-sh/cli`. Use GitHub downloads or the plugin in the meantime.
+
+**From source:** to build version 0.1.0 yourself, use Rust and a C compiler:
+
+```sh
+cargo install --locked --git https://github.com/stevenvaughanbooth/adage --tag v0.1.0 adage-cli adage-exec adage-train
+```
+
+For a Windows source install, omit `adage-exec`. Source installs place the binaries in `~/.cargo/bin`.
 
 **From a checkout**, to work on Adage or try a branch:
 

@@ -232,6 +232,16 @@ test.describe("every tab is a page of its own", () => {
     await page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Try Adage" }).click();
     await expect(page).toHaveURL(/\/get-started$/);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Get started");
+    await expect(page.getByRole("link", { name: "GitHub release downloads", exact: true })).toHaveAttribute("href", "https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0");
+    const install = page.getByRole("region", { name: "Install and set up" });
+    await expect(install).toContainText("# macOS or Linux · install Adage 0.1.0");
+    await expect(install.getByRole("button", { name: "Copy install", exact: true })).toHaveAttribute("data-copy", "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/download/v0.1.0/adage-cli-installer.sh | sh");
+    await expect(install).not.toContainText("npm install");
+    await expect(page.locator('a[href*="npmjs.com"]')).toHaveCount(0);
+    await page.locator("#npm-install summary").click();
+    await expect(page.locator("#npm-install")).toContainText("The package is not published yet");
+    await page.locator("#plugin-install summary").click();
+    await expect(page.getByRole("button", { name: "Copy plugin install" })).toHaveAttribute("data-copy", "/plugin marketplace add stevenvaughanbooth/adage\n/plugin install adage@adage");
   });
 
   test("the home page ends with where to go next", async ({ page }) => {
