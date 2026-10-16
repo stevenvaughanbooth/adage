@@ -116,6 +116,42 @@ If a publish job fails, investigate before rerunning it. Already-published npm v
 are skipped; confirm their provenance and contents belong to this release. A broken
 published version is fixed with a new patch release, not an overwritten tag.
 
+## Recover publishing after the GitHub Release exists
+
+If the binaries and GitHub Release succeeded but a publisher failed, fix the publisher on
+`main` and use its recovery dispatch. Do not move the release tag, rebuild its binaries,
+or replace its assets. For example, after the recovery change has passed checks and merged:
+
+```bash
+gh workflow run publish-npm.yml --ref main -f release_tag=v0.1.0
+gh workflow run publish-marketplace.yml --ref main -f release_tag=v0.1.0
+```
+
+Each dispatch requires an existing published release. It resolves the tag to a commit,
+checks out that exact source, and downloads the public release's archives, checksums and
+`dist-manifest.json`. The validator checks the tag, all three binary versions, repository,
+workspace and package versions before staging. The ordinary release path reads
+`plan-dist-manifest.json` from the run's downloaded artifacts. Both paths keep the manifest
+in a file: a large manifest must never become a process environment variable.
+
+The existing archive checksum, complete-platform, package-content and Linux smoke checks
+still run. An already-published npm version is skipped; an unchanged marketplace tree is
+a successful no-op. Confirm any existing npm version's contents and provenance before
+recovering a partially published release. Neither path overwrites a published npm version.
+
+Recovery packaging runs the repaired workflow from `main`, so npm provenance identifies
+that workflow revision; its source checkout and binaries still come from the original
+release tag. The binaries retain their original build attestations. The workflow does not
+override GitHub's SHA or ref to make recovery look like the original build.
+
+The recovery npm workflow still needs `ADAGE_NPM_PUBLISH=true` and working authorization.
+Its direct-dispatch identity is **`publish-npm.yml`**, different from the ordinary caller
+**`release.yml`**. A trusted publisher configured only for `release.yml` does not authorize
+this route. Use the existing bootstrap `NPM_TOKEN` with valid publish scope and expiry, or
+explicitly configure the direct workflow in npm before dispatching. A stored token's
+presence does not prove it can publish. After recovery, check both jobs' actual status and
+perform the fresh registry install described above; a GitHub Release alone is insufficient.
+
 ## Dry runs without publishing
 
 Build the three binaries and test the npm wrapper locally:

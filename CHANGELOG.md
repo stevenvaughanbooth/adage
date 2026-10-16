@@ -8,6 +8,14 @@ version as the GitHub Release notes.
 The first version brings together local learning, agent integrations and shareable reflex packs.
 The development history is recorded in Git and the design documents under `docs/`.
 
+## Unreleased
+
+### Fixed
+
+- Release publishers read large manifests from files, avoiding the process-size limit that
+  blocked npm and marketplace publishing after the first GitHub Release. Recovery workflows
+  verify and reuse the existing tag, source and binary assets without rebuilding the release.
+
 ## 0.1.0 - 2026-10-15
 
 **Agent traces become reflexes.** Adage reads the traces coding agents leave behind, finds the

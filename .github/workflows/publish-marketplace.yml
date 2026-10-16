@@ -16,6 +16,12 @@
 name: Publish marketplace
 
 on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing published release tag to recover (for example v0.1.0)
+        required: true
+        type: string
   workflow_call:
     inputs:
       plan:
@@ -29,7 +35,9 @@ jobs:
   publish:
     runs-on: ubuntu-24.04
     env:
-      PLAN: ${{ inputs.plan }}
+      # Keep the reusable plan input for cargo-dist compatibility, but never export its large JSON.
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+      RELEASE_MODE: ${{ github.event_name == 'workflow_dispatch' && 'recovery' || 'automatic' }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -38,19 +46,49 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-      - name: Fetch release artifacts
+      - name: Resolve the published release and preserve its validator
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp scripts/release-publish.mjs "$RUNNER_TEMP/release-publish.mjs"
+          node "$RUNNER_TEMP/release-publish.mjs" resolve "$RUNNER_TEMP/release-identity.json"
+      - name: Check out the exact release source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.release.outputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Fetch artifacts from this release run
+        if: github.event_name != 'workflow_dispatch'
         uses: actions/download-artifact@v8
         with:
           pattern: artifacts-*
           path: artifacts/
           merge-multiple: true
+      - name: Fetch existing public release assets for recovery
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir artifacts \
+            --pattern 'adage-*.tar.xz' --pattern 'adage-*.zip' --pattern 'adage-*.sha256' \
+            --pattern 'dist-manifest.json'
+      - name: Verify release identity and versions from the manifest file
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest=artifacts/plan-dist-manifest.json
+          if [ "$RELEASE_MODE" = recovery ]; then manifest=artifacts/dist-manifest.json; fi
+          node "$RUNNER_TEMP/release-publish.mjs" validate "$RUNNER_TEMP/release-identity.json" "$manifest"
       - name: Stage the plugin with its three verified binaries
         shell: bash
         run: |
           set -euo pipefail
-          version=$(echo "$PLAN" | jq -r '[.releases[] | select(.app_name == "adage-cli") | .app_version][0]')
-          test -n "$version" && test "$version" != null
-          echo "VERSION=$version" >> "$GITHUB_ENV"
           node scripts/stage-plugin.mjs --artifacts artifacts --out staged
           node scripts/check-plugin.mjs --staged staged
       - name: Commit to the marketplace branch
@@ -70,5 +108,9 @@ jobs:
           git -C mkt rm -rq --ignore-unmatch . || true
           cp -R staged/. mkt/
           git -C mkt add -A -f .
-          git -C mkt commit -q -m "adage $VERSION plugin with bundled binaries (from $src)"
-          git -C mkt push origin marketplace
+          if git -C mkt diff --cached --quiet; then
+            echo "The marketplace already contains the verified $VERSION plugin; nothing to publish"
+          else
+            git -C mkt commit -q -m "adage $VERSION plugin with bundled binaries (from $src)"
+            git -C mkt push origin marketplace
+          fi
