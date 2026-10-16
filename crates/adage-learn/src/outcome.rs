@@ -3,8 +3,8 @@
 //! changes rather than by how often agents did something.
 //!
 //! - **Goal events** ([`Goal`]): typed, deterministic detectors. [`Goal::Test`] is a test run that
-//!   actually ran tests, read from its output whatever the exit code (a failing test run is still
-//!   a productive one, and a piped run exits 0 whatever pytest said); [`Goal::Import`] a Python
+//!   actually ran tests, read from an attributable runner report whatever the exit code (a failing
+//!   assertion is still productive, while collection/setup is not); [`Goal::Import`] a Python
 //!   run that imported what it needed; [`Goal::Locate`] the first edit of a source file;
 //!   [`Goal::Build`] a build or check that passed after one that failed.
 //! - **The local reward** ([`local`]): tool calls from a trigger to the first goal event, censored
@@ -25,6 +25,7 @@
 use crate::import::{Session, StepObs};
 pub use adage_core::action::Env;
 use adage_core::action::{self, Action, Role};
+use adage_core::outcome::VerificationOutcome;
 use adage_core::{CanonicalAction, Effect, Normalized};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -51,30 +52,18 @@ fn re(cell: &'static OnceLock<Regex>, pattern: &str) -> &'static Regex {
     cell.get_or_init(|| Regex::new(pattern).expect("a valid pattern"))
 }
 
-/// Whether a test run's output shows that tests ran: pytest's `collected N items` (N > 0) or
-/// `N passed`/`N failed`, unittest's `Ran N tests`, vitest's `Test Files`, jest's `Tests:`, Go's
-/// `ok  <pkg>`/`--- PASS`, cargo's `test result:`. Never `no tests ran`, a missing module or a
-/// missing command. The exit code is not read.
-/// Its word boundaries are ASCII (`(?-u:\b)`): a Unicode `\b` stops the regex engine's lazy DFA
-/// at the first non-ASCII byte (a reporter's `✓` or `━`), and the slow fallback made this most of
-/// a learn run's matching time.
-pub fn executed_tests(output: &str) -> bool {
-    static YES: OnceLock<Regex> = OnceLock::new();
-    static NO: OnceLock<Regex> = OnceLock::new();
-    let yes = re(
-        &YES,
-        r"(?m)collected [1-9]\d* items?|(?-u:\b)\d+ (passed|failed|errors?)(?-u:\b)|(?-u:\b)Ran [1-9]\d* tests?(?-u:\b)|Test Files\s+\d|^\s*Tests:\s+\d|^(ok|FAIL)\s+\S+\s+[\d.]+s|^--- (PASS|FAIL)|test result: (ok|FAILED)",
-    );
-    let no = re(&NO, r"no tests ran|No module named|ModuleNotFoundError|command not found|Cannot find module");
-    let out = adage_core::tokens::bounded(output, 64 * 1024);
-    yes.is_match(out) && (!no.is_match(out) || re_count_passed(out))
-}
-
-/// Whether an output reports tests that passed or failed (a run whose output also names a missing
-/// module inside a test's own failure still ran tests).
-fn re_count_passed(out: &str) -> bool {
-    static P: OnceLock<Regex> = OnceLock::new();
-    re(&P, r"(?-u:\b)\d+ (passed|failed)(?-u:\b)|Test Files\s+\d|test result: ").is_match(out)
+/// Whether an attributable runner report establishes positive executed test cases. Collection,
+/// skipped-only reports, setup errors and shared compound output are not execution evidence.
+/// A safe filtered report may establish a positive count without establishing the final status:
+/// the local goal is tests *executed*, not tests passed. Unsupported wrappers remain unknown.
+pub fn executed_tests(st: &StepObs) -> bool {
+    st.verification().is_some_and(|r| {
+        r.tests_run.is_some_and(|n| n > 0)
+            && matches!(
+                r.outcome,
+                VerificationOutcome::Passed | VerificationOutcome::Failed | VerificationOutcome::Unknown
+            )
+    })
 }
 
 /// The environment family of a failure, read from its output: `no-module:<name>` (Python's
@@ -89,12 +78,24 @@ pub fn env_failure(output: &str) -> Option<String> {
 pub fn env_signature(output: &str) -> Option<(String, String)> {
     static M: OnceLock<Regex> = OnceLock::new();
     static C: OnceLock<Regex> = OnceLock::new();
+    static Z: OnceLock<Regex> = OnceLock::new();
     let out = adage_core::tokens::bounded(output, 64 * 1024);
     if let Some(c) = re(&M, r"No module named '?([A-Za-z_][A-Za-z0-9_]*)'?").captures(out) {
         return Some((format!("no-module:{}", &c[1]), c[0].to_string()));
     }
+    // zsh puts the missing program last. Parse this before the legacy form so neither `zsh`
+    // nor `(eval)`'s line number becomes the program identity. Keep a literal diagnostic
+    // substring for the trigger; a corrected family name alone would never match this output.
+    if let Some(c) =
+        re(&Z, r"(?m)^(?:zsh(?::\d+)?|\(eval\):\d+): command not found: ([A-Za-z0-9_.+-]+)[\t ]*\r?$").captures(out)
+    {
+        let p = &c[1];
+        return Some((format!("cmd-not-found:{p}"), format!("command not found: {p}")));
+    }
     // A shell's own words: `bash: pytest: command not found`, `sh: 1: pytest: not found`.
-    if let Some(c) = re(&C, r"(?m)(?:^|[\s:])([A-Za-z0-9_.+-]+): command not found|^(?:ba|z)?sh: (?:line )?\d+: ([A-Za-z0-9_.+-]+): not found")
+    // Require the diagnostic to end here: malformed reverse-form output must not fall back
+    // to treating a shell name or line number as the missing executable.
+    if let Some(c) = re(&C, r"(?m)(?:^|[\s:])([A-Za-z0-9_.+-]+): command not found[\t ]*\r?$|^(?:ba|z)?sh: (?:line )?\d+: ([A-Za-z0-9_.+-]+): not found[\t ]*\r?$")
         .captures(out)
     {
         let (p, text) = match (c.get(1), c.get(2)) {
@@ -190,7 +191,30 @@ pub fn is_test_run(st: &StepObs) -> bool {
 
 /// Whether a step is a test run that executed tests ([`Goal::Test`]).
 pub fn test_goal(st: &StepObs) -> bool {
-    is_test_run(st) && executed_tests(&st.call.output)
+    is_test_run(st) && executed_tests(st)
+}
+
+/// A successful build/check, distinct from the local test-execution goal. Known runners use
+/// typed evidence, so a pipeline's exit cannot conceal their failure. For unsupported custom
+/// Verify commands, preserve the prior exit-based contract only for one literal direct command;
+/// no success is inferred for a pipeline, compound, refusal, or a normalized argv without a call.
+pub fn build_goal(st: &StepObs) -> bool {
+    if st.norm.effect != Effect::Verify || is_test_run(st) {
+        return false;
+    }
+    if let Some(r) = st.verification() {
+        return r.outcome == VerificationOutcome::Passed;
+    }
+    if st.call.failed || st.call.refused() || st.call.tool != "Bash" {
+        return false;
+    }
+    let CanonicalAction::Exec { argv, .. } = &st.norm.action else { return false };
+    st.call
+        .input
+        .get("command")
+        .and_then(|c| c.as_str())
+        .and_then(adage_core::shell::plain_pipeline)
+        .is_some_and(|stages| matches!(stages.as_slice(), [one] if one.argv == *argv))
 }
 
 /// Whether a step is a harm-class action (outcome-optimisation §1.1, L0): a package install outside
@@ -239,10 +263,22 @@ pub struct LocalReward {
     /// Tool calls after the trigger up to and including the goal event (the horizon when
     /// censored).
     pub calls: u32,
+    /// Recorded native calls when their identity is retained; otherwise the legacy normalized-
+    /// step fallback. This is not proof of a complete transcript. The units must not be pooled.
+    #[serde(default)]
+    pub unit: RewardUnit,
     /// The goal came within the horizon.
     pub reached: bool,
     /// A harm-class action ran before the goal (or within the horizon).
     pub harm: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RewardUnit {
+    NativeCalls,
+    #[default]
+    NormalizedSteps,
 }
 
 /// Whether step `st` is goal `g`.
@@ -255,25 +291,225 @@ pub fn is_goal(st: &StepObs, g: Goal) -> bool {
                 && env_failure(&st.call.output).is_none()
         }
         Goal::Locate => source_edit(st).is_some(),
-        Goal::Build => !st.call.failed && st.norm.effect == Effect::Verify && !is_test_run(st),
+        Goal::Build => build_goal(st),
     }
 }
 
 /// The local reward of the trigger at step `t` of `s` for goal `g`: calls to the first goal event
 /// after it, censored at `horizon`. One function for learning and for replay.
 pub fn local(s: &Session, t: usize, g: Goal, horizon: u32) -> LocalReward {
+    window(s, t, g, horizon, false).reward
+}
+
+struct Window {
+    /// Only steps in the bounded, same-task window, with their cost from the trigger.
+    steps: Vec<(usize, u32)>,
+    reward: LocalReward,
+}
+
+fn native_id(st: &StepObs) -> Option<&str> {
+    st.call.tool_use_id.as_deref().filter(|id| !id.is_empty() && id.len() <= 256)
+}
+
+fn in_cwd(n: &Normalized, cwd: &str) -> bool {
+    match &n.action {
+        CanonicalAction::Exec { cwd: actual, .. } => actual == cwd,
+        CanonicalAction::Compound { actions, .. } => actions.iter().all(|a| in_cwd(a, cwd)),
+        _ => true,
+    }
+}
+
+// Count complete original calls, not the multiple normalized actions a shell call can produce.
+// A changed prompt, actor, cwd, or Adage-made call ends the observation. Environment-failure
+// recovery additionally stops at mutations/opaque work: a later passing test after an install
+// is not evidence for an interpreter-only repair. Refused attempts cost a call but repair nothing.
+fn window(s: &Session, t: usize, g: Goal, horizon: u32, recovery: bool) -> Window {
+    let empty = || Window {
+        steps: Vec::new(),
+        reward: LocalReward { calls: horizon, unit: RewardUnit::NormalizedSteps, reached: false, harm: false },
+    };
+    let Some(trigger) = s.steps.get(t).filter(|st| st.call.by.is_agent()) else { return empty() };
+    let cwd = match &trigger.norm.action {
+        CanonicalAction::Exec { cwd, .. } => cwd.as_str(),
+        _ => s.root.to_str().unwrap_or(""),
+    };
+    if cwd.is_empty() {
+        return empty();
+    }
+    let next_prompt = s.prompts.iter().map(|p| p.at_step as usize).filter(|p| *p > t).min();
+    let mut exact = native_id(trigger).is_some();
+    let mut ids = std::collections::BTreeSet::new();
+    if let Some(id) = native_id(trigger) {
+        ids.insert(id);
+    }
+    let mut groups = Vec::new();
     let mut harmed = false;
-    for (k, st) in s.steps.iter().enumerate().skip(t + 1) {
-        let calls = (k - t) as u32;
-        if calls > horizon {
+    let mut previous_turn = trigger.turn;
+    let mut i = t + 1;
+    while i < s.steps.len() && trigger.same_native_call(&s.steps[i]) {
+        i += 1;
+    }
+    while i < s.steps.len() && groups.len() < horizon as usize {
+        let first = &s.steps[i];
+        let mut end = i + 1;
+        while end < s.steps.len() && first.same_native_call(&s.steps[end]) {
+            end += 1;
+        }
+        if s.steps[i..end].iter().enumerate().any(|(offset, st)| {
+            st.prompt != trigger.prompt
+                || st.turn <= trigger.turn
+                || st.turn < previous_turn
+                || st.turn > previous_turn.saturating_add(1)
+                || next_prompt.is_some_and(|p| i + offset >= p)
+                || st.call.agent != trigger.call.agent
+                || !st.call.by.is_agent()
+                || !in_cwd(&st.norm, cwd)
+                || ["cwd", "workdir"]
+                    .iter()
+                    .any(|key| st.call.input.get(key).and_then(|v| v.as_str()).is_some_and(|actual| actual != cwd))
+        }) {
             break;
         }
-        harmed |= harm(st);
-        if is_goal(st, g) {
-            return LocalReward { calls, reached: true, harm: harmed };
+        // A turn's tool calls can run concurrently. Their transcript order does not prove that
+        // a passing test preceded an install/edit in the same batch; do not credit that repair.
+        if recovery
+            && s.steps[i..end].iter().any(|st| is_goal(st, g))
+            && s.steps.iter().enumerate().any(|(k, st)| {
+                !(i..end).contains(&k)
+                    && st.turn == first.turn
+                    && st.call.agent == first.call.agent
+                    && !first.same_native_call(st)
+            })
+        {
+            break;
+        }
+        let refused = s.steps[i..end].iter().any(|st| st.call.refused());
+        harmed |= !refused && s.steps[i..end].iter().any(harm);
+        if recovery
+            && !refused
+            && (!s.steps[i..end].iter().all(|st| {
+                !st.norm.mutating
+                    && !st.norm.contains_unknown()
+                    && !st.norm.low_confidence()
+                    && matches!(st.norm.effect, Effect::Observe | Effect::Verify)
+            }) || !match first.call.tool.as_str() {
+                "Read" | "Grep" | "Glob" | "LS" => true,
+                "Bash" => {
+                    first
+                        .call
+                        .input
+                        .get("command")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(adage_core::shell::observational_commands)
+                        || (end == i + 1
+                            && first.verification().is_some_and(|r| {
+                                matches!(
+                                    r.outcome,
+                                    VerificationOutcome::Passed
+                                        | VerificationOutcome::Failed
+                                        | VerificationOutcome::SetupFailure
+                                        | VerificationOutcome::NoTests
+                                ) || executed_tests(first)
+                            }))
+                }
+                _ => false,
+            })
+        {
+            break;
+        }
+        exact &= native_id(first).is_some_and(|id| ids.insert(id));
+        groups.push(i..end);
+        if s.steps[i..end].iter().any(|st| is_goal(st, g)) || (!exact && end - t > horizon as usize) {
+            break;
+        }
+        previous_turn = first.turn;
+        i = end;
+    }
+    let unit = if exact { RewardUnit::NativeCalls } else { RewardUnit::NormalizedSteps };
+    let mut steps = Vec::new();
+    for (call, group) in groups.into_iter().enumerate() {
+        for k in group {
+            let calls = if exact { call + 1 } else { k - t } as u32;
+            if calls <= horizon {
+                steps.push((k, calls));
+            }
         }
     }
-    LocalReward { calls: horizon, reached: false, harm: harmed }
+    let goal = steps.iter().find(|(k, _)| is_goal(&s.steps[*k], g));
+    let reward =
+        LocalReward { calls: goal.map_or(horizon, |(_, calls)| *calls), unit, reached: goal.is_some(), harm: harmed };
+    Window { steps, reward }
+}
+
+/// A delayed environment repair witnessed inside the same bounded native-call window as local
+/// outcome accounting. This is recurrence evidence, never an immediate choice, a task grade, or
+/// proof that unrecorded filesystem/environment state was unchanged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RecoveryWitness {
+    pub at: usize,
+    pub goal_at: usize,
+    pub calls: u32,
+}
+
+/// A direct literal argv belonging to one complete native call at the recorded repository root.
+/// A sibling tool in the same turn or a compound sharing its result is not an ordered witness.
+fn direct_root_argv(s: &Session, at: usize) -> Option<&[String]> {
+    let st = s.steps.get(at)?;
+    let id = native_id(st)?;
+    if st.call.tool != "Bash" || !st.call.by.is_agent() || st.call.refused() {
+        return None;
+    }
+    if s.steps.iter().enumerate().any(|(i, other)| {
+        i != at && (native_id(other) == Some(id) || (other.turn == st.turn && other.call.agent == st.call.agent))
+    }) {
+        return None;
+    }
+    let CanonicalAction::Exec { argv, cwd } = &st.norm.action else { return None };
+    if argv.is_empty() || cwd.is_empty() || s.root.to_str() != Some(cwd) || st.norm.effect != Effect::Verify {
+        return None;
+    }
+    let raw = st.call.input.get("command")?.as_str()?;
+    let stages = adage_core::shell::plain_pipeline(raw)?;
+    matches!(stages.as_slice(), [one] if one.argv == *argv).then_some(argv.as_slice())
+}
+
+/// The first productive check after a typed environment failure, if it passed with actual test
+/// cases and changed only the executable environment. All test arguments remain byte-for-byte
+/// equal: no selector, flag, or scope is inferred from a different successful command. Managed
+/// wrappers and other shapes that cannot establish this exact relation abstain.
+pub(crate) fn recovery_witness(s: &Session, at: usize) -> Option<RecoveryWitness> {
+    let failed = s.steps.get(at)?;
+    if !failed.call.failed
+        || failed.verification()?.outcome != VerificationOutcome::SetupFailure
+        || env_signature(&failed.call.output).is_none()
+    {
+        return None;
+    }
+    let before = direct_root_argv(s, at)?;
+    let from = runner(failed)?;
+    if from.env.class() != action::EnvClass::System {
+        return None;
+    }
+    let observed = window(s, at, Goal::Test, HORIZON, true);
+    if observed.reward.unit != RewardUnit::NativeCalls || !observed.reward.reached || observed.reward.harm {
+        return None;
+    }
+    let &(goal_at, calls) = observed.steps.iter().find(|(i, _)| test_goal(&s.steps[*i]))?;
+    let goal = &s.steps[goal_at];
+    let after = direct_root_argv(s, goal_at)?;
+    let to = runner(goal)?;
+    let report = goal.verification()?;
+    let same_program =
+        base(&before[0]) == base(&after[0]) || (action::is_python(&before[0]) && action::is_python(&after[0]));
+    (!goal.call.failed
+        && report.outcome == VerificationOutcome::Passed
+        && report.tests_run.is_some_and(|n| n > 0)
+        && from.family == to.family
+        && to.env.class() == action::EnvClass::Project
+        && from.env != to.env
+        && same_program
+        && before[1..] == after[1..])
+        .then_some(RecoveryWitness { at, goal_at, calls })
 }
 
 const CODE: &[&str] = &[
@@ -338,6 +574,10 @@ pub struct Situation {
     pub next_misfired: bool,
     /// The step of that next test run, if any.
     pub next_at: Option<usize>,
+    /// The next test attempt was the very next native call, decided after this failure. A
+    /// delayed discovery is useful candidate evidence, but not an immediate unaided choice.
+    #[serde(default)]
+    pub immediate_next: bool,
     pub reward: LocalReward,
 }
 
@@ -352,7 +592,9 @@ pub fn situations(s: &Session, env_kind: &str) -> Vec<Situation> {
     let mut edited = false;
     for (i, st) in s.steps.iter().enumerate() {
         let phase = if first_goal.is_some_and(|g| g < i) { "post-goal" } else { "pre-goal" };
-        let (trigger, failed, signature) = if let Some(r) = runner(st).filter(|_| !executed_tests(&st.call.output)) {
+        let (trigger, failed, signature) = if let Some(r) =
+            runner(st).filter(|_| st.verification().is_some_and(|r| r.outcome == VerificationOutcome::SetupFailure))
+        {
             match env_signature(&st.call.output) {
                 Some((f, text)) if seen.insert(f.clone()) => (f, Some(r), Some(text)),
                 _ => continue,
@@ -363,9 +605,24 @@ pub fn situations(s: &Session, env_kind: &str) -> Vec<Situation> {
         } else {
             continue;
         };
-        let reward = local(s, i, Goal::Test, HORIZON);
-        let horizon_end = (i + 1 + HORIZON as usize).min(s.steps.len());
-        let next = s.steps[i + 1..horizon_end].iter().enumerate().find_map(|(k, x)| runner(x).map(|r| (i + 1 + k, r)));
+        let observed = window(s, i, Goal::Test, HORIZON, failed.is_some());
+        let next = observed.steps.iter().find_map(|(k, _)| {
+            let x = &s.steps[*k];
+            (x.turn > st.turn && x.verification().is_some()).then(|| runner(x).map(|r| (*k, r))).flatten()
+        });
+        let immediate_next = observed.reward.unit == RewardUnit::NativeCalls
+            && next.as_ref().is_some_and(|(k, _)| {
+                observed.steps.first() == Some(&(*k, 1))
+                    && s.steps[*k].turn == st.turn.saturating_add(1)
+                    && s.steps[*k].verification().is_some_and(|r| {
+                        matches!(
+                            r.outcome,
+                            VerificationOutcome::Passed
+                                | VerificationOutcome::Failed
+                                | VerificationOutcome::SetupFailure
+                        ) || executed_tests(&s.steps[*k])
+                    })
+            });
         let eco = failed
             .as_ref()
             .map(|r| r.ecosystem())
@@ -382,11 +639,13 @@ pub fn situations(s: &Session, env_kind: &str) -> Vec<Situation> {
             failed,
             signature,
             next_misfired: next.as_ref().is_some_and(|(k, _)| {
-                !executed_tests(&s.steps[*k].call.output) && env_failure(&s.steps[*k].call.output).is_some()
+                s.steps[*k].verification().is_some_and(|r| r.outcome == VerificationOutcome::SetupFailure)
+                    && env_failure(&s.steps[*k].call.output).is_some()
             }),
             next_at: next.as_ref().map(|(k, _)| *k),
+            immediate_next,
             next: next.map(|(_, r)| r),
-            reward,
+            reward: observed.reward,
         });
     }
     out
@@ -414,30 +673,43 @@ mod tests {
     }
 
     #[test]
-    fn executed_tests_reads_the_report_not_the_exit_code() {
-        assert!(executed_tests("============ 47 passed in 0.32s ============"));
-        assert!(executed_tests("collected 12 items\n\ntests/test_x.py ....F"));
-        assert!(executed_tests(" Test Files  1 passed (1)\n      Tests  3 passed (3)"));
-        assert!(executed_tests("ok  \tgithub.com/urfave/cli/v3\t0.412s"));
-        assert!(executed_tests("test result: ok. 5 passed; 0 failed"));
-        assert!(executed_tests("Ran 4 tests in 0.01s\n\nOK"));
-        assert!(!executed_tests("/usr/bin/python: No module named pytest"));
-        assert!(!executed_tests("collected 0 items\n\nno tests ran in 0.01s"));
-        assert!(!executed_tests("bash: pytest: command not found"));
-        // A test that fails on a missing module still ran.
-        assert!(executed_tests("E   ModuleNotFoundError: No module named 'yaml'\n1 failed, 3 passed in 0.2s"));
-        // Reporters that print non-ASCII (vitest's ✓, pytest's ━) read the same.
-        assert!(executed_tests(" ✓ src/a.test.ts (3)\n\n Test Files  1 passed (1)"));
-        assert!(executed_tests("━━━━━━━━━━ 12 passed in 0.40s ━━━━━━━━━━"));
-        assert!(!executed_tests("━━━━━━━━━━ no tests ran in 0.01s ━━━━━━━━━━"));
-    }
-
-    #[test]
     fn env_failures_are_typed() {
         assert_eq!(env_failure("/usr/bin/python: No module named pytest").as_deref(), Some("no-module:pytest"));
         assert_eq!(env_failure("ModuleNotFoundError: No module named 'click'").as_deref(), Some("no-module:click"));
         assert_eq!(env_failure("bash: pytest: command not found").as_deref(), Some("cmd-not-found:pytest"));
         assert_eq!(env_failure("AssertionError: 1 != 2"), None);
+    }
+
+    #[test]
+    fn missing_commands_keep_program_identity_across_shell_dialects() {
+        for (output, signature) in [
+            ("(eval):1: command not found: cargo", "command not found: cargo"),
+            ("(eval):19: command not found: cargo", "command not found: cargo"),
+            ("zsh: command not found: cargo", "command not found: cargo"),
+            ("zsh:4: command not found: cargo", "command not found: cargo"),
+            ("bash: cargo: command not found", "cargo: command not found"),
+            ("sh: 1: cargo: not found", "cargo: not found"),
+        ] {
+            let expected = Some(("cmd-not-found:cargo".into(), signature.into()));
+            assert_eq!(env_signature(output), expected, "{output}");
+            assert!(output.contains(signature), "the trigger must match the actual diagnostic");
+        }
+        assert_eq!(env_failure("(eval):1: command not found: timeout").as_deref(), Some("cmd-not-found:timeout"));
+        assert_eq!(env_failure("(eval):1: command not found: python3.11").as_deref(), Some("cmd-not-found:python3.11"));
+    }
+
+    #[test]
+    fn malformed_reverse_diagnostics_are_not_shell_or_line_number_failures() {
+        for output in [
+            "zsh: command not found:",
+            "(eval):1: command not found: cargo --version",
+            "(eval):1: command not found: cargo; echo unrelated",
+            "(eval):1: command not found: /custom/cargo",
+            "assert message == '(eval):1: command not found: cargo'",
+            "command not found: cargo",
+        ] {
+            assert_eq!(env_signature(output), None, "{output}");
+        }
     }
 
     #[test]

@@ -15,9 +15,10 @@ resolve rate was 0.62 with Adage against 0.65 without and the cost per resolved 
 $0.47. It learned no reflex from real traces: from the benchmark's training traces, and in the
 zero-config run from 58 real past sessions, the learner compiled nothing a user would get. The one
 thing it now delivers on real repositories is an instinct: "tests run in the project's `.venv`".
-It fired in 41 of 66 Python sessions and the agents followed it every time. It works: about two
-tool calls saved per session that needs it (CI [−2.56, −1.17]), which is about $0.01. But a bug
-makes Adage judge every one of those follows as "ignored", so in real use it would switch that
+It fired in 41 of 66 Python sessions and the agents followed it every time. Among sessions that
+hit the environment dead end, the task-weighted comparison reached recognized test-runner output
+about two tool calls sooner (CI [−2.56, −1.17]); this endpoint does not establish executed or passing
+tests, or dollar savings. But a bug makes Adage judge every one of those follows as "ignored", so in real use it would switch that
 instinct off by itself after about five deliveries (reproduced). E1 prefetch cannot be approved for
 any lookup the learner produces (a second bug). The machinery around all this is sound and ready:
 the plugin bundles its binary, the zero-config bootstrap and notices work, E2 actions apply, `adage
@@ -81,12 +82,18 @@ end; `evals/launch/mechanism.py`):
 
 | Measure | adage | control | diff | 95% CI | sign-flip p (21 tasks) |
 | --- | ---: | ---: | ---: | --- | ---: |
-| Tool calls from the dead end to a test run that ran tests | 1.44 | 3.29 | −1.85 | [−2.56, −1.17] | 0.0001 |
+| Tool calls from the first dead end to recognized test-runner output | 1.44 | 3.29 | −1.85 | [−2.56, −1.17] | 0.0001 |
 | Next test command used the project's environment | 71% | 37% | +35 pts | [+17, +52] | 0.004 |
 
-So U11 does what it says, and agents take it. It is worth about two tool calls (roughly one turn,
-about $0.01 at Haiku prices) in sessions of 30 to 40 turns: far below what the session-level metrics
-can resolve, and consistent with them showing nothing.
+The legacy detector accepted `test session starts` or passed/failed/error counts. It required
+neither a positive executed-test count nor passing tests. The recovery comparison includes 62
+Adage and 57 control observations across 21 tasks, excluding one unrecovered session per arm;
+the table reports means of per-task means. It is conditional on reaching the dead end, not an
+effect estimate for all sessions or a comparison of advice recipients against controls.
+
+The 41 followed deliveries describe what recipients did next. Together with the conditional
+recovery comparison, they support an environment-guidance mechanism; they do not establish
+session-level cost savings, better verification, or improved task correctness.
 
 **Sonnet 5 slice** (click and vuejs/core, 8 tasks each, 1 repeat, $18.34): resolve rate 0.44 vs 0.44;
 mean cost $0.51 vs $0.64 (CI [−0.25, −0.01], Holm p = 0.50); $ per resolved $1.17 vs $1.45. With one
@@ -310,8 +317,10 @@ Claims we can make today:
   and nothing runs without you."
 - "On Python repositories with a project `.venv`, when your agent runs the tests outside it, Adage
   tells it to use `.venv/bin/python -m pytest`; agents followed that every time in our real-repository
-  benchmark and reached a working test run about two tool calls sooner." (True once bug 1 is fixed;
-  today the instinct switches itself off after about five uses.)
+  benchmark. Among sessions that hit that dead end, a task-weighted comparison reached recognized
+  test-runner output about two tool calls sooner; that endpoint did not require executed or passing
+  tests." (Historical result; once bug 1 is fixed, the instinct no longer switches itself off after
+  about five uses. This is not evidence of session-level savings.)
 - "On repositories where agents repeatedly need something they cannot discover (a private lookup, a
   regenerate step no file mentions), Adage learned it from about 9–12 sessions and cut turns roughly in
   half on our generated benchmark." (Generated sandboxes only; say so.)

@@ -72,7 +72,43 @@ fn every_implemented_instinct_ships_in_a_base_pack() {
     }
     assert_eq!(shipped, enabled);
     let m = &builtin::marketplace().unwrap().manifest;
-    assert!(m.packs.iter().all(|e| e.default == marketplace::Initially::Detected));
+    for e in &m.packs {
+        assert_eq!(
+            e.default,
+            if matches!(e.name.as_str(), "adage/verification-discovery" | "adage/verification-recovery") {
+                marketplace::Initially::Off
+            } else {
+                marketplace::Initially::Detected
+            }
+        );
+    }
+}
+
+#[test]
+fn recovery_pack_requires_explicit_selection_and_binds_only_advice() {
+    let m = builtin::marketplace().unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    std::fs::write(repo.path().join("Makefile"), "test:\n\tpython3 -m pytest\n").unwrap();
+    let detected: Vec<_> =
+        m.packs.iter().filter(|(e, _)| e.default == marketplace::Initially::Detected).map(|(_, p)| p).collect();
+    let none = BTreeSet::new();
+    let ordinary = instincts::bind(&detected, repo.path(), &[], &none, &none);
+    assert!(!ordinary.origins.values().any(|id| id == "U13"));
+    let recovery = &m.packs.iter().find(|(e, _)| e.name == "adage/verification-recovery").unwrap().1;
+    let mut selected = detected.clone();
+    selected.push(recovery);
+    let enabled = instincts::bind(&selected, repo.path(), &[], &none, &none);
+    let routes: Vec<_> = enabled.of_pack("adage/verification-recovery").collect();
+    assert_eq!(routes.len(), 1);
+    assert!(
+        matches!(&routes[0].step, adage_tracks::Step::Advise { template, .. } if template == "verification-unexplained-recovery")
+    );
+    assert!(recovery.routes.iter().all(|r| r.exec.is_none()));
+    assert_eq!(recovery.manifest.exec.requested, adage_pack::Level::E0);
+    assert!(instincts::bind(&detected, repo.path(), &[], &none, &none)
+        .of_pack("adage/verification-recovery")
+        .next()
+        .is_none());
 }
 
 /// A checkout with a project `.venv` (made, not activated) holding pytest, for U11.

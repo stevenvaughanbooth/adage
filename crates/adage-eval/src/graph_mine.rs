@@ -45,11 +45,13 @@ pub fn to_events(s: &adage_learn::import::Session, task: Option<String>, table: 
     let mut steps = Vec::new();
     let mut turns = Vec::new();
     let mut effects = Vec::new();
+    let mut verification = Vec::new();
     for st in &s.steps {
         let mut push = |step: input::Step, eff| {
             steps.push(step);
             turns.push(st.turn);
             effects.push(eff);
+            verification.push(st.verification());
         };
         match &st.norm.action {
             CanonicalAction::Exec { argv, .. } => push(
@@ -69,14 +71,18 @@ pub fn to_events(s: &adage_learn::import::Session, task: Option<String>, table: 
             _ => {}
         }
     }
-    let inp =
-        input::Session { id: s.id.clone(), prompts: vec![input::Prompt { text: s.prompt.clone(), at_step: 0 }], steps };
+    let inp = input::Session {
+        id: s.id.clone(),
+        prompts: vec![input::Prompt { text: s.learning_prompt().into(), at_step: 0 }],
+        steps,
+    };
     let meta = events::Meta {
         day: Some(s.day.clone()),
         task,
         outcome: s.outcome,
         turns: Some(turns),
         effects: Some(effects),
+        verification: Some(verification),
         influence: vec![],
     };
     events::from_input(&inp, &meta, table)

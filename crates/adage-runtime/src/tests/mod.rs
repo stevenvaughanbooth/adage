@@ -19,6 +19,8 @@ mod refused;
 mod subagent;
 mod turn_step;
 mod typed_slots;
+mod verification_discovery;
+mod verification_recovery;
 
 use super::*;
 use adage_core::spans::SpanKind;

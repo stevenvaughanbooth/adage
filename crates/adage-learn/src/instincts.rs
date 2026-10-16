@@ -93,7 +93,11 @@ impl Config {
     /// Whether the instinct pack `name` is turned on: named in `instincts.packs` (or `auto`) and
     /// not in `instincts.disabled`.
     pub fn wants(&self, name: &str) -> bool {
-        self.binds() && self.packs.iter().any(|p| p == AUTO || p == name) && !self.disabled.contains(name)
+        let detected = adage_pack::builtin::marketplace()
+            .ok()
+            .and_then(|m| m.manifest.packs.iter().find(|p| p.name == name))
+            .is_none_or(|p| p.default != adage_pack::marketplace::Initially::Off);
+        self.binds() && self.packs.iter().any(|p| p == name || (p == AUTO && detected)) && !self.disabled.contains(name)
     }
 
     /// The catalogue ids turned off (`instincts.disabled` entries that name no pack).
@@ -808,4 +812,14 @@ mod tests {
         assert!(should_extinguish(&j(0, 0, 200, 0, 0)).is_none());
         assert!(should_extinguish(&j(0, 1, 200, 0, 0)).is_some());
     }
+}
+#[test]
+fn auto_respects_opt_in_marketplace_packs_but_explicit_selection_binds() {
+    let name = "adage/verification-discovery";
+    assert!(!Config::default().wants(name));
+    let explicit = Config { packs: vec![AUTO.into(), name.into()], ..Default::default() };
+    assert!(explicit.wants(name));
+    let disabled = Config { disabled: [name.into()].into(), ..explicit };
+    assert!(!disabled.wants(name));
+    assert!(Config::default().wants("adage/lockfiles"));
 }

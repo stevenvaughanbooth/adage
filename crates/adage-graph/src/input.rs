@@ -58,6 +58,17 @@ pub struct StepMeta {
     /// Native root-cwd provenance for direct-pytest verbosity pooling; absent is unknown.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub project_pytest_root_cwd: bool,
+    /// Runner-specific result from an attributable native call. None is legacy/unsupported,
+    /// never an assertion that a recognized runner passed. Canonical conversion fills Unknown
+    /// when a recognized runner has no report or shares a compound call's output.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification: Option<adage_core::outcome::VerificationReport>,
+}
+
+impl StepMeta {
+    pub fn execution_status(&self, transport_failed: bool) -> Option<bool> {
+        self.verification.map_or(Some(!transport_failed), |r| r.status())
+    }
 }
 
 /// A session with its per-step metadata (`meta[i]` describes `session.steps[i]`; shorter or

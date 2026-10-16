@@ -230,7 +230,9 @@ fn switch(name: &str, on: bool, root: Option<&Path>, paths: &Paths) -> Result<()
     let mut packs = settings.instincts_packs.clone();
     disabled.retain(|d| d != name);
     if on {
-        if !packs.iter().any(|p| p == adage_learn::instincts::AUTO || p == name) {
+        // AUTO omits optional built-ins. An explicit selection must remain explicit even when
+        // the default packs are also selected, so `packs on` can enable an optional pack.
+        if !packs.iter().any(|p| p == name) {
             packs.push(name.to_string());
             adage_store::config::set(paths, "instincts.packs", &packs.join(",")).map_err(anyhow::Error::msg)?;
         }

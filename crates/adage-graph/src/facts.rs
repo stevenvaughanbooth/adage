@@ -505,6 +505,7 @@ pub fn facts(a: &Annotated, embedder: &Embedder) -> SessionFacts {
         let seg = if seen_prompt { segment } else { 0 };
         match step {
             Step::Exec { argv, output, failed } => {
+                let Some(ok) = meta.execution_status(*failed) else { continue };
                 if output.len() > MAX_OUTPUT {
                     trunc.output = true;
                 }
@@ -537,12 +538,12 @@ pub fn facts(a: &Annotated, embedder: &Embedder) -> SessionFacts {
                     key,
                     argv: argv.clone(),
                     effect: meta.effect.clone(),
-                    ok: !failed,
+                    ok,
                 });
                 if !output.trim().is_empty() {
                     obs.push(obs_of(ev, output));
                 }
-                if *failed {
+                if !ok {
                     fails.push(Fail { act: ev, signature: signature(tokens::bounded(output, MAX_OUTPUT)) });
                 }
                 sources.output(output, ev);
@@ -718,7 +719,14 @@ mod tests {
     }
 
     fn meta(turn: u32, prompt: u16, effect: &str, key: &str) -> StepMeta {
-        StepMeta { project_pytest_root_cwd: false, turn, prompt, effect: effect.into(), key: key.into() }
+        StepMeta {
+            project_pytest_root_cwd: false,
+            turn,
+            prompt,
+            effect: effect.into(),
+            key: key.into(),
+            verification: None,
+        }
     }
 
     fn sample() -> Annotated {

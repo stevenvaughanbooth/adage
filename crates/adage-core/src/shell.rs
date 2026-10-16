@@ -26,6 +26,10 @@ const NOOP_BUILTINS: &[&str] = &[
     "unalias", "trap", "ulimit", "umask", "wait", "fg", "bg", "jobs", "type",
 ];
 
+/// These reads share one concatenated tool result; it is not the source of any individual file.
+/// Ingest keeps the original call intact, and consumers of file contents must honor this note.
+pub const SHARED_CAT_OUTPUT: &str = "shared cat output; no per-file content attribution";
+
 thread_local! {
     static PARSER: std::cell::RefCell<Parser> = std::cell::RefCell::new({
         let mut p = Parser::new();
@@ -357,7 +361,7 @@ fn windows_absolute(p: &str) -> bool {
 /// Extract (argv, has_var_prefix) for a `command` node: variable_assignment children are
 /// skipped (VAR=val prefix before argv[0]) but their command_substitution values, if any, are
 /// walked for embedded actions by the caller.
-fn command_argv(node: Node, src: &str) -> Vec<String> {
+pub(crate) fn command_argv(node: Node, src: &str) -> Vec<String> {
     let mut argv = Vec::new();
     let mut c = node.walk();
     for ch in node.children(&mut c) {
@@ -483,6 +487,24 @@ fn stdin_program(argv: &[String]) -> bool {
 }
 
 fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect, f64, String) {
+    // Numeric Python versions use the existing Python grammar only for a direct, known test
+    // module. Aliasing the whole interpreter would also inherit its broad argument patterns
+    // for inline code and arbitrary scripts. Keep argv (and therefore command identity) intact.
+    let base = basename(cmd);
+    if table.get(&base).is_none() && crate::action::is_python(&base) {
+        let numeric_version = base
+            .strip_prefix("python")
+            .is_some_and(|v| v.split('.').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit())));
+        if numeric_version {
+            if let Some(at) = args.iter().position(|a| a == "-m") {
+                let startup = args[..at].iter().all(|a| matches!(a.as_str(), "-B" | "-I" | "-E" | "-s" | "-u"));
+                let known = args.get(at + 1).is_some_and(|a| matches!(a.as_str(), "pytest" | "unittest"));
+                if startup && known {
+                    return classify_effect("python", &args[at..], table);
+                }
+            }
+        }
+    }
     // `python3 scripts/wi-lookup W-1` — classify the script, not the interpreter.
     const INTERPRETERS: [&str; 9] = ["python", "python3", "node", "bash", "sh", "zsh", "ruby", "perl", "deno"];
     if INTERPRETERS.contains(&cmd) {
@@ -774,7 +796,11 @@ fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
                     if !matches!(a.effect, Effect::Publish) {
                         a.effect = Effect::Author;
                     }
-                    a.note = format!("redirected to {path}");
+                    a.note = if a.note.is_empty() {
+                        format!("redirected to {path}")
+                    } else {
+                        format!("redirected to {path}; {}", a.note)
+                    };
                 }
                 if actions.is_empty() {
                     // pure `> file` truncation with no command (rare) — no body actions to
@@ -923,6 +949,12 @@ fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
                 }
             }
 
+            if cmd == "cat" {
+                if let Some(reads) = cat_reads(node, src, cwd) {
+                    subs.extend(reads);
+                    return subs;
+                }
+            }
             let ops = operands(&cmd, &argv, ctx.table);
             let action_result = shape_command(&cmd, &argv, &ops, cwd, ctx.table);
             subs.push(action_result);
@@ -935,6 +967,59 @@ fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
         // Comments, heredoc bodies encountered directly, punctuation, etc.
         _ => vec![],
     }
+}
+
+/// `cat` reads every literal operand, in order. Only portable, no-value flags are understood;
+/// unknown options, shell expansion and platform-dependent interspersed options stay an exec.
+/// `-` denotes stdin even after `--`, and contributes no invented filesystem path.
+fn cat_reads(node: Node, src: &str, cwd: &str) -> Option<Vec<Normalized>> {
+    // Assignment prefixes do not change cat's operands. Their substitutions were already
+    // collected by walk_statement, just as for other commands.
+    let argv = literal_command_argv(node, src, true)?;
+    let mut options = true;
+    let mut operands_started = false;
+    let mut inputs = 0;
+    let mut paths = Vec::new();
+    for arg in argv.iter().skip(1) {
+        if options && arg == "--" {
+            if operands_started {
+                return None;
+            }
+            options = false;
+            continue;
+        }
+        if options && arg.starts_with('-') && arg != "-" {
+            if operands_started || !arg[1..].chars().all(|c| "benstuv".contains(c)) {
+                return None;
+            }
+            continue;
+        }
+        operands_started = true;
+        inputs += 1;
+        if arg == "-" {
+            continue;
+        }
+        if arg.is_empty() || arg.starts_with("/dev/") || arg.contains(['$', '`', '*', '?', '[', '{', '\\', '\n']) {
+            return None;
+        }
+        paths.push(resolve_path(cwd, arg));
+    }
+    if paths.is_empty() {
+        return None;
+    }
+    let note = if inputs > 1 { SHARED_CAT_OUTPUT } else { "" };
+    Some(
+        paths
+            .into_iter()
+            .map(|path| Normalized {
+                action: CanonicalAction::Read { path, range: None },
+                effect: Effect::Observe,
+                mutating: false,
+                confidence: 0.95,
+                note: note.into(),
+            })
+            .collect(),
+    )
 }
 
 /// Children of `node` that come after the first child of kind `keyword` (e.g. every child
@@ -1259,7 +1344,7 @@ fn shape_command(cmd: &str, argv: &[String], ops: &[String], cwd: &str, table: &
         };
     }
 
-    if (cmd == "cat" || cmd == "nl") && !ops.is_empty() && !has_redirect {
+    if cmd == "nl" && !ops.is_empty() && !has_redirect {
         return Normalized {
             action: CanonicalAction::Read { path: resolve_path(cwd, &ops[0]), range: None },
             effect: Effect::Observe,
@@ -1652,10 +1737,16 @@ fn plain_stage(node: Node, src: &str) -> Option<Stage> {
         }
         _ => return None,
     };
+    let argv = literal_command_argv(cmd, src, false)?;
+    Some(Stage { range: cmd.byte_range(), argv, merges_stderr })
+}
+
+fn literal_command_argv(cmd: Node, src: &str, allow_assignments: bool) -> Option<Vec<String>> {
     let mut argv = Vec::new();
     let mut c = cmd.walk();
     for ch in cmd.children(&mut c) {
         let word = match ch.kind() {
+            "variable_assignment" if allow_assignments => continue,
             "command_name" => ch.named_child(0).filter(|w| ch.named_child_count() == 1 && w.kind() == "word")?,
             "word" | "raw_string" | "number" => ch,
             // A double-quoted string with nothing expanded inside it.
@@ -1672,7 +1763,203 @@ fn plain_stage(node: Node, src: &str) -> Option<Stage> {
     if argv.is_empty() || argv.iter().any(|a| a.contains(['$', '`', '\\'])) {
         return None;
     }
-    Some(Stage { range: cmd.byte_range(), argv, merges_stderr })
+    Some(argv)
+}
+
+/// Whether a shell call contains only a narrow set of literal observational commands. This is
+/// an evidence boundary for intervening discovery, not execution authority or proof that files
+/// stayed unchanged: executable resolution and the environment are not established here.
+/// Lists and pipelines may combine `ls`, `cat`, `head`, `tail`, `wc` and `pwd`. Only stderr may
+/// be redirected, to `/dev/null` or stdout. `ls` may list pathname globs with a literal prefix
+/// (`.venv*`, `src/*.py`); these cannot expand into command options. Code/variable expansion,
+/// assignments, wrappers and other syntax fail closed, even when the normalizer says Observe.
+pub fn observational_commands(command: &str) -> bool {
+    if command.trim().is_empty() || command.len() > MAX_COMMAND || too_deep(command) || too_many_pipes(command) {
+        return false;
+    }
+    let shadow = ascii_shadow(command);
+    let Ok(tree) = PARSER.with(|p| parse_within_budget(&mut p.borrow_mut(), shadow.as_bytes())) else {
+        return false;
+    };
+    if tree.root_node().has_error() {
+        return false;
+    }
+    let mut stack = vec![tree.root_node()];
+    let mut commands = 0;
+    while let Some(node) = stack.pop() {
+        match node.kind() {
+            "program" | "list" | "pipeline" => {
+                let mut cursor = node.walk();
+                for child in node.children(&mut cursor) {
+                    if child.is_named() {
+                        stack.push(child);
+                    } else if !matches!(
+                        (node.kind(), child.kind()),
+                        ("program" | "list", ";" | "&&" | "||") | ("pipeline", "|")
+                    ) {
+                        return false;
+                    }
+                }
+            }
+            "redirected_statement" => {
+                let Some(body) = node.child_by_field_name("body").filter(|n| n.kind() == "command") else {
+                    return false;
+                };
+                let mut cursor = node.walk();
+                for redirect in node.children(&mut cursor).filter(|n| n.id() != body.id()) {
+                    let spelling: String =
+                        text(redirect, command).chars().filter(|c| *c != ' ' && *c != '\t').collect();
+                    if redirect.kind() != "file_redirect" || !matches!(spelling.as_str(), "2>/dev/null" | "2>&1") {
+                        return false;
+                    }
+                }
+                stack.push(body);
+            }
+            "command" => {
+                if !literal_command_argv(node, command, false).is_some_and(|argv| observational_argv(&argv)) {
+                    return false;
+                }
+                commands += 1;
+            }
+            _ => return false,
+        }
+    }
+    commands > 0
+}
+
+fn observational_argv(argv: &[String]) -> bool {
+    let Some((program, args)) = argv.split_first() else { return false };
+    // Conventional names or their standard system locations; `./cat` and custom prefixes
+    // may be repository programs. This still makes no claim about runtime resolution.
+    let program = program.strip_prefix("/bin/").or_else(|| program.strip_prefix("/usr/bin/")).unwrap_or(program);
+    let flags = match program {
+        "ls" => "aAlhdRrtS1F",
+        "cat" => "benstuvAET",
+        "head" | "tail" => "qv",
+        "wc" => "clmwL",
+        "pwd" => "LP",
+        _ => return false,
+    };
+    let mut options = true;
+    let mut count = false;
+    for arg in args {
+        if arg.is_empty() || arg.chars().any(|c| c.is_control() || "$`\\[]{}~".contains(c)) {
+            return false;
+        }
+        // Pathname expansion supplies only names to ls. Requiring a literal, non-option
+        // prefix prevents names such as --some-option from becoming flags. Other readers
+        // retain the literal-only contract; this is not authority to execute a shell call.
+        if arg.contains(['*', '?']) && (program != "ls" || arg.starts_with(['-', '*', '?'])) {
+            return false;
+        }
+        if count {
+            if !arg.bytes().all(|b| b.is_ascii_digit()) {
+                return false;
+            }
+            count = false;
+        } else if options && arg == "--" {
+            options = false;
+        } else if options && matches!(program, "head" | "tail") && matches!(arg.as_str(), "-n" | "-c") {
+            count = true;
+        } else if options && arg.starts_with('-') && arg != "-" {
+            let short = &arg[1..];
+            if !(short.chars().all(|c| flags.contains(c))
+                || matches!(program, "head" | "tail") && short.bytes().all(|b| b.is_ascii_digit()))
+            {
+                return false;
+            }
+        } else if program == "pwd" || arg.starts_with("/dev/") || arg.starts_with("/proc/") || arg.starts_with("/sys/")
+        {
+            return false;
+        }
+    }
+    !count
+}
+
+#[cfg(test)]
+mod cat_tests {
+    use super::*;
+
+    fn reads(command: &str) -> Vec<Normalized> {
+        normalize_shell(command, "/repo", CommandTable::load())
+    }
+
+    fn paths(actions: &[Normalized]) -> Vec<&str> {
+        actions
+            .iter()
+            .filter_map(|n| match &n.action {
+                CanonicalAction::Read { path, .. } => Some(path.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn all_literal_cat_inputs_are_reads_with_shared_output_provenance() {
+        for command in [
+            "cat Cargo.toml src/lib.rs",
+            "/bin/cat -ns Cargo.toml src/lib.rs",
+            "cat -- Cargo.toml src/lib.rs",
+            "FOO=bar cat Cargo.toml src/lib.rs",
+            "cat Cargo.toml src/lib.rs | head -80",
+        ] {
+            let actions = reads(command);
+            assert_eq!(paths(&actions), ["/repo/Cargo.toml", "/repo/src/lib.rs"], "{command}");
+            assert!(actions.iter().all(|n| n.note == SHARED_CAT_OUTPUT && !n.mutating));
+        }
+        let actions = reads("cd crates/core && cat Cargo.toml 'src/lib file.rs' 123");
+        assert_eq!(
+            paths(&actions),
+            ["/repo/crates/core/Cargo.toml", "/repo/crates/core/src/lib file.rs", "/repo/crates/core/123"]
+        );
+        let actions = reads("cat -- -n ./- -");
+        assert_eq!(paths(&actions), ["/repo/-n", "/repo/-"]);
+        assert!(actions.iter().all(|n| n.note == SHARED_CAT_OUTPUT));
+        let actions = reads("cat - README.md");
+        assert_eq!(paths(&actions), ["/repo/README.md"]);
+        assert_eq!(actions[0].note, SHARED_CAT_OUTPUT);
+        let actions = reads("cat README.md");
+        assert_eq!(paths(&actions), ["/repo/README.md"]);
+        assert!(actions[0].note.is_empty());
+    }
+
+    #[test]
+    fn stdin_unknown_options_and_expansions_do_not_invent_file_reads() {
+        for command in [
+            "cat",
+            "cat -",
+            "cat -- -",
+            "cat < input.txt",
+            "cat <<'EOF'\nx\nEOF",
+            "cat --help README.md",
+            "cat --output out a b",
+            "cat -z a b",
+            "cat a -n b",
+            "cat a -- b",
+            "cat $FILES b",
+            "cat *.rs b",
+            "cat {a,b}.rs",
+            "cat /dev/stdin README.md",
+            "cat '' README.md",
+        ] {
+            assert!(paths(&reads(command)).is_empty(), "{command}");
+        }
+    }
+
+    #[test]
+    fn redirection_keeps_writes_and_never_loses_shared_output_marker() {
+        let actions = reads("cat a b > out");
+        assert_eq!(paths(&actions), ["/repo/a", "/repo/b"]);
+        assert!(actions.iter().all(|n| n.mutating && n.effect == Effect::Author));
+        assert!(actions
+            .iter()
+            .all(|n| n.note.starts_with("redirected to /repo/out") && n.note.contains(SHARED_CAT_OUTPUT)));
+        let observed = normalize_shell_observed("cat a b > out", "/repo", CommandTable::load());
+        assert_eq!(paths(&observed), ["/repo/a", "/repo/b"]);
+        assert!(observed.iter().any(|n| matches!(&n.action, CanonicalAction::Write { path } if path == "/repo/out")));
+        let actions = reads("cat a b | sh");
+        assert!(actions.iter().all(|n| n.mutating && n.note.contains(SHARED_CAT_OUTPUT)));
+    }
 }
 
 #[cfg(test)]

@@ -132,6 +132,7 @@ pub(crate) fn respond(ctx: &HookCtx<'_>, ev: Event) -> Result<Responded, Failure
     // The learned follow judge's weights for this repository (fitted at learn time), if any.
     let weights = adage_tracks::layout::read_follow_weights(&paths.tracks(), &repo_key);
     let policy = adage_runtime::Policy {
+        observed_cwd: Some(ctx.cwd.to_path_buf()),
         // ADAGE_CARD_CHECKS=0 (an evaluation knob, like ADAGE_ARM) leaves the card's test-command
         // line out.
         card_checks: std::env::var("ADAGE_CARD_CHECKS").map_or(true, |v| v != "0"),

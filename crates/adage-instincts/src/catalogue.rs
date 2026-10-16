@@ -79,7 +79,7 @@ mod tests {
         let ids: Vec<&str> = c.instincts.iter().map(|i| i.id.as_str()).collect();
         for want in [
             "U1", "U2", "U3", "U4", "U5", "U6", "N1", "P1", "U7", "U8", "U9", "U10", "U11", "N2", "N3", "R1", "R2",
-            "G1", "X1",
+            "G1", "X1", "U12", "U13",
         ] {
             assert!(ids.contains(&want), "{want} missing");
         }
@@ -96,7 +96,7 @@ mod tests {
             assert!(["route", "advisory"].contains(&i.kind.as_str()), "{}", i.id);
         }
         let enabled: Vec<&str> = c.instincts.iter().filter(|i| i.enabled).map(|i| i.id.as_str()).collect();
-        assert_eq!(enabled, ["U1", "U3", "U4", "U5", "U6", "N1", "P1", "U11"]);
+        assert_eq!(enabled, ["U13", "U12", "U1", "U3", "U4", "U5", "U6", "N1", "P1", "U11"]);
         assert_eq!(c.provenance(), "instinct:core@0.1.0");
     }
 }

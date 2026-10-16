@@ -222,6 +222,8 @@ pub struct Meta {
     pub turns: Option<Vec<u32>>,
     /// Effect of each input step, when the importer knows it (else classified here).
     pub effects: Option<Vec<Option<Effect>>>,
+    /// Native runner evidence; unknown/no-tests acts cannot be success or failure examples.
+    pub verification: Option<Vec<Option<adage_core::outcome::VerificationReport>>>,
     pub influence: Vec<Influence>,
 }
 
@@ -391,6 +393,8 @@ pub fn from_input(s: &input::Session, meta: &Meta, table: &CommandTable) -> Even
                 if argv.is_empty() {
                     continue;
                 }
+                let status = meta.verification.as_ref().and_then(|v| v.get(i)).copied().flatten();
+                let Some(ok) = status.map_or(Some(!failed), |r| r.status()) else { continue };
                 let effect = meta
                     .effects
                     .as_ref()
@@ -412,10 +416,10 @@ pub fn from_input(s: &input::Session, meta: &Meta, table: &CommandTable) -> Even
                     block: format!("{} {}", effect.as_str(), program(argv)),
                     embedding: None,
                     batch,
-                    ok: !failed,
+                    ok,
                     segment,
                     effect: Some(effect),
-                    signature: failed.then(|| signature(output)),
+                    signature: (!ok).then(|| signature(output)),
                 });
                 for t in tokens::tokens(tokens::bounded(output, input::MAX_OUTPUT), input::MAX_SOURCE_TOKENS) {
                     if t.text.contains('/') || t.text.contains('.') {

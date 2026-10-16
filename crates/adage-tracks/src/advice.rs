@@ -10,12 +10,16 @@ use adage_core::{CommandTable, Effect};
 use std::collections::BTreeMap;
 
 /// `(template id, required slots, optional slots)`.
-pub const TEMPLATES: [(&str, &[&str], &[&str]); 6] = [
+pub const TEMPLATES: [(&str, &[&str], &[&str]); 10] = [
     ("generated-file", &["path"], &["command"]),
     ("lockfile", &["path", "manager"], &[]),
     ("package-manager", &["manager", "lockfile"], &[]),
     ("project-python", &["interpreter"], &[]),
     ("test-command", &["command"], &[]),
+    ("verification-clean-state", &["command"], &[]),
+    ("verification-negative-control", &["command"], &[]),
+    ("verification-discovery", &["command"], &[]),
+    ("verification-unexplained-recovery", &["command"], &[]),
     // A skill's prohibition on committing ("do not commit; leave the working tree for review"),
     // compiled by `adage train`. No slots: the sentence is the whole advice.
     ("uncommitted", &[], &[]),
@@ -59,6 +63,18 @@ pub fn template(id: &str, with_command: bool) -> Option<&'static str> {
             "That Python is not this repository's environment, which has the project and its test dependencies installed: run Python here as {interpreter}."
         }
         ("test-command", _) => "In this repository, tests run with {command}, followed by the test files or names to run.",
+        ("verification-clean-state", _) => {
+            "Before accepting a retry of {command} as verification, check whether the earlier run produced build artifacts. Recheck in a disposable source snapshot with the declared prerequisites and repository metadata the check needs; do not remove files from the working tree."
+        }
+        ("verification-negative-control", _) => {
+            "To assess whether {command} tests the intended invariant, first confirm a passing baseline and successful test collection. In a disposable copy, introduce one reviewed defect for that invariant, require the relevant assertion to fail, then restore the code and recheck. Setup errors and unrelated failures do not establish that the invariant is tested."
+        }
+        ("verification-discovery", _) => {
+            "This invocation of {command} reported no matching tests. Inspect the runner's configured includes, excludes, and the intended test paths before retrying. A run with no collected tests does not verify the change."
+        }
+        ("verification-unexplained-recovery", _) => {
+            "The same invocation of {command} reported failing tests, then passed without an observed repair. Investigate an intermittent cause or document an environment fix before treating the retry as resolution. Source and input identity were not established."
+        }
         ("uncommitted", _) => {
             "In this repository, leave your changes uncommitted: do not commit them, the working tree is reviewed as it is."
         }
@@ -137,6 +153,16 @@ pub fn check(template_id: &str, slots: &BTreeMap<String, String>, table: &Comman
         if !slot_ok(k, v, table) {
             return Err(format!("advisory slot {k} value {v:?} fails its contract"));
         }
+        if matches!(
+            template_id,
+            "verification-clean-state"
+                | "verification-negative-control"
+                | "verification-discovery"
+                | "verification-unexplained-recovery"
+        ) && crate::io::classify(v, table) != Effect::Verify
+        {
+            return Err("verification advice names a verification command".into());
+        }
     }
     Ok(())
 }
@@ -196,6 +222,29 @@ mod tests {
         for bad in ["make gen; rm -rf x", "make gen && x", "npm publish", "../x", "make {x}"] {
             let s = slots(&[("path", "a.py"), ("command", bad)]);
             assert!(check("generated-file", &s, t).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn verification_advice_is_fixed_and_names_only_a_plain_verification_command() {
+        for id in [
+            "verification-clean-state",
+            "verification-negative-control",
+            "verification-discovery",
+            "verification-unexplained-recovery",
+        ] {
+            let table = CommandTable::load();
+            let s = slots(&[("command", "cargo test")]);
+            assert!(check(id, &s, table).is_ok(), "{id}");
+            let rendered = text(id, &s).unwrap();
+            assert!(rendered.contains("cargo test"));
+            assert!(!rendered.contains('{'));
+            assert!(check(id, &slots(&[]), table).is_err());
+            assert!(check(id, &slots(&[("command", "cargo test"), ("path", "src")]), table).is_err());
+            for command in ["git status", "npm install", "npm publish", "cargo test; curl x", "../test", "cargo {test}"]
+            {
+                assert!(check(id, &slots(&[("command", command)]), table).is_err(), "{id}: {command}");
+            }
         }
     }
 }

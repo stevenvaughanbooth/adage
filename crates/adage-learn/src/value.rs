@@ -6,8 +6,9 @@
 //!
 //! - `Q(s, ∅)`: tool calls from the trigger to the first test run that ran tests, over every
 //!   unexposed trace at `s` (what agents do with no directive);
-//! - `Q(s, Sat d)`: the same over the traces whose next test run was in `Sat(d)` (the same
-//!   environment and tool, any arguments);
+//! - `Q(s, Sat d)`: the same over traces whose immediate next native call chose `Sat(d)`
+//!   (the same environment and tool, any arguments); discovering that repair later is not an
+//!   immediate choice and remains separate evidence that the candidate can execute tests;
 //! - `p_misfire`: how often that next run failed for the environment again;
 //!
 //! each as a posterior whose prior is supplied from the level above (global → ecosystem →
@@ -38,12 +39,13 @@
 //! failed (declared by the repository, [`Statics`], or seen running tests in a trace). An install
 //! is never a candidate. **Admission** is verified (declared, and seen running tests in at least one
 //! trace) or a positive one-sided 90% lower bound on A with enough effective samples. **Strength**
-//! comes from A under the ceiling: fire on a positive lower bound, prime on a positive mean with
-//! P(A > 0) ≥ 0.8, else nothing.
+//! comes from A under the ceiling, and requires an observed immediate choice: fire on a positive
+//! lower bound, prime on a positive mean with P(A > 0) ≥ 0.8, else nothing. Historical fitted
+//! costs in normalized-step units are not mixed with native-call costs.
 
 use crate::import::Exposure as _;
 use crate::import::Session;
-use crate::outcome::{self, Env, Runner, Situation, SituationKey};
+use crate::outcome::{self, Env, RewardUnit, Runner, Situation, SituationKey};
 use adage_core::Effect;
 use adage_graph::stats::{self, Advantage};
 use adage_tracks::why::Why;
@@ -66,8 +68,12 @@ pub struct Cell {
 /// Cross-repository priors: cells keyed `<ecosystem>|<env_kind>|<trigger>|<role>` with `*` for a
 /// level pooled over (`*|*|*|null` is the global cell of `Q(∅)`). Roles: `null` (`Q(∅)`), and
 /// the environment kind of a candidate's `Sat(d)` (`venv`, `managed`).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Priors {
+    /// Cost/choice semantics of `cells`. Missing in legacy files, whose cells are not used.
+    /// Uptake counts have their own route-based semantics and are not cost cells.
+    #[serde(default)]
+    pub outcome_format: u32,
     #[serde(default)]
     pub cells: BTreeMap<String, Cell>,
     /// Cross-repository `p_self` per directive kind ([`kind_of`]): how often agents take the
@@ -75,6 +81,17 @@ pub struct Priors {
     /// `examples/outcome_priors.rs`). A kind with no cell has the research prior ([`SELF_PRIORS`]).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub uptake: BTreeMap<String, SelfCell>,
+}
+
+/// Native-call costs and immediate same-family choices, with session-start avoids counted only
+/// when the working invocation precedes an avoided attempt. Earlier formats counted eventual
+/// recovery as unaided avoidance; their fitted avoid uptake is not compatible evidence.
+pub const OUTCOME_FORMAT: u32 = 3;
+
+impl Default for Priors {
+    fn default() -> Self {
+        Self { outcome_format: OUTCOME_FORMAT, cells: BTreeMap::new(), uptake: BTreeMap::new() }
+    }
 }
 
 /// One kind's pooled unaided rate: `took` of `n` situations, and the concentration a route of the
@@ -124,6 +141,9 @@ impl Priors {
     pub fn prior(&self, k: &SituationKey, role: &str) -> (f64, f64, f64, f64) {
         let (mut m, mut kappa) = (DEFAULT_CALLS, DEFAULT_KAPPA);
         let (mut mis_a, mut mis_b) = MISFIRE_PRIOR;
+        if self.outcome_format != OUTCOME_FORMAT {
+            return (m, kappa, mis_a, mis_b);
+        }
         let levels = Self::levels(k, role);
         let chain = if levels.iter().any(|l| self.cells.contains_key(l)) { levels } else { Self::levels(k, "null") };
         for l in chain {
@@ -142,7 +162,16 @@ impl Priors {
 
     /// Add one repository's situations to the cells (for fitting across repositories).
     pub fn add(&mut self, rows: &[Row]) {
-        for r in rows {
+        for r in rows.iter().filter(|r| r.outcome_format == OUTCOME_FORMAT && r.unit == RewardUnit::NativeCalls) {
+            // A legacy object can be refitted, but its old sufficient statistics cannot be
+            // relabeled or pooled with the new unit and choice semantics.
+            if self.outcome_format != OUTCOME_FORMAT {
+                self.cells.clear();
+                // This fitted kind also used the old eventual/short-window recovery meaning.
+                // Do not relabel it while updating cost rows; unrelated uptake stays intact.
+                self.uptake.remove("avoid");
+                self.outcome_format = OUTCOME_FORMAT;
+            }
             for role in ["null".to_string()].into_iter().chain(r.role.clone()) {
                 for l in Self::levels(&r.key, &role) {
                     let c = self.cells.entry(l).or_default();
@@ -157,10 +186,15 @@ impl Priors {
     }
 }
 
-/// One situation as the value model reads it: its key, the role of the agent's next test run
-/// (the environment kind it ran in, when that is a candidate's), and the local reward.
+/// One situation as the value model reads it: its key, the role of the agent's immediate choice
+/// (when attributable and in the same test family), and the local reward. Legacy and non-native
+/// rows remain readable but do not contribute fitted cost cells.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Row {
+    #[serde(default)]
+    pub outcome_format: u32,
+    #[serde(default)]
+    pub unit: RewardUnit,
     pub key: SituationKey,
     pub role: Option<String>,
     pub calls: u32,
@@ -216,14 +250,29 @@ fn role_of(r: &Runner) -> Option<String> {
 pub fn rows(s: &Session, env_kind: &str) -> Vec<Row> {
     outcome::situations(s, env_kind)
         .into_iter()
-        .map(|x: Situation| Row {
-            role: x.next.as_ref().and_then(role_of),
-            key: x.key,
-            calls: x.reward.calls,
-            misfired: x.next_misfired,
-            harm: x.reward.harm,
+        .map(|x: Situation| {
+            let immediate = immediate_runner(&x);
+            Row {
+                outcome_format: OUTCOME_FORMAT,
+                unit: x.reward.unit,
+                role: immediate.and_then(role_of),
+                misfired: immediate.is_some() && x.next_misfired,
+                key: x.key,
+                calls: x.reward.calls,
+                harm: x.reward.harm,
+            }
         })
         .collect()
+}
+
+/// Choosing an environment for some other runner, or reaching it only after discovery, is not
+/// taking this post-failure directive immediately. The outcome boundary owns call attribution.
+fn immediate_runner(x: &Situation) -> Option<&Runner> {
+    let next = x.next.as_ref()?;
+    (x.reward.unit == RewardUnit::NativeCalls
+        && x.immediate_next
+        && x.failed.as_ref().is_none_or(|failed| failed.family == next.family))
+    .then_some(next)
 }
 
 /// A candidate's value at one situation key, with what it rests on.
@@ -313,7 +362,7 @@ pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors, bar: 
         for s in ss {
             for st in &s.steps {
                 if let Some(r) = outcome::runner(st).filter(|r| r.family == family && spelled(r).is_some()) {
-                    if outcome::executed_tests(&st.call.output) {
+                    if outcome::executed_tests(st) {
                         if let Some(c) = spelled(&r) {
                             cands.entry(c).or_insert((r.env.clone(), false));
                         }
@@ -324,13 +373,18 @@ pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors, bar: 
         let mine: Vec<&At> = at.iter().filter(|a| a.x.key == key && a.spelling == spelling).collect();
         for (command, (env, declared)) in cands {
             let role = env.kind().to_string();
-            let unexposed: Vec<&&At> = mine.iter().filter(|a| !a.s.exposed_to(&[command.as_str()], false)).collect();
+            let unexposed: Vec<&&At> = mine
+                .iter()
+                .filter(|a| a.x.reward.unit == RewardUnit::NativeCalls && !a.s.exposed_to(&[command.as_str()], false))
+                .collect();
             let null: Vec<u32> = unexposed.iter().map(|a| a.x.reward.calls).collect();
-            let sat: Vec<&&&At> =
-                unexposed.iter().filter(|a| a.x.next.as_ref().is_some_and(|r| r.env == env)).collect();
+            let sat: Vec<&&&At> = unexposed
+                .iter()
+                .filter(|a| immediate_runner(&a.x).is_some_and(|r| r.env == env && r.family == family))
+                .collect();
             let other: Vec<f64> = unexposed
                 .iter()
-                .filter(|a| a.x.next.as_ref().is_none_or(|r| r.env != env))
+                .filter(|a| immediate_runner(&a.x).is_none_or(|r| r.env != env || r.family != family))
                 .map(|a| a.x.reward.calls as f64)
                 .collect();
             let (m0, k0, _, _) = priors.prior(&key, "null");
@@ -340,8 +394,8 @@ pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors, bar: 
                 stats::gamma_poisson(sat.iter().map(|a| a.x.reward.calls as f64).sum(), sat.len() as f64, m1, k1);
             let mis = sat.iter().filter(|a| a.x.next_misfired).count() as f64;
             let misfire = (ma + mis, mb + sat.len() as f64 - mis);
-            // What delivering changes: the unexposed triggers whose agent reached `Sat(d)` unaided
-            // are `p_self`'s evidence (the research's prior for a dead end: 0.29).
+            // What delivering changes now: an immediate choice is `p_self` evidence. Eventual
+            // discovery remains verified candidate evidence, not an already-taken action.
             let unaided =
                 Unaided { traces: unexposed.len() as u32, traces_took: sat.len() as u32, ..Default::default() };
             let up = uplift("avoid", &unaided, priors, bar);
@@ -351,15 +405,16 @@ pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors, bar: 
                 .filter(|s| {
                     s.steps.iter().any(|st| {
                         outcome::runner(st).is_some_and(|r| r.env == env && r.family == family)
-                            && outcome::executed_tests(&st.call.output)
+                            && outcome::executed_tests(st)
                     })
                 })
                 .count() as u32;
             let effective = sat.len() as f64 + k1;
             let verified = declared && ran_tests >= 1;
-            // Verified or valued, and worth delivering: agents who already recover to it unaided
-            // gain nothing from being told.
-            let admitted = (verified || (adv.lower > 0.0 && effective >= MIN_EFFECTIVE)) && !up.summary.gated;
+            // No observed immediate choice means Q(Sat) is prior-only. A later verified repair
+            // is still reported, but cannot alone promote a directive on predicted savings.
+            let admitted =
+                !sat.is_empty() && (verified || (adv.lower > 0.0 && effective >= MIN_EFFECTIVE)) && !up.summary.gated;
             let strength = admitted.then(|| strength_of(&adv, Effect::Verify, false)).flatten();
             out.push(Valued {
                 key: key.clone(),
@@ -615,7 +670,10 @@ fn prior_of(table: &[(&str, f64)], kind: &str, pooled: f64) -> f64 {
 impl Priors {
     /// `p_self`'s prior for a kind: (mean, κ, fitted across repositories).
     pub fn self_prior(&self, kind: &str) -> (f64, f64, bool) {
-        match self.uptake.get(kind).filter(|c| c.n > 0.0) {
+        // Legacy avoid uptake counted eventual or five-step recovery, not an immediate choice.
+        // The historical built-in constant remains a weak prior, not a current measurement.
+        match self.uptake.get(kind).filter(|c| c.n > 0.0 && (kind != "avoid" || self.outcome_format == OUTCOME_FORMAT))
+        {
             Some(c) => ((c.took / c.n).clamp(0.01, 0.99), c.kappa.unwrap_or(SELF_KAPPA), true),
             None => (prior_of(&SELF_PRIORS, kind, SELF_POOLED), SELF_KAPPA, false),
         }
@@ -758,11 +816,120 @@ fn failure_matches(command: &str, observed: &str) -> bool {
         || command.strip_prefix("exec ").is_some_and(|runner| adage_core::pattern::runs_avoided(runner, observed))
 }
 
+/// The narrow environment action class used by learned recovery values. Other commands keep
+/// their existing route-specific follow semantics.
+fn directed_environment_runner(command: &str) -> Option<Runner> {
+    let actions = adage_core::shell::normalize_shell(command, ".", adage_core::CommandTable::load());
+    let [action] = actions.as_slice() else { return None };
+    let adage_core::CanonicalAction::Exec { argv, .. } = &action.action else { return None };
+    let action = adage_core::action::classify_argv(argv);
+    (action.role == adage_core::action::Role::TestRun && action.env.class() == adage_core::action::EnvClass::Project)
+        .then_some(Runner { env: action.env, family: action.runner })
+}
+
+/// Whether this trace's first relevant choice selected the working check before attempting an
+/// avoided runner. Later calls do not change this decision's accounting. Recovery
+/// support is a different observation: once an avoided invocation actually ran, later repair
+/// cannot turn it into unaided prevention. Unknown prefixes are censored, not negative evidence.
+/// Recorded native calls establish ordering only within one prompt/actor/cwd; they do not prove
+/// that the transcript contains every action or that source/environment bytes were unchanged.
+fn avoided_unaided(s: &Session, avoid: &str, instead: &str) -> Option<bool> {
+    use adage_core::outcome::VerificationOutcome;
+    use adage_core::CanonicalAction;
+
+    let first = s.steps.first()?;
+    let cwd = s.root.to_str().filter(|s| !s.is_empty())?;
+    if first.prompt != 0 || first.turn != 0 {
+        return None;
+    }
+    let mut seen = BTreeSet::new();
+    let mut previous_turn = None;
+    let mut i = 0;
+    while i < s.steps.len() {
+        let st = &s.steps[i];
+        let id = st.call.tool_use_id.as_deref().filter(|id| !id.is_empty() && id.len() <= 256)?;
+        let mut end = i + 1;
+        while end < s.steps.len() && st.same_native_call(&s.steps[end]) {
+            end += 1;
+        }
+        if !seen.insert(id)
+            || st.prompt != first.prompt
+            || s.prompts.iter().skip(1).any(|p| p.at_step as usize <= i)
+            || st.call.agent != first.call.agent
+            || !st.call.by.is_agent()
+            || s.steps[i..end].iter().any(|part| part.call.refused())
+            || previous_turn.is_some_and(|turn: u32| st.turn != turn.saturating_add(1))
+            || s.steps[end..].iter().any(|other| other.turn == st.turn)
+            || ["cwd", "workdir"]
+                .iter()
+                .any(|key| st.call.input.get(key).and_then(|v| v.as_str()).is_some_and(|actual| actual != cwd))
+            || s.steps[i..end].iter().any(|part| {
+                part.norm.mutating
+                    || part.norm.contains_unknown()
+                    || part.norm.low_confidence()
+                    || matches!(&part.norm.action, CanonicalAction::Exec { cwd: actual, .. } if actual != cwd)
+            })
+        {
+            return None;
+        }
+        let command = st.call.input.get("command").and_then(|v| v.as_str());
+        let observation = match st.call.tool.as_str() {
+            "Read" | "Grep" | "Glob" | "LS" => s.steps[i..end].iter().all(|part| part.norm.effect == Effect::Observe),
+            "Bash" => command.is_some_and(adage_core::shell::observational_commands),
+            _ => false,
+        };
+        if !observation {
+            if end != i + 1 || st.call.tool != "Bash" {
+                return None;
+            }
+            let CanonicalAction::Exec { argv, .. } = &st.norm.action else { return None };
+            let command = command?;
+            let stages = adage_core::shell::plain_pipeline(command)?;
+            if !matches!(stages.as_slice(), [one] if one.argv == *argv) {
+                return None;
+            }
+            let report = st.verification()?;
+            // NoTests, unknown/shared output, and passive discovery do not establish that a
+            // relevant check ran. A real avoided attempt counts zero even if it later passes.
+            if report.status().is_none() || adage_core::outcome::verification_is_discovery(argv) {
+                return None;
+            }
+            if adage_core::pattern::runs_avoided(avoid, &st.key) {
+                return Some(false);
+            }
+            let exact = stages[0].argv.join(" ") == instead;
+            let verbosity = st.project_pytest_root_cwd
+                && adage_core::execution_equivalence::project_pytest_equivalent(instead, command);
+            // Assertion failures still show the intended test invocation was selected and ran
+            // test cases. This measures choice, not code correctness or a successful task.
+            return ((exact || verbosity)
+                && matches!(report.outcome, VerificationOutcome::Passed | VerificationOutcome::Failed)
+                && report.tests_run.is_some_and(|n| n > 0))
+            .then_some(true);
+        }
+        previous_turn = Some(st.turn);
+        i = end;
+    }
+    None
+}
+
 /// The unaided rate of a route over the training traces, judged at its trigger: each unexposed
-/// trace where the trigger occurs is one situation, and it took the step when a later call (within
-/// [`AFTER_FAILURE_WINDOW`] after a failure) follows the directed command. `None` for a trigger
-/// read only at hook time (a context, an intent) or a step with no command.
+/// trace where the trigger occurs is one situation. Typed environment recoveries use the same
+/// immediate native-call choice as [`value_failures`]; other failures keep their existing
+/// [`AFTER_FAILURE_WINDOW`] follow window. `None` for a trigger read only at hook time (a context,
+/// an intent) or a step with no command. A session-start avoid counts prevention before the
+/// avoided attempt, not eventual recovery; other session-start directives look over the session.
 pub fn unaided_in_traces(r: &Route, ss: &[&Session]) -> Option<(u32, u32)> {
+    if let (Trigger::SessionStart, Step::Avoid { avoid, instead, .. }) = (&r.trigger, &r.step) {
+        let mut counts = (0, 0);
+        for s in ss.iter().filter(|s| !crate::engine::exposed(s, r)) {
+            if let Some(took) = avoided_unaided(s, avoid, instead) {
+                counts.0 += u32::from(took);
+                counts.1 += 1;
+            }
+        }
+        return Some(counts);
+    }
     let directed = directed_command(r)?;
     let pairs: Vec<(&str, &str)> = ss
         .iter()
@@ -802,6 +969,19 @@ pub fn unaided_in_traces(r: &Route, ss: &[&Session]) -> Option<(u32, u32)> {
             Trigger::Intent { .. } | Trigger::Context { .. } => return None,
         };
         let Some((from, to)) = at else { continue };
+        if matches!(r.trigger, Trigger::AfterFailure { .. }) {
+            if let Some(target) = directed_environment_runner(&directed) {
+                if let Some(situation) =
+                    outcome::situations(s, "unknown").into_iter().find(|x| x.at + 1 == from && x.failed.is_some())
+                {
+                    if situation.reward.unit == RewardUnit::NativeCalls {
+                        n += 1;
+                        took_n += u32::from(immediate_runner(&situation) == Some(&target));
+                    }
+                    continue;
+                }
+            }
+        }
         n += 1;
         took_n += u32::from(s.steps[from..to].iter().any(|st| took(&directed, st, &weights)));
     }
@@ -814,6 +994,11 @@ pub fn unaided_in_traces(r: &Route, ss: &[&Session]) -> Option<(u32, u32)> {
 /// judged on the traces ([`unaided_in_traces`]). The session-start test card counts the sessions
 /// it would have helped, so its unaided count is the rest.
 pub fn trace_counts(r: &Route, ss: &[&Session]) -> Option<(u32, u32)> {
+    // Mined avoid support counts failed-then-recovered traces. Neither that count nor an old
+    // saved uplift is evidence that the failure was avoided at session start.
+    if matches!((&r.trigger, &r.step), (Trigger::SessionStart, Step::Avoid { .. })) {
+        return unaided_in_traces(r, ss);
+    }
     if let Some(u) = &r.evidence.uplift {
         return Some((u.traces_took, u.traces));
     }
@@ -902,6 +1087,10 @@ pub fn fit_beta_kappa(units: &[(f64, f64)], max_kappa: f64) -> Option<f64> {
     }
     Some((p * (1.0 - p) / tau2 - 1.0).clamp(0.5, max_kappa))
 }
+
+#[cfg(test)]
+#[path = "value_accounting_tests.rs"]
+mod accounting_tests;
 
 #[cfg(test)]
 mod tests {

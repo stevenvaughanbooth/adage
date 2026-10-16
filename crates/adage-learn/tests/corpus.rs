@@ -137,3 +137,143 @@ fn corrupt_evidence_is_an_error_and_object_names_cannot_escape_the_store() {
     assert!(corpus::load(REPO, &store).unwrap_err().to_string().contains("digest mismatch"));
     assert!(store.corpus_object("../../outside").is_err());
 }
+
+#[test]
+fn native_export_and_learning_share_child_lineage_without_overriding_declared_identity() {
+    use adage_ingest::batch::{self, Options};
+    use serde_json::json;
+    use std::collections::BTreeMap;
+
+    let d = tempfile::tempdir().unwrap();
+    let record = |ordinal, kind: &str, payload| json!({"timestamp":"2026-10-01T00:00:00Z", "ordinal":ordinal, "type":kind, "payload":payload});
+    let meta = |id: &str| json!({"id":id,"cwd":"/fixture/corpus-lineage","source":"cli"});
+    let user = || json!({"type":"message","role":"user","content":[{"type":"input_text","text":"check this module"}]});
+    let call = |id: &str| json!({"type":"function_call","name":"exec_command","call_id":id,"arguments":"{\"cmd\":\"cargo test\"}"});
+    let output = |id: &str| json!({"type":"function_call_output","call_id":id,"output":"Process exited with code 0\nOutput:\nok"});
+    let parent = vec![
+        record(0, "session_meta", meta("parent")),
+        record(1, "response_item", user()),
+        record(2, "response_item", call("parent-call")),
+        record(3, "response_item", output("parent-call")),
+    ];
+    let mut child_meta = meta("child");
+    child_meta["source"] =
+        json!({"subagent":{"thread_spawn":{"parent_thread_id":"parent","agent_path":"/root/child"}}});
+    child_meta["parent_thread_id"] = json!("parent");
+    child_meta["subagent_history_start_ordinal"] = json!(4);
+    let mut child = parent.clone();
+    child[0] = record(0, "session_meta", child_meta);
+    child.extend([
+        record(
+            4,
+            "response_item",
+            json!({"type":"agent_message","recipient":"/root/child","encrypted_content":"opaque"}),
+        ),
+        record(5, "response_item", call("child-call")),
+        record(6, "response_item", output("child-call")),
+    ]);
+    let paths: Vec<_> = [("child", child), ("parent", parent)]
+        .into_iter()
+        .map(|(name, rows)| {
+            let path = d.path().join(format!("{name}.jsonl"));
+            std::fs::write(&path, rows.iter().map(|r| format!("{r}\n")).collect::<String>()).unwrap();
+            path
+        })
+        .collect();
+    let options =
+        Options { repo_override: Some(REPO.into()), locator: &adage_ingest::AsRecorded, ..Default::default() };
+    let batch = batch::read(&paths, &options);
+    assert_eq!(batch.sessions.len(), 2);
+    let mut exported = Vec::new();
+    corpus::export(&paths, Some(REPO), &BTreeMap::new(), &BTreeMap::new(), &mut exported).unwrap();
+    let sessions: Vec<_> = String::from_utf8(exported)
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str::<Record>(l).unwrap().session)
+        .collect();
+    assert_eq!(sessions, batch.sessions);
+    assert_eq!(sessions[0].evidence_group(), sessions[1].evidence_group());
+    assert!(sessions[0].prompt.is_empty(), "an encrypted assignment never inherits the parent's task");
+    assert_eq!(sessions[0].steps.len(), 1, "only the child's own action survives");
+
+    let declared = adage_trace::EvidenceIdentity { task_id: Some("explicit-task".into()), ..Default::default() };
+    let identities = BTreeMap::from([("child".into(), declared.clone())]);
+    let mut exported = Vec::new();
+    corpus::export(&paths, Some(REPO), &identities, &BTreeMap::new(), &mut exported).unwrap();
+    let first: Record = serde_json::from_slice(exported.split(|b| *b == b'\n').next().unwrap()).unwrap();
+    assert_eq!(first.session.identity, declared);
+}
+
+#[test]
+fn separately_exported_nested_workers_rejoin_when_the_corpus_is_loaded() {
+    use serde_json::json;
+    use std::collections::BTreeMap;
+
+    let d = tempfile::tempdir().unwrap();
+    let trace = |id: &str, parent: Option<&str>| {
+        let mut meta = json!({"id":id,"cwd":"/fixture/corpus-lineage","source":"cli"});
+        if let Some(parent) = parent {
+            meta["source"] = json!({"subagent":{"thread_spawn":{
+                "parent_thread_id":parent,"agent_path":format!("/root/{id}")}}});
+            meta["parent_thread_id"] = json!(parent);
+            meta["subagent_history_start_ordinal"] = json!(1);
+        }
+        let prompt = if parent.is_some() {
+            json!({"type":"agent_message","recipient":format!("/root/{id}"),"encrypted_content":"opaque"})
+        } else {
+            json!({"type":"message","role":"user","content":[{"type":"input_text","text":"verify module"}]})
+        };
+        let rows = [
+            ("session_meta", meta),
+            ("response_item", prompt),
+            (
+                "response_item",
+                json!({"type":"function_call","name":"exec_command","call_id":id,
+                "arguments":"{\"cmd\":\"cargo test\"}"}),
+            ),
+            (
+                "response_item",
+                json!({"type":"function_call_output","call_id":id,
+                "output":"Process exited with code 0\nOutput:\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"}),
+            ),
+        ];
+        let path = d.path().join(format!("{id}.jsonl"));
+        let bytes = rows
+            .into_iter()
+            .enumerate()
+            .map(|(ordinal, (kind, payload))| {
+                format!(
+                    "{}\n",
+                    json!({"timestamp":"2026-10-01T00:00:00Z","ordinal":ordinal,"type":kind,"payload":payload})
+                )
+            })
+            .collect::<String>();
+        std::fs::write(&path, bytes).unwrap();
+        path
+    };
+    let root = trace("root", None);
+    let child = trace("child", Some("root"));
+    let grandchild = trace("grandchild", Some("child"));
+    let export = |paths: &[std::path::PathBuf]| {
+        let mut bytes = Vec::new();
+        corpus::export(paths, Some(REPO), &BTreeMap::new(), &BTreeMap::new(), &mut bytes).unwrap();
+        bytes
+    };
+    let a = export(&[root, child]);
+    let b = export(&[grandchild]);
+    let before: Record = serde_json::from_slice(b.split(|x| *x == b'\n').next().unwrap()).unwrap();
+    assert_eq!(before.session.identity.group_id.as_deref(), Some("codex-lineage:child"));
+    let files = store(d.path());
+    for bytes in [&a, &b] {
+        assert!(corpus::import(bytes.as_slice(), REPO, Mode::Append, Limits::default(), &files).unwrap().committed);
+    }
+    let manifest = files.corpus_manifest(REPO).unwrap().unwrap();
+    let loaded = corpus::load(REPO, &files).unwrap();
+    assert_eq!(loaded.sessions.len(), 3);
+    assert!(loaded.sessions.iter().all(|s| s.identity.group_id.as_deref() == Some("codex-lineage:root")));
+    assert_eq!(corpus::audit(REPO, &files).unwrap().training_groups.len(), 1);
+    // Regrouping affects the evidence view, not the pinned source object or its committed digest.
+    let original = files.corpus_object(&manifest.sessions["grandchild"]).unwrap();
+    assert_eq!(serde_json::from_slice::<Session>(&original).unwrap(), before.session);
+    assert_eq!(files.corpus_manifest(REPO).unwrap().unwrap(), manifest);
+}

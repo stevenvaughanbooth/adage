@@ -162,21 +162,11 @@ pub fn situation(steps: &[StepObs]) -> String {
     parts.join(" ; ")
 }
 
-/// Whether a test run's output shows tests that ran and none that failed.
-pub fn tests_passed(output: &str) -> bool {
-    static FAIL: OnceLock<Regex> = OnceLock::new();
-    static PASS: OnceLock<Regex> = OnceLock::new();
-    let out = adage_core::tokens::bounded(output, 64 * 1024);
-    if !outcome::executed_tests(out) {
-        return false;
-    }
-    let fail = FAIL.get_or_init(|| {
-        Regex::new(r"(?m)\b[1-9]\d* (failed|errors?)\b|^FAIL\b|^--- FAIL|test result: FAILED|^FAILED|Tests:.*\b[1-9]\d* failed")
-            .expect("valid")
-    });
-    let pass = PASS
-        .get_or_init(|| Regex::new(r"(?m)\b[1-9]\d* passed\b|^OK\b|^ok\s|test result: ok|^--- PASS").expect("valid"));
-    pass.is_match(out) && !fail.is_match(out)
+/// Whether an attributable test invocation established positive executed cases and passed.
+/// Unlike the local test-execution goal, filtered/uncertain final status cannot seed a good case.
+pub fn tests_passed(st: &StepObs) -> bool {
+    outcome::test_goal(st)
+        && st.verification().is_some_and(|r| r.outcome == adage_core::outcome::VerificationOutcome::Passed)
 }
 
 /// What a case proposes.
@@ -410,7 +400,7 @@ pub fn proposals_of(st: &StepObs, root: &str) -> Option<(Proposal, Option<Propos
 /// proposal.
 pub fn satisfies(p: &Proposal, st: &StepObs, root: &str) -> bool {
     let Some(a) = outcome::action_of(st) else { return false };
-    if a.role != Role::TestRun || a.runner != p.family || !outcome::executed_tests(&st.call.output) {
+    if a.role != Role::TestRun || a.runner != p.family || !outcome::executed_tests(st) {
         return false;
     }
     match &p.area {
@@ -422,9 +412,7 @@ pub fn satisfies(p: &Proposal, st: &StepObs, root: &str) -> bool {
 /// The first good outcome at or after `from`: (step, calls to it).
 fn good_outcome(s: &Session, from: usize) -> Option<(usize, u32)> {
     let end = (from + HORIZON as usize).min(s.steps.len());
-    (from..end)
-        .find(|&j| outcome::test_goal(&s.steps[j]) && tests_passed(&s.steps[j].call.output))
-        .map(|j| (j, (j + 1 - from) as u32))
+    (from..end).find(|&j| tests_passed(&s.steps[j])).map(|j| (j, (j + 1 - from) as u32))
 }
 
 /// Calls from a decision point to the first test run that ran tests (censored at the horizon), and
@@ -585,18 +573,6 @@ pub fn steps_of_call(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn passing_runs_are_read_from_their_output() {
-        assert!(tests_passed("============ 47 passed in 0.32s ============"));
-        assert!(!tests_passed("==== 1 failed, 46 passed in 0.4s ===="));
-        assert!(tests_passed(" Test Files  1 passed (1)\n      Tests  3 passed (3)"));
-        assert!(!tests_passed(" Test Files  1 failed (1)\n      Tests  1 failed | 2 passed (3)"));
-        assert!(tests_passed("ok  \tgithub.com/urfave/cli/v3\t0.412s"));
-        assert!(!tests_passed("--- FAIL: TestX (0.00s)\nFAIL\tgithub.com/urfave/cli/v3\t0.4s"));
-        assert!(tests_passed("Ran 4 tests in 0.01s\n\nOK"));
-        assert!(!tests_passed("/usr/bin/python: No module named pytest"));
-    }
 
     #[test]
     fn areas_are_monorepo_packages() {

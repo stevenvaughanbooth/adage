@@ -247,9 +247,12 @@ event outside both alphabets is still skipped by the fast path.
 
 `adage condition` is the existing learning command; setup and background learning use that
 pipeline. `adage sense` previews available evidence without publishing learned routes.
-`adage train <SKILL.md>` is a separate deterministic skill compiler: it makes no model calls
-and replays compiled commands in a sandbox. Its optional `--execute` evidence workflow starts
-paid agent sessions only with an explicit human invocation. Neither is background learning.
+`adage train <SKILL.md>` is a separate deterministic skill compiler: it makes no model calls,
+compiles supported command forms and attempts sandbox replay. Its report distinguishes verified,
+stale and not-replayed steps. Unsupported prose is not verified; a missing tool, unavailable
+sandbox or missing example can leave a compiled step not replayed. Its optional `--execute`
+evidence workflow starts paid agent sessions only with an explicit human invocation. Neither is
+background learning.
 
 Routine actions have a different value test from reminders. If agents already run a check
 reliably, reminding them can add context without saving work, while an approved CPU action can
@@ -296,8 +299,14 @@ result links, repository state and typed contracts therefore remain necessary al
 ## What is automatic after setup
 
 Automatic learning, matching, applicable installed instincts and advisory delivery are governed
-by the normal configuration. Supported command rewrites can avoid a procedural mistake before
-it occurs. These are the immediate-value path and must be tested without seeded benchmark rules.
+by the normal configuration. Supported Python interpreter rewrites are on by default
+(`runtime.rewrite = true`): they change a pending agent command to use the project's verified
+environment, subject to the harness's permissions. `adage delegate rewrites off` disables them
+without changing execution grants. These rewrites are separate from Adage's opt-in executor.
+
+Silent control sessions are off by default (`runtime.control = 0`). A person can set
+`adage config set runtime.control 0.1` to hold out about one session in ten for comparison.
+Without control evidence, activity counts do not establish savings.
 
 No hook reaches the network. The background learner makes one request a day at most, after it
 conditions a repository: whether a newer Adage is out (the npm registry, then GitHub's latest

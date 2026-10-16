@@ -76,4 +76,4 @@ on its own line) and each template uses one of them; a template that moves the c
 the match. The `T_FINISH` basis sentences encode origin (`declares this` for instincts,
 `written instructions require it` for authored routes, the rest for learned): `check_directive`
 cross-checks them against `Route::is_instinct` and `evidence.origin`. `T_ADVICE` is a fixed
-array of seven sentences; adding an advisory template in the runtime means growing it.
+array of advisory sentences with matching template ids; adding a template means growing both.

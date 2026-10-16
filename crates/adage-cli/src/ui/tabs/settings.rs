@@ -144,7 +144,7 @@ const META: &[Meta] = &[
         Section::Instincts,
         "Instinct packs",
         "Which instinct packs to use.",
-        "auto (every installed pack), or pack names, comma-separated, e.g. adage/python-env",
+        "auto (default and added packs), plus optional pack names, comma-separated",
     ),
     m(
         "instincts.disabled",
@@ -395,7 +395,7 @@ fn shown(row: &SettingRow, t: &Theme) -> (String, Style) {
         ("learn.repos", "all") => plain("all repositories".into()),
         ("learn.claude_projects", "") => quiet("default (~/.claude/projects)"),
         ("learn.codex_sessions", "auto") => plain("auto, once Codex hooks are on".into()),
-        ("instincts.packs", "auto") => plain("auto, every installed pack".into()),
+        ("instincts.packs", "auto") => plain("auto, defaults + added packs".into()),
         ("learn.repos" | "instincts.packs" | "instincts.disabled", _) if !v.is_empty() => plain(list(v)),
         ("ui.notices" | "update.check", "off") => quiet("off"),
         ("runtime.control", _) => match v.parse::<f64>() {

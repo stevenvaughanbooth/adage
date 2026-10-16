@@ -12,8 +12,9 @@ use std::collections::{BTreeMap, BTreeSet};
 /// The order detectors run in. Where two instincts propose the same trigger, the earlier wins, so
 /// specific instincts (a wrapper that explains a failure) come before generic ones (the one test
 /// command). Every catalogue id appears exactly once.
-pub const BIND_ORDER: [&str; 19] = [
-    "U1", "U11", "P1", "N1", "U3", "U5", "U4", "U6", "U2", "U7", "U8", "U9", "U10", "N2", "N3", "R1", "R2", "G1", "X1",
+pub const BIND_ORDER: [&str; 21] = [
+    "U1", "U11", "P1", "N1", "U3", "U5", "U4", "U6", "U12", "U13", "U2", "U7", "U8", "U9", "U10", "N2", "N3", "R1",
+    "R2", "G1", "X1",
 ];
 
 /// How a candidate route's id is formed.
@@ -121,6 +122,8 @@ pub fn detect(id: &str, ctx: &Ctx) -> Detected {
         "U4" => u4(ctx),
         "U6" => u6(ctx),
         "U11" => u11(ctx),
+        "U12" => u12(ctx),
+        "U13" => u13(ctx),
         // Catalogued, not yet bindable: the model cannot express them (see docs/instincts.md).
         "U2" | "U7" | "U8" | "U9" | "U10" | "N2" | "N3" | "R1" | "R2" | "G1" | "X1" => Detected::default(),
         other => Detected {
@@ -128,6 +131,88 @@ pub fn detect(id: &str, ctx: &Ctx) -> Detected {
             ..Default::default()
         },
     }
+}
+
+/// U12: a declared, recognizable test runner reported no matching tests. The runtime also
+/// requires the core runner-report parser to establish NoTests for the actual shell invocation;
+/// a substring in an assertion or quoted log is insufficient. No command is run by this advice.
+fn u12(ctx: &Ctx) -> Detected {
+    use adage_core::outcome::{verification_report, VerificationOutcome};
+    let mut d = Detected::default();
+    let mut seen = BTreeSet::new();
+    for e in &ctx.facts.entries {
+        if e.effect() != Some(Effect::Verify) || e.alias_of.is_some() {
+            continue;
+        }
+        let segments: Vec<_> = e.lines.iter().flat_map(|l| &l.segments).collect();
+        let [segment] = segments.as_slice() else { continue };
+        if !segment.env.is_empty() {
+            continue;
+        }
+        // A test-named wrapper must not conceal a declared help/list/collect-only body.
+        if verification_report(&segment.argv, "").is_none_or(|r| r.outcome != VerificationOutcome::Unknown) {
+            continue;
+        }
+        let Some((fam, _)) = family(segment) else { continue };
+        let (signature, sample) = match fam.as_str() {
+            "py:pytest" => ("no tests ran", "no tests ran in 0.01s"),
+            "js:vitest" => ("No test files found", "No test files found, exiting with code 1"),
+            "js:jest" => ("No tests found", "No tests found, exiting with code 1"),
+            _ => continue,
+        };
+        let body = segment.argv.join(" ");
+        // The wrapper is eligible only when its invocation has the same recognized report
+        // format as its one body command. Opaque make/just/custom wrappers abstain; the directly
+        // declared runner may still bind. Inline interpreter programs and passive flags abstain.
+        for command in e.command.iter().chain(std::iter::once(&body)) {
+            let argv: Vec<String> = command.split(' ').map(str::to_string).collect();
+            if !adage_tracks::advice::plain_command(command)
+                || adage_tracks::io::classify(command, ctx.table) != Effect::Verify
+                || verification_report(&argv, "").is_none_or(|r| r.outcome != VerificationOutcome::Unknown)
+                || verification_report(&argv, sample).is_none_or(|r| r.outcome != VerificationOutcome::NoTests)
+            {
+                continue;
+            }
+            let Some(key) = command_key(command, ctx.table) else { continue };
+            if !seen.insert((key.clone(), signature)) {
+                continue;
+            }
+            d.advisories.push(AdvisoryCandidate {
+                instinct: "U12".into(),
+                template_id: "verification-discovery".into(),
+                trigger: Trigger::AfterFailure { command: key.clone(), signature: signature.into() },
+                slots: [("command".into(), command.clone())].into(),
+                id_parts: vec![key, signature.into(), command.clone()],
+                ecosystem: ecosystem_of_family(&fam),
+                declared: Some(source_file(e.source).into()),
+            });
+        }
+    }
+    d
+}
+
+/// Optional recovery advice uses the same bounded declaration discovery, but only direct test
+/// runners. Native runtime evidence, not a declaration or substring, gates actual delivery.
+fn u13(ctx: &Ctx) -> Detected {
+    let mut d = Detected::default();
+    let mut seen = BTreeSet::new();
+    for mut a in u12(ctx).advisories {
+        let Some(command) = a.slots.get("command") else { continue };
+        let argv: Vec<String> = command.split(' ').map(str::to_string).collect();
+        let recognized = ["1 failed in 0.01s", "Tests  1 failed (1)"]
+            .iter()
+            .any(|sample| adage_core::outcome::verification_test_attempt(&argv, command, sample, true).is_some());
+        if !recognized || !seen.insert(command.clone()) {
+            continue;
+        }
+        let Some(key) = command_key(command, ctx.table) else { continue };
+        a.instinct = "U13".into();
+        a.template_id = adage_tracks::recovery::TEMPLATE.into();
+        a.trigger = Trigger::AfterCommand { command: key.clone() };
+        a.id_parts = vec![key, command.clone()];
+        d.advisories.push(a);
+    }
+    d
 }
 
 fn basename(t: &str) -> &str {

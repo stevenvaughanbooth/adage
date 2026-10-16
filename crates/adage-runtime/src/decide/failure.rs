@@ -5,7 +5,7 @@
 use super::{emit_ok, fire_contexts, pending_for, MainThread, Walk};
 use crate::decision::directive;
 use crate::noticed::notice;
-use crate::observe::{call_keys, exec_segments};
+use crate::observe::{call_command, call_keys, exec_segments};
 use crate::policy::{failure_matches, follows_call, follows_learned};
 use crate::state::push_history_capped;
 use crate::{render, By, Call, Ctx, Decision, Directive, Judgement, SessionState};
@@ -42,7 +42,7 @@ fn on_failed_call(
 ) {
     let keyed = call_keys(call, ctx);
     let segs = exec_segments(&keyed);
-    for (key, _) in keyed {
+    for (key, normalized) in keyed {
         d.observed.push(format!("{key} !failed"));
         push_history_capped(st, format!("{key} !failed"), ctx.params.history);
         // The directed command, run within the follow window, failed: a misfire, unless
@@ -67,7 +67,7 @@ fn on_failed_call(
                 true
             }
         });
-        fire_after_failure(ctx, w.routes, st, out, &key, &call.output);
+        fire_after_failure(ctx, w.routes, st, out, &key, call, &normalized);
         // Context triggers: a failure item, and the record that keeps the batch after it
         // from counting this call as a successful command.
         if let Some(sy) = w.syms {
@@ -101,11 +101,14 @@ pub(super) fn fire_after_failure(
     st: &mut SessionState,
     out: &mut Vec<Directive>,
     key: &str,
-    output: &str,
+    call: &Call,
+    normalized: &adage_core::Normalized,
 ) {
     let hits = |ir: &&&IndexedRoute| match &ir.route.trigger {
         Trigger::AfterFailure { command, signature } => {
-            failure_matches(&ctx.policy, &ir.route, command, key) && output.contains(signature.as_str())
+            failure_matches(&ctx.policy, &ir.route, command, key)
+                && call.output.contains(signature.as_str())
+                && discovery_report_matches(ctx, &ir.route.step, call, normalized)
         }
         _ => false,
     };
@@ -131,4 +134,31 @@ pub(super) fn fire_after_failure(
             out.push(directive(ir, t));
         }
     }
+}
+
+/// Discovery advice is conditional on the identified runner's actual report. Other failure
+/// routes retain their existing signature semantics. Shared core parsing refuses quoted logs,
+/// inline programs and ambiguous compound calls, and a completed test summary defeats NoTests.
+fn discovery_report_matches(ctx: &Ctx, step: &Step, call: &Call, normalized: &adage_core::Normalized) -> bool {
+    let Step::Advise { template, slots } = step else { return true };
+    if template != "verification-discovery" {
+        return true;
+    }
+    let adage_core::CanonicalAction::Exec { argv, cwd } = &normalized.action else { return false };
+    if std::path::Path::new(cwd) != ctx.root {
+        return false;
+    }
+    if outcome::verification_is_discovery(argv) {
+        return false;
+    }
+    let Some(command) = call_command(call) else { return false };
+    let Some(declared) = slots.get("command") else { return false };
+    let fixed: Vec<String> = declared.split(' ').map(str::to_string).collect();
+    if !argv.starts_with(&fixed)
+        || !argv[fixed.len()..].iter().all(|arg| !arg.starts_with('-') && adage_tracks::advice::safe_glob(arg))
+    {
+        return false;
+    }
+    outcome::verification_for_command(argv, command, &call.output, true)
+        .is_some_and(|r| r.outcome == outcome::VerificationOutcome::NoTests)
 }

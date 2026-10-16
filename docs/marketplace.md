@@ -200,7 +200,8 @@ Base instincts · the adage marketplace, built into Adage 0.1.0
   session).
 - `adage packs show <name>` prints a pack's files, as installed.
 - `adage init` lists the packs that apply to the repository before it binds anything.
-- Settings: `instincts.packs` is `auto` (every installed instinct pack) or a list of names;
+- Settings: `instincts.packs` is `auto` (default built-in packs and added instinct packs), explicit names, or both.
+  Optional built-ins need an explicit name, which `adage packs on <name>` adds;
   `instincts.disabled` takes pack names (`adage/lockfiles`) and instinct ids (`U3`);
   `instincts.enabled = false` turns them all off.
 

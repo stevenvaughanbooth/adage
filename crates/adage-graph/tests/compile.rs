@@ -33,6 +33,7 @@ fn trace(id: &str, steps: &[(&str, &str)]) -> Annotated {
             prompt: 0,
             effect: effect.to_string(),
             key: String::new(),
+            verification: None,
         });
     }
     Annotated {
@@ -332,6 +333,7 @@ fn a_dead_ends_signature_is_the_cause_not_makes_status_line() {
                 prompt: 0,
                 effect: "verify".into(),
                 key: String::new(),
+                verification: None,
             },
         );
         a

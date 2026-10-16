@@ -203,10 +203,16 @@ impl Corpus {
                         if argv.is_empty() {
                             continue;
                         }
+                        // Unknown observations remain opportunities, not proof that this runner
+                        // always fails. They supply neither successful literals nor signatures.
+                        runners.insert(stable::runner(argv));
+                        let Some(ok) = a.meta.get(i).map_or(Some(!failed), |m| m.execution_status(*failed)) else {
+                            continue;
+                        };
                         let key = events::act_key(argv);
                         let e = c.acts.entry(key.clone()).or_default();
                         let lit = stable::shell_join(argv);
-                        if !*failed {
+                        if ok {
                             ok_lits.insert((key.clone(), lit.clone()));
                             if a.meta.get(i).is_some_and(|m| m.project_pytest_root_cwd) {
                                 root_cwd_lits.insert((key.clone(), lit.clone()));
@@ -220,19 +226,18 @@ impl Corpus {
                             .unwrap_or_else(|| events::classify(argv, table));
                         e.effect = Some(e.effect.map_or(eff, |x| max_effect(x, eff)));
                         let out = adage_core::tokens::bounded(output, input::MAX_OUTPUT);
-                        if *failed {
+                        if !ok {
                             if let Some(sig) = stable::failure_signature(argv, out) {
                                 *e.signatures.entry(sig).or_default() += 1;
                             }
                         } else if let Some(f) = stable::listed_field(out) {
                             *e.fields.entry(f).or_default() += 1;
                         }
-                        if !*failed {
+                        if ok {
                             ok_keys.insert(key.clone());
                         }
                         keys.insert(key);
-                        runners.insert(stable::runner(argv));
-                        if !*failed {
+                        if ok {
                             passed.insert(stable::runner(argv));
                         }
                     }

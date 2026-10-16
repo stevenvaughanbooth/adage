@@ -24,6 +24,7 @@ pub mod facts;
 pub mod flow;
 pub mod input;
 pub mod mine;
+pub mod procedures;
 pub mod proto;
 pub mod score;
 pub mod select;

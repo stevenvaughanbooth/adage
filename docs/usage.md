@@ -682,7 +682,7 @@ adage config set learn.min_interval_secs 300  # condition each repository at mos
 | `learn.cards` | `true` | Procedure cards for recurring tasks (embedded with the installed or bundled model) ([docs/training.md](training.md#recurring-tasks-procedure-cards)) |
 | `learn.card_threshold` | `0.811` | A prompt's best similarity to a family's prompts that delivers its card (strict: it recognises phrasing close to earlier prompts, not paraphrases) |
 | `instincts.enabled` | `true` | Bind Adage's instincts from each repository's files |
-| `instincts.packs` | `auto` | The instinct packs to bind: `auto` (every installed one) or pack names |
+| `instincts.packs` | `auto` | The instinct packs to bind: `auto` (default and added packs), explicit pack names, or both; optional built-ins need an explicit name |
 | `instincts.disabled` | `""` | Packs (`adage/lockfiles`) or instinct ids (`U3`) never to bind; `adage packs off` writes it |
 | `ui.notices` | `daily` | One-line notices at session start (Claude Code), at most daily and only when new; `off` silences them |
 | `ui.start_screen` | `true` | `adage ui` opens on Adage's brain, turning, for about two seconds; any key skips it (`ADAGE_START_SCREEN` wins) |

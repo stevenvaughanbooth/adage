@@ -15,6 +15,12 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+mod verification;
+pub use verification::{
+    verification, verification_for_command, verification_is_discovery, verification_report, verification_test_attempt,
+    VerificationOutcome, VerificationReport,
+};
+
 /// What a command prints when its environment, not the code under test, is wrong: the runner or
 /// a module missing, a program not installed. Test output rarely contains these on its own, and
 /// they are only read beside a runner that did not report tests ([`tests_ran`]).
@@ -59,7 +65,7 @@ static SUMMARY: Lazy<Regex> = Lazy::new(|| {
 /// interrupted by errors, or unittest's `FAILED (failures=1)`.
 static FAILED_SUMMARY: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
-        r"(?m)\b\d+ (?:failed|errors?)\b[^\n]*\bin [0-9.]+ ?s\b|Interrupted: \d+ errors? during collection|^FAILED \((?:failures|errors)=\d+|^--- FAIL: |^FAIL\s+\S+\s+[0-9.]+s|^test result: FAILED",
+        r"(?m)\b[1-9]\d* (?:failed|errors?)\b[^\n]*\bin [0-9.]+ ?s\b|Interrupted: [1-9]\d* errors? during collection|^FAILED \((?:failures|errors)=[1-9]\d*|^--- FAIL: |^FAIL\s+\S+\s+[0-9.]+s|^test result: FAILED|^\s*(?:Tests?:|Test Suites:|Test Files)\s+[^\n]*\b[1-9]\d* failed\b",
     )
     .unwrap()
 });

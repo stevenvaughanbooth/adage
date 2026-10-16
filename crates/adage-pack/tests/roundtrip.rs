@@ -104,6 +104,89 @@ fn signs_and_verifies_in_the_pack_namespace() {
 }
 
 #[test]
+fn optional_discovery_pack_is_portable_signed_advice_without_execution() {
+    let marketplace = adage_pack::builtin::marketplace().unwrap();
+    let (entry, original) = marketplace.packs.iter().find(|(e, _)| e.name == "adage/verification-discovery").unwrap();
+    assert_eq!(entry.default, adage_pack::marketplace::Initially::Off);
+    assert_eq!(original.manifest.exec.requested, Level::E0);
+    assert!(original
+        .routes
+        .iter()
+        .all(|r| r.exec.is_none() && r.steps.iter().all(|s| s.run.is_none() && s.advise.is_some())));
+    let out = tempfile::tempdir().unwrap();
+    original.write(out.path()).unwrap();
+    let keys = tempfile::tempdir().unwrap();
+    let (private, public) = key(keys.path());
+    sign_dir(out.path(), None, Some(&private)).unwrap();
+    let signers = adage_sign::allowed_signers::parse(&format!("fixture {}", adage_sign::key_line(&public))).unwrap();
+    verify_dir(out.path(), &signers, SystemTime::now()).unwrap();
+    let imported = Pack::load(out.path()).unwrap();
+    assert_eq!(&imported, original);
+    let repo = tempfile::tempdir().unwrap();
+    std::fs::write(repo.path().join("package.json"), r#"{"scripts":{"test":"vitest run"}}"#).unwrap();
+    let routes = adage_pack::instincts::bound_routes(&imported, repo.path(), None);
+    assert_eq!(routes.len(), 2, "{routes:?}");
+    for route in routes {
+        assert!(matches!(route.status, adage_pack::Status::Live { max_level: Level::E0 }));
+        let runtime = route.route.unwrap();
+        assert!(matches!(runtime.step, adage_tracks::Step::Advise { .. }));
+        assert_eq!(runtime.evidence.support, 0);
+        assert_eq!(runtime.evidence.provenance, "instinct:adage/verification-discovery@0.1.0");
+    }
+}
+
+#[test]
+fn recovery_pack_preserves_its_stateful_template_through_signed_roundtrip() {
+    let marketplace = adage_pack::builtin::marketplace().unwrap();
+    let (_, original) = marketplace.packs.iter().find(|(e, _)| e.name == "adage/verification-recovery").unwrap();
+    let out = tempfile::tempdir().unwrap();
+    original.write(out.path()).unwrap();
+    let keys = tempfile::tempdir().unwrap();
+    let (private, public) = key(keys.path());
+    sign_dir(out.path(), None, Some(&private)).unwrap();
+    let signers = adage_sign::allowed_signers::parse(&format!("fixture {}", adage_sign::key_line(&public))).unwrap();
+    verify_dir(out.path(), &signers, SystemTime::now()).unwrap();
+    let imported = Pack::load(out.path()).unwrap();
+    assert_eq!(&imported, original);
+    let repo = tempfile::tempdir().unwrap();
+    std::fs::write(repo.path().join("Makefile"), "test:\n\tpython3 -m pytest\n").unwrap();
+    let bound = adage_pack::instincts::bound_routes(&imported, repo.path(), None);
+    assert_eq!(bound.len(), 1);
+    assert!(matches!(bound[0].status, adage_pack::Status::Live { max_level: Level::E0 }));
+    let runtime = bound[0].route.as_ref().unwrap();
+    assert!(matches!(&runtime.trigger, adage_tracks::Trigger::AfterCommand { .. }));
+    assert!(
+        matches!(&runtime.step, adage_tracks::Step::Advise { template, .. } if template == "verification-unexplained-recovery")
+    );
+    assert_eq!(runtime.evidence.support, 0);
+}
+
+#[test]
+fn verification_procedure_templates_have_distinct_portable_policy_identity() {
+    let original = &adage_pack::builtin::marketplace()
+        .unwrap()
+        .packs
+        .iter()
+        .find(|(e, _)| e.name == "adage/verification-discovery")
+        .unwrap()
+        .1;
+    let mut digests = std::collections::BTreeSet::new();
+    for template in ["verification-discovery", "verification-clean-state", "verification-negative-control"] {
+        let mut manifest = original.manifest.clone();
+        manifest.requires.templates = vec![format!("advise:{template}@1"), "advise@1".into()];
+        let mut routes = original.routes.clone();
+        routes[0].steps[0].advise.as_mut().unwrap().template = template.into();
+        let p = Pack::new(manifest, routes, Default::default(), Default::default()).unwrap();
+        assert!(digests.insert(p.route_exec_digest("investigate-empty-selection").unwrap()));
+        assert_eq!(Pack::from_files(&p.files().unwrap()).unwrap(), p);
+    }
+    let mut after_edit = original.routes.clone();
+    after_edit[0].trigger = adage_pack::TriggerV2::AfterEdit { paths: "{paths}".into() };
+    let err = Pack::new(original.manifest.clone(), after_edit, Default::default(), Default::default()).unwrap_err();
+    assert!(format!("{err:#}").contains("discovery advice follows a failure"), "{err:#}");
+}
+
+#[test]
 fn line_endings_do_not_change_the_digest_or_the_closure() {
     let files = common::files();
     let crlf: std::collections::BTreeMap<String, Vec<u8>> = files

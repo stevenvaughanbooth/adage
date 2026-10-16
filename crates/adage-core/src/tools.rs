@@ -81,9 +81,8 @@ pub fn normalize_tool(tool: &str, input: &Value, cwd: &str, table: &CommandTable
         ),
         "ToolSearch" | "SendMessage" | "AskUserQuestion" | "TodoWrite" | "TaskCreate" | "TaskUpdate" | "TaskList"
         | "TaskStop" | "Monitor" | "ExitPlanMode" | "EnterPlanMode" | "SendUserFile" | "ReadNotifications"
-        | "Artifact" | "ScheduleWakeup" | "CronCreate" | "CronDelete" | "CronList" => {
-            full(CanonicalAction::Control { tool: tool.to_string() }, Effect::Observe, false)
-        }
+        | "Artifact" | "ScheduleWakeup" | "CronCreate" | "CronDelete" | "CronList" | "StructuredOutput"
+        | "SubagentHandback" => full(CanonicalAction::Control { tool: tool.to_string() }, Effect::Observe, false),
         _ => {
             if let Some(rest) = tool.strip_prefix("mcp__") {
                 // An MCP server's tool: the harness calls it, a shell cannot. Environment-class, since
@@ -250,5 +249,28 @@ mod control_tests {
             assert!(matches!(n[0].action, CanonicalAction::Control { .. }), "{tool}: {:?}", n[0].action);
             assert_eq!(template_key(&n[0].action), key);
         }
+    }
+
+    #[test]
+    fn workflow_handbacks_are_control_not_environment_changes() {
+        let table = CommandTable::load();
+        for tool in ["StructuredOutput", "SubagentHandback"] {
+            // These payloads are reports, including reports of failure. Their contents never
+            // become commands or establish a successful task outcome in the normalizer.
+            for input in [
+                json!({ "verdict": "pass", "command": "rm -rf /repo" }),
+                json!({ "status": "failed", "message": "Blocked on another task" }),
+                json!(null),
+            ] {
+                let normalized = normalize_tool(tool, &input, "/repo", table);
+                assert_eq!(normalized.len(), 1);
+                assert_eq!(normalized[0].action, CanonicalAction::Control { tool: tool.into() });
+                assert_eq!(normalized[0].effect, crate::Effect::Observe);
+                assert!(!normalized[0].mutating);
+            }
+        }
+        let unknown = normalize_tool("StructuredOutputShell", &json!({}), "/repo", table);
+        assert!(matches!(unknown[0].action, CanonicalAction::Unknown { .. }));
+        assert_eq!(unknown[0].effect, crate::Effect::Environment);
     }
 }

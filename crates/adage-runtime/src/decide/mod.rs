@@ -70,6 +70,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     // Exec-only routes (vendored scripts) are carried out by adage-exec, never directed on their
     // own ([`Policy::exec_only`](crate::Policy::exec_only)).
     let routes: Vec<&IndexedRoute> = ctx.index.for_repo(&ctx.repo).filter(|r| in_play(&ctx.policy, r)).collect();
+    let recovery = observe_recovery(ctx, &routes, st, ev);
     // Context triggers (Track G §7): the repository's alphabet and net, and a symboliser for it,
     // only when it has any.
     let net = ctx.index.contexts(&ctx.repo);
@@ -101,6 +102,24 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
         }
     }
 
+    if let Some(hit) = recovery {
+        for ir in &routes {
+            let (Trigger::AfterCommand { command }, Step::Advise { template, slots }) =
+                (&ir.route.trigger, &ir.route.step)
+            else {
+                continue;
+            };
+            if template == adage_tracks::recovery::TEMPLATE
+                && slots.get("command") == Some(&hit.command)
+                && command == &command_key(&hit.command, ctx.table)
+                && emit_ok(ctx, st, &out, &ir.route.id)
+            {
+                if let Some(text) = render::route_text(&ir.route, &[]) {
+                    out.push(directive(ir, text));
+                }
+            }
+        }
+    }
     let out = approach_lock(&routes, st, out);
     for o in &out {
         st.emitted.push(o.route.clone());
@@ -122,6 +141,36 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
         d.obligation_state = Some(ObligationState::capture(st));
     }
     d
+}
+
+fn observe_recovery(
+    ctx: &Ctx,
+    routes: &[&IndexedRoute],
+    st: &mut SessionState,
+    ev: &Event,
+) -> Option<adage_tracks::recovery::Recovery> {
+    if ctx.policy.observed_cwd.as_deref().is_some_and(|cwd| cwd != ctx.root) {
+        st.recovery.clear();
+        return None;
+    }
+    if !routes
+        .iter()
+        .any(|r| matches!(&r.route.step, Step::Advise { template, .. } if template == adage_tracks::recovery::TEMPLATE))
+    {
+        st.recovery.clear();
+        return None;
+    }
+    let call = match ev {
+        Event::Failure { call } => call,
+        Event::Batch { calls } if calls.len() == 1 => &calls[0],
+        Event::TurnStep { .. } => return None,
+        // No ordering claim about parallel calls or a different task boundary.
+        _ => {
+            st.recovery.clear();
+            return None;
+        }
+    };
+    st.recovery.observe(call, ctx.root, ctx.table, ctx.params.history)
 }
 
 /// Whether route `id` may be emitted now: not emitted before this session nor in this decision,

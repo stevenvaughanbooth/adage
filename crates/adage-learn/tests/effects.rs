@@ -51,3 +51,37 @@ fn without_the_scripts_text_a_change_report_still_keeps_it_environment() {
     let refs: Vec<&Session> = ss.iter().collect();
     assert!(infer(COMMAND, &refs).is_none());
 }
+
+#[test]
+fn concatenated_cat_output_is_not_an_individual_scripts_source() {
+    let mut ss = sessions();
+    for s in &mut ss {
+        let original = s.steps.iter().find(|st| st.rel_path.as_deref() == Some("scripts/wi-lookup")).unwrap().clone();
+        s.steps.retain(|st| st.rel_path.as_deref() != Some("scripts/wi-lookup"));
+        let mut call = original.call.clone();
+        call.input = serde_json::json!({"command": "cat README.md scripts/wi-lookup"});
+        // A tool result is retained intact, not split or copied as certified source per file.
+        call.output = "documentation and concatenated source with no file boundaries".into();
+        let actions = adage_core::tools::normalize_tool(
+            "Bash",
+            &call.input,
+            s.root.to_str().unwrap(),
+            adage_core::CommandTable::load(),
+        );
+        let steps = adage_ingest::signals::call_steps(original.turn, original.prompt, &call, actions, &s.root);
+        assert_eq!(
+            steps.iter().filter_map(|st| st.rel_path.as_deref()).collect::<Vec<_>>(),
+            ["README.md", "scripts/wi-lookup"]
+        );
+        assert!(steps.iter().all(|st| st.call.output == call.output));
+        s.steps.splice(0..0, steps);
+    }
+    let note = infer(COMMAND, &ss.iter().collect::<Vec<_>>()).expect("independent run-and-use evidence remains");
+    assert!(!note.contains("its text"), "combined output is not individual source evidence: {note}");
+    let run = ss[2].steps.iter_mut().find(|st| st.call.output.starts_with("ID: W-")).unwrap();
+    run.call.output.push_str("\nWrote .tracker/last-lookup.json\n");
+    assert!(
+        infer(COMMAND, &ss.iter().collect::<Vec<_>>()).is_none(),
+        "a combined read cannot suppress the script's own change report"
+    );
+}

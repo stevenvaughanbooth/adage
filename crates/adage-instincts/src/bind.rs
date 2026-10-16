@@ -443,9 +443,23 @@ pub fn check_advisory(r: &Route, cat: &Catalogue, table: &CommandTable) -> Resul
     if (r.strength, r.effect, r.state) != (Strength::Prime, Effect::Observe, RouteState::Forming) {
         return Err("advice is prime, observe, in forming".into());
     }
+    // Recovery compares the concrete invocation at runtime. Its trigger is the canonical
+    // key of that same checked slot, which may replace a declared test filename with {path}.
+    // This permits no free-form trigger pattern and does not broaden the command slot.
+    let recovery_key = if template == adage_tracks::recovery::TEMPLATE {
+        let expected = slots.get("command").and_then(|command| command_key(command, table));
+        if !matches!(&r.trigger, Trigger::AfterCommand { command } if Some(command) == expected.as_ref()) {
+            return Err("recovery advice must match its exact command slot's canonical key".into());
+        }
+        expected
+    } else {
+        None
+    };
     match &r.trigger {
         Trigger::AfterEdit { paths } if safe_glob(paths) => {}
-        Trigger::AfterCommand { command } if command.starts_with("exec ") && plain_command(&command[5..]) => {}
+        Trigger::AfterCommand { command }
+            if command.starts_with("exec ")
+                && (plain_command(&command[5..]) || recovery_key.as_ref() == Some(command)) => {}
         // After a failure with this signature (never any failure: see `check_route`).
         Trigger::AfterFailure { command, signature }
             if command.starts_with("exec ")

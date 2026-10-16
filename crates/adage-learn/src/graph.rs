@@ -310,6 +310,7 @@ mod tests {
 
     fn session(i: usize, prompt: &str, cmds: &[(&str, Effect)]) -> Session {
         Session {
+            delegation: None,
             id: format!("s{i:02}"),
             root: "/r".into(),
             repo: "acme".into(),

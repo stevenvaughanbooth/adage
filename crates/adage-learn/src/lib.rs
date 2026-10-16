@@ -285,6 +285,7 @@ pub fn learn_sessions_into(
         }
     }
     for (repo, rr) in &report.repos {
+        store.write_procedures(repo, &rr.engine.procedures)?;
         if let (Some(root), Some(ic)) = (rr.instincts.as_ref().and_then(|i| i.root.as_deref()), cfg.instincts.as_ref())
         {
             store.write_binding(repo, &instincts::binding_now(root, ic));

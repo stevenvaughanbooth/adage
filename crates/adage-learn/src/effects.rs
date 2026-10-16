@@ -123,10 +123,20 @@ fn reports_change(output: &str) -> bool {
 
 /// Whether the step shows the script's own text: the agent read it, or ran a pager over it.
 fn shows_text(st: &crate::import::StepObs, rel: &str) -> bool {
+    // Multiple cat operands are useful co-read evidence, but their one result has no per-file
+    // boundaries. It cannot certify any one script's source or override its reported writes.
+    if st.norm.note.contains(adage_core::shell::SHARED_CAT_OUTPUT) {
+        return false;
+    }
     match &st.norm.action {
         CanonicalAction::Read { .. } => st.rel_path.as_deref() == Some(rel),
         CanonicalAction::Exec { argv, .. } => {
-            matches!(argv.first().map(String::as_str), Some("cat" | "head" | "sed" | "less"))
+            // Retain the old single-file Exec representation, but not an ambiguous cat
+            // exec with options or several inputs. New literal cat operands become Read.
+            if argv.first().is_some_and(|a| a == "cat") {
+                return argv.len() == 2 && argv[1].trim_start_matches("./") == rel;
+            }
+            matches!(argv.first().map(String::as_str), Some("head" | "sed" | "less"))
                 && argv.iter().skip(1).any(|a| a.trim_start_matches("./") == rel)
         }
         _ => false,
@@ -258,6 +268,7 @@ mod tests {
 
     fn session(id: &str, steps: Vec<StepObs>) -> Session {
         Session {
+            delegation: None,
             id: id.into(),
             root: "/r".into(),
             repo: "clinic".into(),
@@ -312,6 +323,16 @@ mod tests {
         );
         let note = infer("python3 tools/case {item}", &ss.iter().collect::<Vec<_>>()).expect("observe");
         assert!(note.contains("its text uses no network or process library"), "{note}");
+    }
+
+    #[test]
+    fn ambiguous_cat_exec_does_not_establish_script_source() {
+        for cmd in ["cat README.md tools/case", "cat --unknown tools/case", "cat - tools/case"] {
+            let mut ss: Vec<Session> =
+                (0..3).map(|i| lookup_then_read(&format!("s{i}"), "Updated 3 records")).collect();
+            ss[0].steps.insert(0, exec(0, cmd, Effect::Observe, "source with no file boundaries"));
+            assert!(infer("python3 tools/case {item}", &ss.iter().collect::<Vec<_>>()).is_none(), "{cmd}");
+        }
     }
 
     #[test]

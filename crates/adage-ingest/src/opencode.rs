@@ -206,6 +206,7 @@ pub fn decode(v: &Value, cx: &Decode<'_>) -> Option<Session> {
     let prompts = prompts.anchor(&steps);
     let influence = signals.anchor(&first_step, steps.len());
     Some(Session {
+        delegation: None,
         id,
         root,
         repo: repo_key,

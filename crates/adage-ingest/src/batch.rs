@@ -10,6 +10,8 @@ use adage_trace::Session;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+pub use crate::lineage::group_native_lineages;
+
 /// How to read a batch.
 #[derive(Clone)]
 pub struct Options {
@@ -91,15 +93,17 @@ pub fn read(traces: &[PathBuf], opts: &Options) -> Batch {
             cache::Read::Session(s) => {
                 batch.read += 1;
                 batch.steered += usize::from(s.steered);
-                if !s.steps.is_empty() {
-                    batch.sessions.push(*s);
-                }
+                // An empty coordinator may still connect its working children to their native
+                // ancestor. Keep its lineage until the whole batch has been grouped.
+                batch.sessions.push(*s);
             }
         }
     }
     if let Some(f) = &opts.progress {
         f(traces.len(), traces.len());
     }
+    group_native_lineages(&mut batch.sessions);
+    batch.sessions.retain(|s| !s.steps.is_empty());
     // Which repository each checkout is, for when it is deleted (a removed worktree). Not under an
     // override, which is not the checkout's own key.
     if over.is_none() {
@@ -121,6 +125,53 @@ mod tests {
     use super::*;
     use crate::AsRecorded;
     use serde_json::json;
+
+    #[test]
+    fn an_empty_native_coordinator_still_connects_its_working_descendants() {
+        let d = tempfile::tempdir().unwrap();
+        let write = |id: &str, parent: Option<&str>, works: bool| {
+            let mut meta = json!({"id":id,"cwd":"/repo"});
+            if let Some(parent) = parent {
+                meta["parent_thread_id"] = json!(parent);
+                meta["source"] = json!({"subagent":{"thread_spawn":{"parent_thread_id":parent}}});
+                meta["subagent_history_start_ordinal"] = json!(1);
+            }
+            let mut rows = vec![
+                json!({"type":"session_meta","payload":meta}),
+                json!({"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"A task"}]}}),
+            ];
+            if works {
+                rows.extend([
+                    json!({"type":"response_item","payload":{"type":"function_call","name":"exec_command","call_id":"call","arguments":"{\"cmd\":\"cargo test\"}"}}),
+                    json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"call","output":"Exit code: 0\nOutput:\nok"}}),
+                ]);
+            }
+            for (ordinal, row) in rows.iter_mut().enumerate() {
+                row["ordinal"] = json!(ordinal);
+                row["timestamp"] = json!("2026-10-15T00:00:00Z");
+            }
+            let path = d.path().join(format!("{id}.jsonl"));
+            std::fs::write(&path, rows.iter().map(|v| format!("{v}\n")).collect::<String>()).unwrap();
+            path
+        };
+        let paths = vec![
+            write("grandchild", Some("coordinator"), true),
+            write("root", None, true),
+            write("sibling", Some("root"), true),
+            write("coordinator", Some("root"), false),
+        ];
+        let opts = Options { repo_override: Some("r".into()), locator: &AsRecorded, ..Default::default() };
+        let batch = read(&paths, &opts);
+        assert_eq!(batch.read, 4);
+        assert_eq!(batch.sessions.len(), 3, "the final learning batch still excludes empty traces");
+        assert!(batch.sessions.iter().all(|s| s.identity.group_id.as_deref() == Some("codex-lineage:root")));
+        let cx =
+            Decode { table: CommandTable::load(), locator: &AsRecorded, repo_override: Some("r"), subagent: false };
+        let mut exported: Vec<_> = paths.iter().map(|p| read_trace(p, &cx).unwrap()).collect();
+        group_native_lineages(&mut exported);
+        exported.retain(|s| !s.steps.is_empty());
+        assert_eq!(batch.sessions, exported, "grouping agrees with the export path before eligibility filtering");
+    }
 
     /// One transcript recorded in a checkout whose `origin` names its repository.
     fn transcript_in_checkout(d: &Path) -> PathBuf {

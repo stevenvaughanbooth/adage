@@ -148,7 +148,7 @@ fn on_call(
         // Failure-triggered dead ends and instincts (never obligations) see a piped
         // failure too, by its output; each still needs its own signature there.
         if piped_failed {
-            fire_after_failure(ctx, w.routes, st, out, &key, &call.output);
+            fire_after_failure(ctx, w.routes, st, out, &key, call, &n);
         }
         // Obligations met.
         if main {
@@ -417,6 +417,7 @@ fn after_command(
         if let Trigger::AfterCommand { command } = &ir.route.trigger {
             if ctx.policy.meets(command, key) && emit_ok(ctx, st, out, &ir.route.id) {
                 let text = match &ir.route.step {
+                    Step::Advise { template, .. } if template == adage_tracks::recovery::TEMPLATE => None,
                     Step::Advise { .. } => render::route_text(&ir.route, &[]),
                     Step::Sequence { commands } => {
                         let t = render::route_text(&ir.route, &[]);

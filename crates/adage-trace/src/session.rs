@@ -28,6 +28,24 @@ pub struct StepObs {
     pub project_pytest_root_cwd: bool,
 }
 
+impl StepObs {
+    /// Whether two normalized steps retain the same native invocation and result. Ingestion
+    /// projects `Call::failed` onto individual shell subactions, so that derived flag is not
+    /// invocation identity. Every other original call field, the prompt and the turn must agree.
+    /// Consumers must still require adjacency and reject a reused id outside that one group.
+    pub fn same_native_call(&self, other: &Self) -> bool {
+        self.call.tool_use_id.as_deref().is_some_and(|id| !id.is_empty() && id.len() <= 256)
+            && self.turn == other.turn
+            && self.prompt == other.prompt
+            && self.call.tool_use_id == other.call.tool_use_id
+            && self.call.tool == other.call.tool
+            && self.call.input == other.call.input
+            && self.call.output == other.call.output
+            && self.call.by == other.call.by
+            && self.call.agent == other.call.agent
+    }
+}
+
 /// One prompt the person typed, and where it falls among the session's steps.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PromptObs {
@@ -43,10 +61,27 @@ pub const MAX_PROMPT_BYTES: usize = 64 * 1024;
 /// At most this many prompts are kept per session.
 pub const MAX_PROMPTS: usize = u16::MAX as usize;
 
+/// Native delegation context, retained as observations, never user authority or a task grade.
+/// A shared parent is a leakage family, not evidence that its workers are independent trials.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Delegation {
+    pub parent_id: String,
+    pub agent_id: String,
+    /// The harness's computed assignment with its framing removed. The original prompt remains
+    /// available in `Session::prompts`; this text must never be treated as human consent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task: Option<String>,
+    /// The worker's own recorded role instructions, not inherited tool output or a verdict.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+}
+
 /// Serializable so that a parse can be cached (`adage_ingest::cache`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegation: Option<Delegation>,
     /// Task, leakage group and attempt supplied by a corpus or dataset manifest.
     #[serde(default, skip_serializing_if = "crate::EvidenceIdentity::is_empty")]
     pub identity: crate::EvidenceIdentity,
@@ -88,6 +123,10 @@ pub struct Ending {
     /// off (a turn limit, a kill).
     #[serde(default)]
     pub cut_off: bool,
+    /// The harness accepted a structured handback. This is a completed report, including a
+    /// report of blocked or failed work, not evidence of task success or failure.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub structured_handback: bool,
 }
 
 /// `gauge.harness` names, per session source.
@@ -123,6 +162,11 @@ pub struct Directed {
 pub const FINISH_LINE_STOP: &str = "finish-line-stop";
 
 impl Session {
+    /// Meaning of the delegated assignment for learning, without the harness's repeated wrapper.
+    /// This changes neither instruction authority nor the source-assigned evidence group.
+    pub fn learning_prompt(&self) -> &str {
+        self.delegation.as_ref().and_then(|d| d.task.as_deref()).unwrap_or(&self.prompt)
+    }
     /// The session's outcome as its transcript suggests it, for when none was recorded: failed if
     /// the agent ended by asking the person for help or was cut off, or if its last check failed;
     /// a check only applies if it followed the final mutation in a later model turn and served
@@ -130,6 +174,9 @@ impl Session {
     pub fn proxy_outcome(&self) -> Option<bool> {
         if self.ending.asked_for_help || self.ending.cut_off {
             return Some(false);
+        }
+        if self.ending.structured_handback {
+            return None;
         }
         let last_check = self.steps.iter().rev().find(|s| {
             s.norm.effect == adage_core::Effect::Verify
@@ -149,7 +196,7 @@ impl Session {
         {
             return None;
         }
-        Some(!last_check.call.failed)
+        last_check.verification().map_or(Some(!last_check.call.failed), |r| r.status())
     }
 
     /// Preserve whether an outcome was recorded or merely inferred from trace completion.

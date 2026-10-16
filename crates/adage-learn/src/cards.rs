@@ -746,7 +746,7 @@ pub fn compile(ss: &[&Session], model: &StaticModel, p: &CardParams, provenance:
             if v.edits.is_empty() {
                 return None;
             }
-            let e = model.embed(&normalize(&s.prompt))?;
+            let e = model.embed(&normalize(s.learning_prompt()))?;
             Some((v, e))
         })
         .collect();

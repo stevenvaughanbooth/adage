@@ -33,6 +33,9 @@ pub struct Ctx<'a> {
 /// with `Policy::default()` decides exactly as the plain `adage hook` does.
 #[derive(Debug, Clone)]
 pub struct Policy {
+    /// Native event cwd when the harness supplies it. Recovery advice currently binds only
+    /// root-relative declared invocations and abstains in a different working directory.
+    pub observed_cwd: Option<std::path::PathBuf>,
     /// Procedure cards are oriented: no exemplar; where the card's files stand in the checkout now
     /// ([`crate::orient::block`]). `false` renders cards as they were before (the exemplar of the
     /// last edit, no orientation): an evaluation knob for the card's earlier form.
@@ -84,6 +87,7 @@ pub const PREDICT_CAP: u32 = 6;
 impl Default for Policy {
     fn default() -> Self {
         Policy {
+            observed_cwd: None,
             card_orientation: true,
             card_checks: true,
             follow_weights: None,

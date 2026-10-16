@@ -35,8 +35,19 @@ fn learn_routine(root: &Path, count: usize, mode: &str) -> Index {
                 lines.push(json!({"type":"user","sessionId":sid,"cwd":cwd,"message":{"role":"user","content":format!("Stop that task. Independently audit package {i} now.")}}));
             }
             let id = format!("toolu_{n}");
+            let command = input.get("command").and_then(Value::as_str).unwrap_or("");
+            let missing_python = mode == "recovery-observation" && command.starts_with("python3 ");
+            let failed = tool == "Bash"
+                && (mode == "failed" || (mode == "one-negative" && i == count - 1) || missing_python);
+            let output = if tool == "Bash" && (mode == "masked-failed" || missing_python) {
+                "ModuleNotFoundError: No module named pytest"
+            } else if tool == "Bash" && command.contains(" -m pytest ") {
+                if failed { "1 failed in 0.01s" } else { "1 passed in 0.01s" }
+            } else {
+                "done"
+            };
             lines.push(json!({"type":"assistant","sessionId":sid,"cwd":cwd,"message":{"id":format!("msg_{}", if mode == "same-turn" { 0 } else { n }),"model":"m","content":[{"type":"tool_use","id":id,"name":tool,"input":input}]}}));
-            lines.push(json!({"type":"user","sessionId":sid,"cwd":cwd,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":id,"content":if (mode == "masked-failed" || (mode == "recovery-observation" && input.get("command").and_then(Value::as_str).is_some_and(|c|c.starts_with("python3 ")))) && tool=="Bash" { "ModuleNotFoundError: No module named pytest" } else { "done" },"is_error":(mode == "failed" || (mode == "one-negative" && i == count - 1) || (mode == "recovery-observation" && input.get("command").and_then(Value::as_str).is_some_and(|c|c.starts_with("python3 ")))) && tool=="Bash"}]}}));
+            lines.push(json!({"type":"user","sessionId":sid,"cwd":cwd,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":id,"content":output,"is_error":failed}]}}));
         }
         let p=root.join(format!("{sid}.jsonl"));
         std::fs::write(&p,lines.iter().map(Value::to_string).collect::<Vec<_>>().join("\n")).unwrap();

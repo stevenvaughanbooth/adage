@@ -10,7 +10,7 @@
 //! | a verify step, then a "before you finish" verify step | a `sequence` after a code edit, which carries both |
 //! | "before you finish, run `make ci`" | `obligation` after **any** edit (`*`) |
 //! | a forbidden command with the failure signature | `avoid` at session start |
-//! | "run the tests of the module you changed" (`tests/test_{module}.py`) | `obligation` with the edited file's tests (a map from the repository's names and history) |
+//! | "run the tests of the module you changed" (`tests/test_{module}.py`) | kept as text: requires runner-qualified target evidence absent from skill compilation |
 //! | "do not commit" | the fixed advice `uncommitted` after any edit |
 //!
 //! Everything else stays text, with the reason: an edit or a decision (needs judgment), a slot the
@@ -22,8 +22,8 @@ use crate::procedure::{Graph, Pre, Role, SlotFrom, Step};
 use adage_core::{CommandTable, Effect};
 use adage_pack::validate::{argv_token_ok, program, rank, Program};
 use adage_pack::{
-    AdviseSpec, AvoidSpec, EditTestsSource, ExitV2, Input, InputFrom, PromptSource, ReadSpec, RepoFile, ResultSource,
-    RouteEvidence, RouteOrigin, RouteV2, RunSpec, ScriptRef, Shape, StepV2, Strength, TriggerV2, TypeDef,
+    AdviseSpec, AvoidSpec, ExitV2, Input, InputFrom, PromptSource, ReadSpec, RepoFile, ResultSource, RouteEvidence,
+    RouteOrigin, RouteV2, RunSpec, ScriptRef, Shape, StepV2, Strength, TriggerV2, TypeDef,
 };
 use adage_tracks::io;
 use once_cell::sync::Lazy;
@@ -512,94 +512,16 @@ impl Cx<'_> {
         }
     }
 
-    /// "Run the tests of the module you changed" (`tests/test_{module}.py`): the edited file's
-    /// tests, from the repository's map (named tests and history, `adage_learn::testmap`).
+    /// A dynamic edited-file template needs target/runner evidence for every binding. Skill
+    /// compilation has no trace/discovery input; replaying the first static pair cannot validate
+    /// the rest of a name/co-change map. Preserve the instruction rather than emit that map.
     fn edit_tests(&mut self, s: &Step, c: &crate::procedure::Command) {
-        let argv = argv_of(&c.template);
-        let holes: Vec<usize> = argv.iter().enumerate().filter(|(_, t)| t.contains('{')).map(|(i, _)| i).collect();
-        if holes.len() != 1 || s.role != Role::Verify {
-            self.why(&s.id, format!("`{}` binds the edited file's name in a way no pack input carries", c.template));
-            return;
-        }
-        let glob = match &s.pre {
-            Pre::AfterEdit(g) => Some(g.clone()),
-            _ => self.out.code_glob.clone(),
-        };
-        let Some(glob) = glob else {
-            self.why(&s.id, format!("`{}` runs the edited file's tests, but the skill names no code glob", c.template));
-            return;
-        };
-        let mut concrete = argv.clone();
-        concrete[holes[0]] = "{tests}".into();
-        let template = concrete.join(" ");
-        let p = match self.plain(&template) {
-            Ok(p) => p,
-            Err(e) => {
-                self.why(&s.id, e);
-                return;
-            }
-        };
-        let files = adage_learn::testmap::files(self.root);
-        let history = adage_learn::testmap::cochange(self.root);
-        let pattern = glob::Pattern::new(&glob).ok();
-        let map: BTreeMap<String, Vec<String>> = adage_learn::testmap::tests_of(&files, &history, &BTreeMap::new())
-            .into_iter()
-            .filter(|(src, _)| pattern.as_ref().is_some_and(|g| g.matches(src)))
-            .filter(|(src, ts)| {
-                adage_pack::validate::safe_path(src) && ts.iter().all(|t| adage_pack::validate::safe_path(t))
-            })
-            .take(adage_pack::EDIT_TESTS_MAX_ENTRIES)
-            .collect();
-        if map.is_empty() {
-            self.why(
-                &s.id,
-                format!(
-                    "`{}`: no file matching {glob} has tests the repository's names or history point to",
-                    c.template
-                ),
-            );
-            return;
-        }
-        let Some(ceiling) = strength_for(p.effect, true) else {
-            self.why(&s.id, format!("`{template}` is {}: Adage never directs it (effect ceiling)", p.effect.as_str()));
-            return;
-        };
-        let (first_src, first_tests) = map.iter().next().map(|(a, b)| (a.clone(), b.clone())).unwrap_or_default();
-        let mut replay_argv = p.argv.clone();
-        let at = replay_argv.iter().position(|t| t == "{tests}").unwrap_or(0);
-        replay_argv.splice(at..=at, first_tests.iter().cloned());
-        let route = RouteV2 {
-            id: self.id(&s.id, "edited-tests"),
-            summary: summary(&s.title),
-            shape: Shape::Obligation,
-            detector: None,
-            trigger: TriggerV2::AfterEdit { paths: glob },
-            entry: true,
-            inputs: BTreeMap::from([(
-                "tests".to_string(),
-                Input {
-                    ty: "repo-path-list".into(),
-                    from: InputFrom {
-                        edit_tests: Some(EditTestsSource { k: adage_learn::testmap::K, map }),
-                        ..InputFrom::default()
-                    },
-                    values: None,
-                    max: None,
-                },
-            )]),
-            steps: vec![run_step("run", p.argv, p.effect, p.script)],
-            links: Vec::new(),
-            // A check after an edit is suggested, not fired (as the learner's): prime at most.
-            strength: if ceiling == Strength::Fire { Strength::Prime } else { ceiling },
-            exit: vec![ExitV2::ExploratoryChange],
-            exec: None,
-            evidence: Some(evidence(self.g)),
-        };
-        let _ = first_src;
-        self.push(
-            &[&s.id],
-            route,
-            vec![Check::Works { argv: replay_argv, expect: s.expect.clone(), regenerate: false }],
+        self.why(
+            &s.id,
+            format!(
+                "`{}`: runner-qualified target execution evidence is unavailable for the edited-file template; names and co-change alone do not establish selected tests; keep this instruction or use explicit checks",
+                c.template
+            ),
         );
     }
 
@@ -676,8 +598,8 @@ impl Cx<'_> {
     }
 }
 
-/// Compile a procedure graph for the repository at `root` (scripts are pinned against it, and
-/// the edited-file test map is read from it). Nothing runs: [`crate::verify`] replays after.
+/// Compile a procedure graph for the repository at `root` (scripts are pinned against it).
+/// Nothing runs: [`crate::verify`] replays after.
 pub fn compile(graph: Graph, root: &Path, table: &CommandTable) -> Compiled {
     let prefix = id_prefix(&graph.skill.name);
     let code_glob = code_glob(&graph).filter(|g| adage_pack::validate::safe_glob(g));

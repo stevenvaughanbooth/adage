@@ -382,6 +382,15 @@ pub fn validate(t: &Track) -> Result<()> {
             }
             Step::Advise { template, slots } => {
                 crate::advice::check(template, slots, table).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
+                if template == "verification-discovery" && !matches!(r.trigger, Trigger::AfterFailure { .. }) {
+                    bail!("{}: discovery advice follows a failure with a recognized no-tests report", ctx());
+                }
+                if template == crate::recovery::TEMPLATE && !matches!(r.trigger, Trigger::AfterCommand { .. }) {
+                    bail!(
+                        "{}: recovery advice follows a successful command with qualified prior failure evidence",
+                        ctx()
+                    );
+                }
                 // Advice directs nothing: prime, observe, no route slots, and a reactive trigger.
                 if r.strength != Strength::Prime || r.effect != Effect::Observe || !r.slots.is_empty() {
                     bail!("{}: an advisory step is prime, observe, with no route slots", ctx());

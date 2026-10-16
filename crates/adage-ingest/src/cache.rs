@@ -72,8 +72,15 @@ pub enum Read {
 /// format 4: native root-cwd provenance for direct-pytest verbosity pooling; format 5 was given
 /// by two changes made apart, either `Call.by` from the transcript's `adage_` tool-use ids (the
 /// calls the Claude Code mod made in the agent's place) or `Session::identity` (the canonical
-/// evidence identity); format 6: both, so neither format-5 entry is read as having the other).
-pub const SESSION_FORMAT: u32 = 6;
+/// evidence identity); format 6: both, so neither format-5 entry is read as having the other;
+/// format 7: workflow-nested Claude sub-agent files, bounded Codex own-history import and native
+/// lineage grouping, and accepted structured handbacks retained without a correctness outcome;
+/// format 8: native delegated task context, Claude call ids and conservative parent grouping;
+/// format 9: direct numeric-version Python pytest/unittest invocations normalize as Verify;
+/// format 10: native calls with no normalized actions retained as opaque boundaries;
+/// format 11: bounded literal Codex exec forwarders retain native command/result provenance;
+/// format 12: native Claude task-completion envelopes are not human task instructions).
+pub const SESSION_FORMAT: u32 = 12;
 
 /// The identity of this parser: a cache written by any other build is not trusted.
 fn parser_id() -> String {

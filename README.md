@@ -47,16 +47,18 @@ agent; the repeated part gets cheaper.
   `adage packs` shows which apply and turns any off.
 - **Keeps learning.** After each session ends, a background learner updates the reflexes. No
   re-runs needed.
-- **Compiles skills.** `adage train SKILL.md` turns a skill's steps into verified reflexes, replayed
-  in a sandbox so stale instructions are caught.
-- **Measures itself.** 1 session in 10 is a silent control, so savings are measured against a
-  baseline, never assumed.
-- **Nothing runs without you.** By default Adage only advises. Running commands is a separate,
-  opt-in, sandboxed binary for macOS and Linux.
+- **Compiles supported skill steps.** `adage train SKILL.md` compiles supported commands and
+  attempts sandbox replay. Its report distinguishes verified, stale and not-replayed steps;
+  it does not verify every instruction in a skill.
+- **Optional measurement.** Enable silent control sessions with `adage config set runtime.control 0.1`
+  to compare treated sessions with a baseline. Controls are off by default.
+- **Separate execution approval.** By default Adage gives guidance and can rewrite supported
+  Python commands to the project's verified interpreter. `adage delegate rewrites off` disables
+  those rewrites. Adage-run commands require the separate, opt-in sandboxed executor on macOS or Linux.
 - **Shareable.** Reflexes travel as signed, reviewable packs you can commit or hand to a teammate:
   the same format the built-in instincts ship in.
-- **Small and fast.** One ~10 MB Rust binary with a bundled embedding model, deterministic and
-  fail-open.
+- **Local and deterministic.** A Rust CLI with a bundled embedding model and fail-open hooks;
+  execution and skill compilation use companion binaries.
 
 ## Install
 
@@ -200,10 +202,11 @@ interval and caveat.
 
 ## Safe by default
 
-- Adage **advises**. It doesn't run commands for the agent unless you turn on delegation at a
-  terminal (`adage delegate on`), and then only reflexes you approved, inside an OS sandbox, on
-  macOS or Linux. On Windows it advises but executes nothing, and its hook invocation there is
-  untested.
+- Adage gives **guidance and supported interpreter rewrites** by default. Rewrites change a
+  pending agent command and remain subject to the harness's permissions; turn them off with
+  `adage delegate rewrites off`. Separately, Adage runs commands only when you enable delegation
+  (`adage delegate on`) and approve the reflex, inside an OS sandbox on macOS or Linux. Windows
+  execution is unsupported, and its hook invocation is untested.
 - **No hook touches the network.** Transcripts are read locally, and background learning reads
   only the current repository's. The one request Adage makes on its own is the background
   learner's check, at most once a day, for a newer version (`adage config set update.check off`

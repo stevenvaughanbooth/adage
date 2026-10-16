@@ -78,6 +78,18 @@ pub const FILES: &[(&str, &str)] = &[
         "packs/test-wrapper/routes/run-declared-wrapper.yaml",
         include_str!("../../../packs/test-wrapper/routes/run-declared-wrapper.yaml"),
     ),
+    ("packs/verification-recovery/CLOSURE", include_str!("../../../packs/verification-recovery/CLOSURE")),
+    ("packs/verification-recovery/pack.toml", include_str!("../../../packs/verification-recovery/pack.toml")),
+    (
+        "packs/verification-recovery/routes/investigate-passing-retry.yaml",
+        include_str!("../../../packs/verification-recovery/routes/investigate-passing-retry.yaml"),
+    ),
+    ("packs/verification-discovery/CLOSURE", include_str!("../../../packs/verification-discovery/CLOSURE")),
+    ("packs/verification-discovery/pack.toml", include_str!("../../../packs/verification-discovery/pack.toml")),
+    (
+        "packs/verification-discovery/routes/investigate-empty-selection.yaml",
+        include_str!("../../../packs/verification-discovery/routes/investigate-empty-selection.yaml"),
+    ),
 ];
 
 static BUILTIN: LazyLock<Result<Loaded, String>> = LazyLock::new(|| {

@@ -16,7 +16,7 @@
 //!
 //! | Event | Skipped when |
 //! | --- | --- |
-//! | session start, session end | always: nothing decides on them |
+//! | session start, session end | no recovery observation waits across this boundary |
 //! | prompt | no intent routes; no prompt route's span kind in the text; no prompt token a prompt route's learned value type accepts; not the session's first prompt (`prompts` > 0) |
 //! | batch | no pending judgement, no bound read batch (`reads`), no obligation and no procedure card waiting for an edit (`card_waiting`) in the state; no call might match ([`Triggers::call_might_match`]); no edit adds a test function to a test file (`new_tests`, which a receipt names) |
 //! | failure | no call might match, and no pending judgement (a failure of a directed command judges it `misfired`) |
@@ -44,7 +44,7 @@ use adage_tracks::triggers::Triggers;
 /// state that exists but cannot be read, means "do not skip").
 pub fn skip(t: &Triggers, ev: &Event, cwd: &str, state: impl FnOnce() -> Option<SessionState>) -> bool {
     match ev {
-        Event::SessionStart | Event::SessionEnd => true,
+        Event::SessionStart | Event::SessionEnd => state().is_some_and(|st| st.recovery.is_empty()),
         Event::Prompt { text } => {
             if t.intent {
                 return false;
@@ -58,7 +58,7 @@ pub fn skip(t: &Triggers, ev: &Event, cwd: &str, state: impl FnOnce() -> Option<
             // The first prompt of a session is always decided in full, even with no dead end to
             // announce: it moves `prompts` off 0, which a later decision reads if a dead end is
             // learned mid-session. One full decision per session costs little.
-            state().is_some_and(|st| st.prompts > 0)
+            state().is_some_and(|st| st.prompts > 0 && st.recovery.is_empty())
         }
         Event::Batch { calls } => {
             if t.calls_matter() && calls.iter().any(|c| t.call_might_match(&haystack(cwd, &c.tool, &c.input))) {
@@ -71,15 +71,20 @@ pub fn skip(t: &Triggers, ev: &Event, cwd: &str, state: impl FnOnce() -> Option<
             // A procedure card waiting for the session's first edit of one of its files (a prompt
             // just below its threshold) is said at an edit no trigger word names.
             state().is_some_and(|st| {
-                st.pending.is_empty() && st.obligations.is_empty() && st.card_waiting.is_none() && st.reads.is_empty()
+                st.pending.is_empty()
+                    && st.obligations.is_empty()
+                    && st.card_waiting.is_none()
+                    && st.reads.is_empty()
+                    && st.recovery.is_empty()
             })
         }
         // A failure can also judge a pending directive (followed, and it failed).
         Event::Failure { call } => {
             (!t.calls_matter() || !t.call_might_match(&haystack(cwd, &call.tool, &call.input)))
-                && state().is_some_and(|st| st.pending.is_empty())
+                && state().is_some_and(|st| st.pending.is_empty() && st.recovery.is_empty())
         }
-        Event::Stop { .. } => state().is_some_and(|st| !st.obligations.iter().any(|o| !o.met && !o.stop_requested)),
+        Event::Stop { .. } => state()
+            .is_some_and(|st| st.recovery.is_empty() && !st.obligations.iter().any(|o| !o.met && !o.stop_requested)),
         // Only what Adage already directed is ever predicted: with nothing pending, no read batch
         // bound and no armed finish line, there is nothing to predict and nothing to record.
         Event::TurnStep { .. } => state()
@@ -140,7 +145,7 @@ mod tests {
         // A state that exists but cannot be read is never skipped past: it will be rebuilt.
         assert!(!skip(&t, &ls(), "/r", || None));
         assert!(!skip(&t, &prompt, "/r", || None));
-        assert!(skip(&t, &Event::SessionStart, "/r", || None));
+        assert!(!skip(&t, &Event::SessionStart, "/r", || None));
     }
 
     #[test]

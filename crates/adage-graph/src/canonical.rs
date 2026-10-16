@@ -45,6 +45,21 @@ fn push(n: &Normalized, step: &StepObs, out: &mut Vec<(input::Step, input::StepM
         effect: effect.as_str().to_string(),
         key,
         project_pytest_root_cwd: step.project_pytest_root_cwd,
+        verification: step.verification().or_else(|| {
+            // Ingest normally flattens compounds. A caller that retained one still has shared
+            // output: do not lose that uncertainty while this bridge expands its body.
+            if matches!(step.norm.action, CanonicalAction::Compound { .. }) {
+                if let CanonicalAction::Exec { argv, .. } = action {
+                    return adage_core::outcome::verification_report(argv, "").map(|_| {
+                        adage_core::outcome::VerificationReport {
+                            outcome: adage_core::outcome::VerificationOutcome::Unknown,
+                            tests_run: None,
+                        }
+                    });
+                }
+            }
+            None
+        }),
     };
     match action {
         CanonicalAction::Exec { argv, .. } => out.push((
@@ -94,13 +109,14 @@ pub fn annotate_prefix(s: &Session, n: usize) -> input::Annotated {
     }
     start.push(out.len() as u32);
     let prompts: Vec<input::Prompt> = if s.prompts.is_empty() {
-        vec![input::Prompt { text: s.prompt.clone(), at_step: 0 }]
+        vec![input::Prompt { text: s.learning_prompt().to_string(), at_step: 0 }]
     } else {
         s.prompts
             .iter()
             .filter(|p| p.at_step as usize <= steps.len())
-            .map(|p| input::Prompt {
-                text: p.text.clone(),
+            .enumerate()
+            .map(|(i, p)| input::Prompt {
+                text: if i == 0 { s.learning_prompt().to_string() } else { p.text.clone() },
                 at_step: start.get(p.at_step as usize).copied().unwrap_or(out.len() as u32),
             })
             .collect()
@@ -163,6 +179,7 @@ pub fn events(a: &input::Annotated, s: &Session) -> crate::events::EventSession 
         outcome: s.outcome,
         turns: Some(a.meta.iter().map(|m| m.turn).collect()),
         effects: Some(a.meta.iter().map(|m| effect(&m.effect)).collect()),
+        verification: Some(a.meta.iter().map(|m| m.verification).collect()),
         influence: influence(s),
     };
     crate::events::from_input(&a.session, &meta, adage_core::CommandTable::load())
@@ -289,6 +306,7 @@ mod tests {
                 PromptObs { text: "after".into(), at_step: 4 },
             ],
             identity: Default::default(),
+            delegation: None,
             ending: Default::default(),
         };
         let a = annotate(&s);
@@ -333,6 +351,7 @@ mod tests {
             harness: CLAUDE_CODE.into(),
             prompts: vec![PromptObs { text: "p".into(), at_step: 0 }],
             identity: Default::default(),
+            delegation: None,
             ending: Default::default(),
         };
         assert!(s.exposed_to(&["make test"], false) && s.exposed_to(&["python3 -m pytest tests"], false));
@@ -349,6 +368,7 @@ mod tests {
         let s = Session {
             id: "s".into(),
             identity: Default::default(),
+            delegation: None,
             root: "/r".into(),
             repo: "r".into(),
             model: None,
