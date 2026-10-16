@@ -289,7 +289,10 @@ jobs:
           claude plugin validate --strict .
       - name: validate output matches the committed VALIDATE.txt
         run: |
-          claude plugin validate --strict plugin/claude-code 2>&1 | sed "s#$PWD/##g" > /tmp/validate.txt
+          set -euo pipefail
+          # Claude's bullets/checkmark vary by host; keep the manifest/hook/API text exact.
+          claude plugin validate --strict plugin/claude-code 2>&1 \
+            | sed -e "s#$PWD/##g" -e 's/^  ❯ /  > /' -e 's/^✔ Validation passed$/√ Validation passed/' > /tmp/validate.txt
           diff -u plugin/claude-code/VALIDATE.txt /tmp/validate.txt
       # One plugin carries the mod and the three binaries (plan A8, onboarding plan O1); its
       # session-start shim is exercised by plugin/test/session-start.test.sh.

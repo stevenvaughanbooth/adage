@@ -27,6 +27,8 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   Public installation instructions remain marked pending until a release is verified.
 - A documentation index separates setup, reference and research. The historical launch
   handoff now summarizes the study and its limitations without personal working notes.
+- YAML files use the YAML organization's maintained parser fork, replacing the deprecated
+  `serde_yaml` and unmaintained `unsafe-libyaml` dependencies while preserving the file format.
 - Offline route evaluation can recognize a reviewed contextual execution contract only when the full
   ordered context, fixed command and qualifying execution evidence agree. These contracts
   do not count toward planted-convention discovery or prove live savings. Existing quality

@@ -26,6 +26,8 @@ and access to this repository:
 cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli adage-exec adage-train
 ```
 
+For a Windows source install, omit `adage-exec` from the command above.
+
 On macOS and Linux, packages include all three commands: `adage` for setup, learning and review;
 `adage-exec` for separately approved execution; and `adage-train` for compiling supported skill
 steps. Windows packages include `adage` and `adage-train`; execution is unsupported.
