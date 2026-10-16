@@ -8,8 +8,8 @@ Every tab in the header is a page of its own, so no page scrolls forever:
 | `/how` | `how.html` | How Adage plugs into Claude Code (a diagram that follows the hooks as the page scrolls), then the nine chapters in 3D, with the math behind every threshold |
 | `/packs` | `packs.html` | What a pack is, file by file, sharing one, and the base instincts |
 | `/evidence` | `evidence.html` | The results at a glance, what we tested and how, the held-out result in advisory and execution mode, what the Claude Code mod changes, the limits and the data (`/how-we-tested` redirects here) |
-| `/get-started` | `get-started.html` | The npm and release-binary install paths (clearly pending until published), source fallback and local demos |
-| `/early-access` | `early-access.html` | The early-access list |
+| `/get-started` | `get-started.html` | GitHub release downloads, the Claude Code plugin, npm publication status, source fallback and local demos |
+| `/early-access` | `early-access.html` | The legacy route with installation links and an optional one-email release notification |
 
 Every page carries the same header, with the page you are on marked; on a phone its pages slide
 sideways under the mark. `/packs`, `/get-started` and `/early-access` share one script (`src/subpage.ts`). The
@@ -32,10 +32,13 @@ The site describes Adage as an experiment. Claims of savings belong to a named s
 comparisons remain visible. Skills can carry judgment and their own evaluations; packs are a
 complementary way to distribute rules, not proof that inference is unnecessary.
 
-`get-started.html` deliberately marks npm and release downloads as pending. Remove that notice
-only after verifying the public `@adage-sh/cli` package, its platform packages and release assets.
-Set `VITE_REPO_URL` only when the repository is public. The main CTA goes to installation; the
-existing `/early-access` route remains available for older links.
+`get-started.html` leads with the published v0.1.0 GitHub release and the Claude Code plugin.
+The primary copy button provides the version-pinned shell installer for macOS and Linux; Windows
+users can download the CLI archive from the release page. npm is explicitly pending, without a
+registry link or primary install command. Verify the public launcher and platform packages before
+activating that channel. The main CTA goes to installation. The existing `/early-access` route remains available for older links, with
+a direct install link and an optional one-email notification for the next release. Registration
+stays closed unless its existing webhook is configured; publication does not enable it.
 
 ## How the page behaves
 

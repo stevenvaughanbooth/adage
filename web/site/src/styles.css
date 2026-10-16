@@ -314,6 +314,7 @@ code { font: 0.92em var(--mono); background: var(--raised); border: 1px solid va
 .term-top { display: flex; gap: 6px; padding: 12px 14px; border-bottom: 1px solid rgb(255 255 255 / 0.08); }
 .term-top i { width: 10px; height: 10px; border-radius: 50%; background: rgb(255 255 255 / 0.16); }
 .term pre { margin: 0; padding: 18px 20px 22px; overflow-x: auto; }
+#start .term pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .band .term pre code { background: none; border: 0; padding: 0; font: 14px/1.9 var(--mono); color: inherit; }
 .term .p { color: #8b7cff; user-select: none; } .term .c { color: #8b8e9c; }
 .term .copybtn { position: absolute; top: 7px; right: 8px; border: 1px solid rgb(255 255 255 / 0.14); background: rgb(255 255 255 / 0.06); color: #e9e9f0; border-radius: 8px; padding: 4px 10px; font-size: 12.5px; cursor: pointer; }

@@ -4,12 +4,16 @@ Adage is an early experiment. A release should make it easy to try, state what h
 been tested, and leave people a way to report failures. It does not need to claim a general
 speedup or replace the agent's reasoning.
 
-The first planned release is `0.1.0`. Until a public release and npm package have been
-verified, keep the README and website clear that downloads are pending.
+Version `0.1.0` is available through
+[GitHub Releases](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0) and the Claude
+Code marketplace. The npm packages are staged and checked; their first publication is pending
+publishing authorization. Verify each channel's public artifacts and a fresh installation
+before describing it as available in the README and website.
 
 ## The install path
 
-The primary package is `@adage-sh/cli`, in the `adage-sh` npm organization:
+The planned npm package is `@adage-sh/cli`, in the `adage-sh` npm organization. After its first
+publication, users can install it with:
 
 ```bash
 npm install -g @adage-sh/cli
@@ -17,7 +21,7 @@ cd your-project
 adage init
 ```
 
-It installs prebuilt binaries. Users need neither Rust nor a Git checkout. npm selects one
+The package contains prebuilt binaries. Users need neither Rust nor a Git checkout. npm selects one
 of five platform packages: macOS arm64 and x64, Linux arm64 and x64, or Windows x64.
 The platform packages include `adage` and `adage-train`, plus `adage-exec` on macOS and
 Linux. Windows supports advice only. There are no install-time download scripts.
@@ -109,8 +113,9 @@ and do not publish an empty placeholder package to make the install command appe
 7. In a fresh directory with a fresh npm prefix, install from the registry and run
    `adage version` and `adage init`. Check the documented plugin route too. Verify
    installation on the supported operating systems before claiming platform coverage.
-8. Once those public paths work, remove the pending-release wording from the README
-   and website, deploy the website, and add the next Unreleased section to CHANGELOG.
+8. Update the README and website as each public install path is verified, retaining a clear
+   pending notice for any unpublished channel. Deploy the website and add the next Unreleased
+   section to CHANGELOG.
 
 If a publish job fails, investigate before rerunning it. Already-published npm versions
 are skipped; confirm their provenance and contents belong to this release. A broken
@@ -199,4 +204,5 @@ After changing the dist configuration, temporarily remove `allow-dirty = ["ci"]`
 macOS Developer ID signing is not configured yet. Direct downloads can encounter
 Gatekeeper prompts. Enable `macos-sign` only after the Apple credentials described in
 `dist-workspace.toml` exist. Homebrew can follow signing; its configuration and checks
-must be updated together. npm and the bundled plugin remain the intended first paths.
+must be updated together. GitHub downloads and the bundled plugin are available now; npm
+follows its first verified publication.

@@ -42,21 +42,30 @@ guidance without enabling automatic execution.
 
 ### Install
 
-The intended download path is **npm**, with no Rust build or Git checkout:
+Install the **0.1.0 release**, with no Rust build or Git checkout. On macOS or Linux:
 
 ```sh
-npm install -g @adage-sh/cli
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/download/v0.1.0/adage-cli-installer.sh | sh
+```
+
+Follow any PATH instructions printed by the installer, then:
+
+```sh
 cd /path/to/your/repository
 adage init
 ```
 
-**Publication status:** the first npm package and release downloads are being prepared. The
-command above becomes usable when `@adage-sh/cli` is published. Until then, the
-[source install](docs/usage.md#install) is the available path and requires repository access.
+Download Windows binaries and other standalone archives from the
+[v0.1.0 GitHub release](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0), or install
+the [Claude Code plugin](docs/usage.md#install). See the installation guide for each option.
 
-The npm package includes `adage`, the skill compiler, and the execution companion on macOS and
-Linux. After installation, `adage init` connects the agents it finds, shows its proposed changes, and offers to
-learn from this repository's history. Codex also requires its own hook review in `/hooks`.
+The shell installer installs `adage`. On macOS and Linux, `adage init` offers to fetch matching
+skill-compiler and execution companions, checking their published checksums. It then connects
+the agents it finds, shows its proposed changes, and offers to learn from this repository's
+history. Codex also requires its own hook review in `/hooks`.
+
+**npm publication is pending.** The planned command is `npm install -g @adage-sh/cli`; use the
+release downloads above until the package is published.
 
 ```sh
 adage doctor                   # check the connection

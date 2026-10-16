@@ -10,40 +10,28 @@ second keeps all of them current.
 
 ### Install
 
-The recommended download path is `@adage-sh/cli` on npm. It contains the native Adage binaries;
-you do not need Rust or a checkout:
+Download prebuilt binaries from the
+[v0.1.0 GitHub release](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0).
+You do not need Rust or a checkout. On macOS or Linux, the shell installer installs `adage`;
+`adage init` offers to fetch matching companions and checks their published checksums:
 
 ```sh
-npm install -g @adage-sh/cli
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/download/v0.1.0/adage-cli-installer.sh | sh
+```
+
+Follow any PATH instructions printed by the installer, then run:
+
+```sh
 adage init
 ```
 
-**First publication is pending.** The npm command and release downloads below are ready to use
-only after their artifacts are published. Until then, install from source with Rust, a C compiler
-and access to this repository:
-
-```sh
-cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli adage-exec adage-train
-```
-
-For a Windows source install, omit `adage-exec` from the command above.
-
-On macOS and Linux, packages include all three commands: `adage` for setup, learning and review;
+On macOS and Linux, the three commands are `adage` for setup, learning and review;
 `adage-exec` for separately approved execution; and `adage-train` for compiling supported skill
 steps. Windows packages include `adage` and `adage-train`; execution is unsupported.
-`adage` finds its companions beside it. Source installs place them in `~/.cargo/bin`.
+`adage` finds its companions beside it.
 
-A published [GitHub release](https://github.com/stevenvaughanbooth/adage/releases) also provides
-standalone binaries and installers. The shell installer installs `adage`; `adage init` offers to
-fetch matching companions and checks their published checksums:
-
-```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
-adage init
-```
-
-The release's Claude Code plugin bundles the same platform binaries. Once its marketplace branch
-is published, install it inside Claude Code with:
+The release's Claude Code plugin bundles the same platform binaries. Install it inside Claude
+Code with:
 
 ```text
 /plugin marketplace add stevenvaughanbooth/adage
@@ -52,6 +40,18 @@ is published, install it inside Claude Code with:
 
 Windows release artifacts provide advisory operation only. Automatic execution is unsupported,
 and Windows hook invocation has not been verified. See [harness support](harnesses.md).
+
+**npm publication is pending.** The prepared `@adage-sh/cli` package selects the matching
+platform binaries without an install-time download script. Once published, its install command
+will be `npm install -g @adage-sh/cli`. Use GitHub downloads or the plugin in the meantime.
+
+**From source:** to build version 0.1.0 yourself, use Rust and a C compiler:
+
+```sh
+cargo install --locked --git https://github.com/stevenvaughanbooth/adage --tag v0.1.0 adage-cli adage-exec adage-train
+```
+
+For a Windows source install, omit `adage-exec`. Source installs place the binaries in `~/.cargo/bin`.
 
 **From a checkout**, to work on Adage or try a branch:
 
@@ -122,18 +122,15 @@ registered a second time (`registered … · nothing to write`); the plugin is s
 binary you ran, and nothing else that is in place is rewritten. In another repository,
 `adage init` adds that one to the repositories Adage learns from.
 
-**Known, until a fix lands** (seen live on 2026-10-07, Claude Code 2.1.292): with the plugin
-`adage init` installs, every command hook runs once and the opening line arrives, but the mod (the
-band, the pane, `/adage` and the questions in the session) does not yet find the plugin's data
-directory by itself, so it stays inert. Until it does, export
-`CLAUDE_PLUGIN_DATA=~/.claude/plugins/data/adage-adage-local` (under `$CLAUDE_CONFIG_DIR` instead
-when that is set) in the shell that starts `claude`.
+The mod finds the plugin's data directory automatically after the session-start shim creates
+its binary links. No `CLAUDE_PLUGIN_DATA` export is normally needed. If the binary is missing
+or does not answer its version check, the mod stays inactive; run `adage doctor` to inspect setup.
 
 ### If you prefer to do it by hand
 
 Each step `adage init` takes is also a command of its own.
 
-- **The plugin, typed in Claude Code** (once v0.1.0 is tagged): `/plugin marketplace add
+- **The plugin, typed in Claude Code:** `/plugin marketplace add
   stevenvaughanbooth/adage`, then `/plugin install adage@adage`. `adage init` names these when
   `claude` is not on `PATH`.
 - **Claude Code's settings file instead of the plugin:** `adage install claude-code --write`
@@ -144,12 +141,8 @@ Each step `adage init` takes is also a command of its own.
 - **The plugin straight from a checkout**, for developing it: `plugin/build.sh` builds the three
   binaries and stages them into `plugin/claude-code/dist/`, and `claude --plugin-dir
   plugin/claude-code` loads the plugin for that session. Disable the installed one first
-  (`claude plugin disable adage@adage-local`), or every hook runs twice. Claude Code substitutes
-  `${CLAUDE_PLUGIN_DATA}` into the plugin's command hooks but does not put it in its own
-  environment, so under `--plugin-dir` the mod (the band, the pane, `/adage`) finds no binary
-  unless `CLAUDE_PLUGIN_DATA` is exported before `claude` starts, set to
-  `<config dir>/plugins/data/adage-inline` ([evaluation results](claude-mod/evaluation-results.md),
-  defect 4), until the mod's own lookup of that directory, in progress on this branch, lands.
+  (`claude plugin disable adage@adage-local`), or every hook runs twice. The mod also discovers
+  the inline plugin's data directory after the session-start shim creates its binary links.
 - **Learning now:** `adage condition` in a repository conditions on its history at once; after
   that the background learner keeps it current.
 
@@ -207,10 +200,8 @@ update, leaves the kept binaries where they are and names `adage update --rollba
 them back byte for byte (each checked against its recorded SHA-256 first) and re-points the
 registrations to them.
 
-**Before the first release.** Until v0.1.0 is tagged no release can be found (the check records
-`unavailable`), so a source install stops with `cannot check now` and names
-`adage update --branch main`, which builds the main branch instead. A checkout build needs no
-release.
+**Development versions.** `adage update --branch main` builds the main branch instead of a
+published release. A checkout build needs no release.
 
 **The published plugin.** A plugin installed with `/plugin install adage@adage` is updated by
 Claude Code: from its binary, `adage update` runs `claude plugin marketplace update` and
@@ -549,7 +540,7 @@ conditioning can still bind enabled instincts from repository files.
 `adage init` installs the Adage plugin into Claude Code for you ([above](#first-run-adage-init)):
 `claude plugin list` then shows `adage@adage-local` at user scope, enabled, read from
 `$ADAGE_HOME/plugin/adage`. Claude Code reads it in place, so `adage init` again, or `adage update`,
-stages new binaries and modules there and the next session runs them. Once v0.1.0 is tagged,
+stages new binaries and modules there and the next session runs them.
 `/plugin install adage@adage` installs the released plugin, which Claude Code updates. To develop
 the plugin itself, load it from a checkout with `--plugin-dir`
 ([by hand](#if-you-prefer-to-do-it-by-hand)).

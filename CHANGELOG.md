@@ -18,6 +18,14 @@ The development history is recorded in Git and the design documents under `docs/
   blocked npm and marketplace publishing after the first GitHub Release. Recovery workflows
   verify and reuse the existing tag, source and binary assets without rebuilding the release.
 
+### Documentation
+
+- Installation guides link the verified 0.1.0 release downloads and Claude Code plugin, and
+  identify npm publication as pending. The legacy early-access page points to installation
+  and describes updates for the next release.
+- Setup guides remove an obsolete plugin-data workaround and distinguish preview integrations
+  from commands that apply hook configuration.
+
 ## 0.1.0 - 2026-10-15
 
 **Agent traces become reflexes.** Adage reads the traces coding agents leave behind, finds the

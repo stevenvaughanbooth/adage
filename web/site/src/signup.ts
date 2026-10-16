@@ -25,7 +25,7 @@ export function initSignup() {
     submit.disabled = value;
     retry.disabled = value;
   };
-  const closed = () => say("Sign-ups aren't open yet. Explore the interactive walkthrough below while you wait.");
+  const closed = () => say("Sign-ups aren't open yet. You can install Adage now or explore the walkthrough below.");
 
   async function check(focus = false) {
     if (busy) return;
@@ -73,7 +73,7 @@ export function initSignup() {
         signal: controller.signal,
         body: JSON.stringify({ email: email.value.trim(), hp_x7: (form.elements.namedItem("hp_x7") as HTMLInputElement).value }),
       });
-      if (response.ok) { form.reset(); say("You're on the list. We'll email you once, when the first release is ready.", "ok"); }
+      if (response.ok) { form.reset(); say("You're on the list. We'll email you once, when the next release is ready.", "ok"); }
       else if (response.status === 400 || response.status === 413) say("That address doesn't look right. Check it and try again.", "err");
       else if (response.status === 503) { setAvailable(false); closed(); }
       else say("Something went wrong on our side. Please try again in a minute.", "err");
