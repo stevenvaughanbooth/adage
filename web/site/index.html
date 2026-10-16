@@ -61,7 +61,7 @@
   <div class="copy">
     <span class="eyebrow">Experimental · Claude Code · Codex and OpenCode in preview</span>
     <h1 id="h" tabindex="-1">Learn from the work <br>your agent <em>repeats.</em></h1>
-    <p class="sub">Adage reads your coding agent's past sessions and learns small, reusable rules called <b>reflexes</b>. When the same situation returns, it can suggest a step that worked before. You can inspect the evidence and choose what to trust.</p>
+    <p class="sub">Your agent's past work holds useful lessons. Adage learns small, reusable rules called <b>reflexes</b> from those sessions and suggests steps when the same situation returns. Inspect what it learned, try it in your workflow, and help discover what else it can learn.</p>
     <div class="cta">
       <a class="btn primary" href="/get-started">Get started</a>
       <a class="btn" href="#shortcuts">See a reflex happen</a>
@@ -83,6 +83,16 @@
     <span><i class="dot prime"></i>instinct</span>
     <span><i class="dot fire"></i>reflex</span>
     <span><i class="dot inhibit"></i>inhibit</span>
+  </div>
+</section>
+
+<section class="band alt" id="mod-result" aria-labelledby="mod-result-h">
+  <div class="wrap">
+    <p class="kicker reveal">Claude Code mod prototype · development study</p>
+    <h2 class="display reveal" id="mod-result-h">{{ev:claude-mod:mod_vs_alone.fewer_requests_percent|int}}% fewer <span class="soft">model requests.</span></h2>
+    <p class="lede reveal">The mod lets Adage carry out approved steps directly inside Claude Code's agent loop. In this study, it used {{ev:claude-mod:arms.mod.requests_mean|fixed2}} requests per session versus {{ev:claude-mod:arms.a0.requests_mean|fixed2}} for the agent alone, with {{ev:claude-mod:arms.mod.hidden_passed}}/{{ev:claude-mod:arms.mod.of}} runs passing hidden tests in both arms and {{ev:claude-mod:mod_vs_alone.cost_lower_percent|int}}% lower API-list cost.</p>
+    <p class="reveal">A separate prototype, beyond the standard hook integration. {{ev:claude-mod:study.tasks}} sandbox tasks × {{ev:claude-mod:study.repetitions}} runs per arm, {{ev:claude-mod:study.model}}, development run {{ev:claude-mod:study.run}} after fixes on these tasks. A promising direction to test on fresh work.</p>
+    <p class="ctarow reveal"><a class="btn primary" href="/evidence#mod">Explore the mod results</a><a class="textlink" href="https://github.com/stevenvaughanbooth/adage/blob/main/CONTRIBUTING.md">Help explore deeper harness integration →</a></p>
   </div>
 </section>
 
@@ -212,13 +222,13 @@ $ make check
 <section class="band alt" id="next" aria-labelledby="next-h">
   <div class="wrap">
     <p class="kicker reveal">Keep going</p>
-    <h2 class="display reveal" id="next-h">An experiment you can inspect. <span class="soft">And help improve.</span></h2>
-    <p class="lede reveal">Can an agent harness learn the routine parts of a job, instead of asking the model to interpret instructions every time? That's what Adage explores. Early results are mixed: some tasks need fewer calls, others gain little or get slower. We publish the limits alongside the wins.</p>
-    <p class="ctarow next-cta reveal"><a class="btn primary" href="/get-started">Get started</a></p>
+    <h2 class="display reveal" id="next-h">More useful reflexes <span class="soft">are waiting in the traces.</span></h2>
+    <p class="lede reveal">We think there is much more to learn from the work agents already do. Our working hypothesis: a specialized repository or workflow gives Adage clearer patterns to learn, and better reflexes to reuse. Help test it with more histories, find valuable patterns the learner misses, and turn useful discoveries into packs.</p>
+    <p class="ctarow next-cta reveal"><a class="btn primary" href="/get-started">Try your own history</a><a class="btn" href="https://github.com/stevenvaughanbooth/adage/blob/main/CONTRIBUTING.md">Help improve the learner</a></p>
     <ul class="grid pagelinks">
       <li class="card reveal"><h3><a href="/how">How it works <span aria-hidden="true">→</span></a></h3><p>Follow one session from transcript to hook, step by step, with the math behind every threshold.</p></li>
       <li class="card reveal"><h3><a href="/packs">Packs <span aria-hidden="true">→</span></a></h3><p>Share what your agents learned as signed packs, and get Adage's instincts on day one.</p></li>
-      <li class="card reveal"><h3><a href="/evidence">Evidence <span aria-hidden="true">→</span></a></h3><p>Results from specific tasks, including failed comparisons, and how we measured them.</p></li>
+      <li class="card reveal"><h3><a href="/evidence">Evidence <span aria-hidden="true">→</span></a></h3><p>What worked in our studies, what needs improving, and how to test the next useful reflex.</p></li>
       <li class="card reveal"><h3><a href="/get-started">Get started <span aria-hidden="true">→</span></a></h3><p>The npm and binary install paths, supported platforms, and a local demo to explore first.</p></li>
     </ul>
   </div>

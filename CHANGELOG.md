@@ -18,9 +18,13 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Trying and sharing Adage
 
-- Rewritten README, guides and website explain Adage as an experiment in learning reusable
-  responses from agent history. They distinguish advice, approved execution and the separate
-  Claude Code mod prototype, and keep negative and mixed study results visible.
+- Rewritten README, guides and website invite contributors to uncover useful patterns in
+  agent history and improve automatic learning. They explain advice, approved execution and
+  the separate Claude Code mod prototype, and present specialized workflows as a hypothesis
+  to explore alongside the published study results.
+- Both teaser cuts use the website's evidence: 22% fewer model requests in the advisory
+  comparison and about 48% fewer in the Claude Code mod development study. Each comparison
+  names its scope and passing-run counts; a renderer reads the same evidence files as the website.
 - The planned `@adage-sh/cli` npm package installs platform binaries without Rust or a Git
   checkout. Release staging verifies archive checksums and package contents; scoped-package
   smoke tests and Node 24 publishing support token bootstrap and npm trusted publishing.

@@ -43,7 +43,8 @@
     <div>
       <h1 class="kicker reveal">Get started</h1>
       <h2 class="display reveal" id="start-h">Install it. Explore it. <span class="soft">Then try your own history.</span></h2>
-      <p class="lede reveal">Adage is an experiment in learning repeatable steps from coding agent sessions. The first public release is being prepared. The npm package and release downloads below are the planned install paths; they are not published yet.</p>
+      <p class="lede reveal">Find the useful lessons in your agent's history. Try Adage on a repository or workflow you know well, inspect the reflexes it learns, and help us discover patterns worth reusing.</p>
+      <p class="reveal">The first public release is being prepared. The npm package and release downloads below are the planned install paths; they are not published yet.</p>
       <p class="reveal">Once released, the npm launcher installs prebuilt Adage binaries. You will not need Rust or a repository clone. Start with a sample-data demo, then run <code>adage init</code> in a project to review setup. Claude Code is the primary integration; Codex and OpenCode are in preview.</p>
       <p class="reveal">macOS and Linux are the initial download targets. Opt-in execution is experimental and runs in an operating-system sandbox. Windows execution is unsupported.</p>
       <p class="links reveal" id="repo-links" hidden><a href="#" data-repo="">Read the README</a><a href="#" data-repo="/releases">Release downloads</a><a href="#" data-repo="/blob/main/docs/lexicon.md">Terms explained</a></p>
@@ -77,6 +78,7 @@ adage doctor</code></pre>
     <details class="source-install reveal"><summary>Source preview · requires repository access, Rust and Git</summary><p>Already have repository access? From your checkout: <code>cargo install --locked --path crates/adage-cli</code>. Or install from Git:</p><pre><code>cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli</code></pre><button class="btn" type="button" data-copy="cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli">Copy source install</button><p>For a real repository, run <code>adage init</code>. Preview harness setup: <code>adage install codex --write --scope user</code> or <code>adage install opencode --write --scope user</code>. Run <code>adage doctor</code> to verify setup.</p></details>
     <details class="source-install reveal"><summary>Claude Code plugin · after the first release</summary><p>The plugin bundles Adage with Claude Code. It does not add the CLI to your terminal PATH, so use npm if you also want the commands and demos above.</p><pre><code>/plugin marketplace add stevenvaughanbooth/adage
 /plugin install adage@adage</code></pre><button class="btn" type="button" data-copy="/plugin marketplace add stevenvaughanbooth/adage&#10;/plugin install adage@adage">Copy plugin install</button></details>
+    <p class="lede reveal">Have a specialized workflow, a useful recovery, or a verification step the learner missed? Train on your local history and help us turn that pattern into something Adage can discover automatically. Share a small, sanitized example or a reusable pack; your private traces can stay on your machine. <a href="https://github.com/stevenvaughanbooth/adage/blob/main/CONTRIBUTING.md">Contribute to the experiment →</a></p>
     <p class="ctarow reveal"><a class="btn primary" href="/evidence">Read the evidence</a><a class="btn" href="/how">How it works</a></p>
   </div>
 </section>

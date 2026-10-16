@@ -7,8 +7,17 @@ into **reflexes**: small rules that can suggest a next step when the same situat
 The question behind it is simple: how much routine work can an agent learn to handle
 without reasoning through the same skill or workflow again? Adage does not train a model.
 Its learner and runtime use deterministic rules, and the learned results keep their evidence.
-It can miss useful patterns, learn nothing from a history, or add overhead. Better results
-are a hypothesis to test in your projects, not a promise.
+
+Our working hypothesis is that specialized repositories and workflows offer clearer patterns
+to learn, producing better reflexes with greater benefit. Help explore that opportunity: find
+a recurring workflow Adage misses, contribute representative examples, improve automatic
+detection, and measure the reflex on new tasks.
+
+One [Claude Code mod experiment](https://github.com/stevenvaughanbooth/adage/blob/main/docs/benchmarks.md#claude-code-mod-prototype)
+used **48% fewer model requests** than the agent alone, with **all 12 runs passing hidden checks
+in both arms**. This separate mod prototype was tested on six sandbox tasks, each repeated twice,
+in development run 4 after fixes informed by earlier runs. It shows a concrete opportunity for
+deeper harness integration alongside Adage's portable command hooks.
 
 ## Install
 

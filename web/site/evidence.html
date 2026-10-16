@@ -43,11 +43,12 @@
     <div class="ev-intro-text">
       <p class="kicker">Evidence</p>
       <h1 class="display" id="ev-h1" data-heldout="headline">{{heldout:headline}}</h1>
-      <p class="lede">These are results from specific experiments, not a promise of faster coding. Adage has reduced model calls in some studies; other tests showed little benefit or slower runs. The held-out execution mode below missed its correctness bar. We are releasing the experiment so others can test the idea.</p>
+      <p class="lede">The studies below show useful reductions in model calls and point to more value to explore. Bring a repository, a recurring workflow, or a pattern the learner missed. Together we can test which reflexes help, learn from more traces, and improve the parts that still need work. Each result keeps its study scope and correctness checks alongside it.</p>
+      <p class="ev-callout"><a href="#mod"><b>The Claude Code mod prototype used {{ev:claude-mod:mod_vs_alone.fewer_requests_percent|int}}% fewer model requests</b></a> than the agent alone, with {{ev:claude-mod:arms.mod.hidden_passed}}/{{ev:claude-mod:arms.mod.of}} runs passing hidden tests in both arms. A separate development study on {{ev:claude-mod:study.tasks}} sandbox tasks, not the standard hook install.</p>
       <div class="ev-question">
         <p class="ev-q-label">The question we test</p>
         <p class="ev-q">Can Adage handle predictable steps on your CPU so the agent needs fewer model calls, without hurting correctness?</p>
-        <p class="ev-q-note">It is strongest on the work a repository repeats. A novel task still needs the model's reasoning, and Adage leaves that alone.</p>
+        <p class="ev-q-note">Our working hypothesis is that specialized repositories and recurring workflows produce more useful reflexes. These studies are a starting point for testing that idea across more projects.</p>
       </div>
       <p class="ev-jump"><a class="btn primary" href="#glance">See the results</a><a class="textlink" href="#tested">How we tested it ↓</a></p>
     </div>
@@ -76,9 +77,9 @@
         <dl class="ev-gl-stats">
           <div><dt>Model calls per session</dt><dd>{{ev:claude-mod:arms.a0.requests_mean|fixed1}} → {{ev:claude-mod:arms.mod.requests_mean|fixed1}}</dd></div>
           <div><dt>Cost per session</dt><dd>{{ev:claude-mod:mod_vs_alone.cost_lower_percent|int}}% lower</dd></div>
-          <div><dt>Hidden tests passed</dt><dd>{{ev:claude-mod:arms.mod.hidden_passed}}/{{ev:claude-mod:arms.mod.of}}<small>{{ev:claude-mod:arms.a0.hidden_passed}}/{{ev:claude-mod:arms.a0.of}} alone</small></dd></div>
+          <div><dt>Runs passing hidden tests</dt><dd>{{ev:claude-mod:arms.mod.hidden_passed}}/{{ev:claude-mod:arms.mod.of}}<small>{{ev:claude-mod:arms.a0.hidden_passed}}/{{ev:claude-mod:arms.a0.of}} alone</small></dd></div>
         </dl>
-        <p class="ev-gl-setting">A small billing service · {{ev:claude-mod:study.model}} · {{ev:claude-mod:study.tasks}} held-out tasks × {{ev:claude-mod:study.repetitions}}</p>
+        <p class="ev-gl-setting">A small billing service · {{ev:claude-mod:study.model}} · {{ev:claude-mod:study.tasks}} sandbox tasks × {{ev:claude-mod:study.repetitions}} runs · development run {{ev:claude-mod:study.run}}</p>
         <a class="ev-gl-more" href="#mod">Why the mod helps ↓</a>
       </article>
     </div>
@@ -127,12 +128,12 @@
 <section class="band ev-mod" id="mod" aria-labelledby="mod-h">
   <div class="wrap">
     <p class="kicker reveal">New · the Claude Code mod</p>
-    <h2 class="display reveal" id="mod-h">A separate harness experiment. <span class="soft">Let approved steps run directly.</span></h2>
+    <h2 class="display reveal" id="mod-h">{{ev:claude-mod:mod_vs_alone.fewer_requests_percent|int}}% fewer model requests. <span class="soft">With the Claude Code mod prototype.</span></h2>
     <p class="lede reveal">This study used a separate Claude Code mod prototype, not the standard Adage install. The prototype ran inside the agent loop and could take a previously approved step directly through Claude Code's permission check, without a model request to choose it. The next model request still read the result. This explores a deeper harness integration; its results should not be read as a promise about the released hook integration.</p>
     <figure class="ev-example ev-mod-fig reveal" aria-labelledby="mod-fig-h">
       <figcaption>
         <p class="kicker" id="mod-fig-h">Model calls per session, on average</p>
-        <p class="ev-ex-lead">{{ev:claude-mod:study.tasks}} held-out tasks in a small billing service, each run {{ev:claude-mod:study.repetitions}} times in every arm with {{ev:claude-mod:study.model}}. Each dot is one model call.</p>
+        <p class="ev-ex-lead">{{ev:claude-mod:study.tasks}} sandbox tasks in a small billing service, each run {{ev:claude-mod:study.repetitions}} times in every arm with {{ev:claude-mod:study.model}}. Development run {{ev:claude-mod:study.run}}, after fixes on these tasks. Each dot is one model call.</p>
       </figcaption>
       <div class="ev-runs three">
         <div class="ev-run">
@@ -152,7 +153,7 @@
           <p class="ev-run-note">The rings are steps Adage took itself, about {{ev:claude-mod:arms.mod.steps_made_per_session|int}} a session, with no model call.</p>
         </div>
       </div>
-      <p class="ev-ex-foot">Hidden tests passed {{ev:claude-mod:arms.mod.hidden_passed}}/{{ev:claude-mod:arms.mod.of}} in every arm. The best case, task {{ev:claude-mod:example.task}}: {{ev:claude-mod:example.requests.mod.0}} calls a session with the mod, against {{ev:claude-mod:example.requests.adage.0}} through hooks and {{ev:claude-mod:example.requests.a0.0}} or {{ev:claude-mod:example.requests.a0.1}} alone.</p>
+      <p class="ev-ex-foot">{{ev:claude-mod:arms.mod.hidden_passed}}/{{ev:claude-mod:arms.mod.of}} runs passed hidden tests in every arm. The best case, task {{ev:claude-mod:example.task}}: {{ev:claude-mod:example.requests.mod.0}} calls a session with the mod, against {{ev:claude-mod:example.requests.adage.0}} through hooks and {{ev:claude-mod:example.requests.a0.0}} or {{ev:claude-mod:example.requests.a0.1}} alone.</p>
     </figure>
 
     <h3 class="subhead reveal">What the mod did in the model's place</h3>
@@ -171,7 +172,7 @@
       <div class="ev-more-body">
         <div class="ev-table" role="region" aria-label="The mod's comparison, by arm" tabindex="0">
           <table>
-            <thead><tr><th scope="col">Arm</th><th scope="col">Model calls per session</th><th scope="col">Cost per session</th><th scope="col">Hidden tests passed</th></tr></thead>
+            <thead><tr><th scope="col">Arm</th><th scope="col">Model calls per session</th><th scope="col">Cost per session</th><th scope="col">Runs passing hidden tests</th></tr></thead>
             <tbody>
               <tr><th scope="row">The agent alone</th><td>{{ev:claude-mod:arms.a0.requests_mean|fixed2}}</td><td>{{ev:claude-mod:arms.a0.cost_usd_mean|usd4}}</td><td>{{ev:claude-mod:arms.a0.hidden_passed}}/{{ev:claude-mod:arms.a0.of}}</td></tr>
               <tr><th scope="row">Adage through hooks</th><td>{{ev:claude-mod:arms.adage.requests_mean|fixed2}}</td><td>{{ev:claude-mod:arms.adage.cost_usd_mean|usd4}}</td><td>{{ev:claude-mod:arms.adage.hidden_passed}}/{{ev:claude-mod:arms.adage.of}}</td></tr>
@@ -207,7 +208,8 @@
         <ul class="ev-list next">
           <li><b>The mod, registered.</b> Fresh tasks in a real repository, with the pass rule written first.</li>
           <li><b>Expensive to cheap.</b> Learn from sessions with a strong model, then see whether a cheaper model, with Adage, can do the same work.</li>
-          <li><b>More repositories.</b> Including one the learning pipeline has never seen.</li>
+          <li><b>Your specialized workflows.</b> Train on more histories, including subagent work, and test whether clearer recurring patterns produce more useful reflexes.</li>
+          <li><b>Patterns the learner misses.</b> Bring a repeatable recovery or verification step; help the learner discover it automatically and measure its value on fresh tasks.</li>
           <li><b>Execution mode's quality bar.</b> A new registered test before it is anything more than experimental.</li>
         </ul>
       </div>
@@ -219,7 +221,7 @@
   <div class="wrap">
     <p class="kicker reveal">Go deeper</p>
     <h2 class="display reveal" id="repro-h">The full study history and raw data <span class="soft">are in the repository.</span></h2>
-    <p class="lede reveal">Every earlier study, including the ones that missed, with the rules written before each, the per-session records and the scripts that scored them.</p>
+    <p class="lede reveal">Use the studies as a starting point for your own experiments: the rules, records and scoring scripts are open. Successful comparisons and failed ones both help us choose what to improve next. <a href="https://github.com/stevenvaughanbooth/adage/blob/main/CONTRIBUTING.md">Contribute a pattern, a fix, or a new evaluation →</a></p>
     <ul class="ev-repro-grid">
       <li class="reveal"><h3>The held-out result</h3><p>The report and decision record behind its numbers, unchanged.</p><a href="/evidence/heldout-report.json"><code>heldout-report.json</code></a> · <a href="/evidence/heldout-record.md"><code>decision record</code></a></li>
       <li class="reveal"><h3>The mod's run</h3><p>All four live runs, what each had to show, and the defects they found.</p><a href="https://github.com/stevenvaughanbooth/adage/blob/0b5809db/docs/claude-mod/evaluation-results.md"><code>evaluation-results.md</code></a> · <a href="/evidence/claude-mod.json"><code>claude-mod.json</code></a></li>

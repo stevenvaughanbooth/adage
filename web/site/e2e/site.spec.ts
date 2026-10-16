@@ -236,7 +236,8 @@ test.describe("every tab is a page of its own", () => {
     await films(page, "fail");
     await page.goto("/");
     const next = page.locator("#next");
-    await expect(next.locator(".next-cta").getByRole("link", { name: "Get started" })).toHaveAttribute("href", "/get-started");
+    await expect(next.locator(".next-cta").getByRole("link", { name: "Try your own history" })).toHaveAttribute("href", "/get-started");
+    await expect(next.locator(".next-cta").getByRole("link", { name: "Help improve the learner" })).toHaveAttribute("href", "https://github.com/stevenvaughanbooth/adage/blob/main/CONTRIBUTING.md");
     for (const t of TABS) {
       await expect(next.locator(".pagelinks").getByRole("link", { name: t.name })).toHaveAttribute("href", t.path);
     }

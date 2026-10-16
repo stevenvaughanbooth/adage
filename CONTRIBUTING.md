@@ -1,8 +1,25 @@
 # Contributing to Adage
 
-Adage is an experiment in learning reusable behavior from agent work. Useful contributions
-include missed patterns, unnecessary suggestions, reproducible regressions and evaluations that
-measure task quality as well as time or cost. A negative result is useful evidence.
+Adage is an experiment in learning reusable behavior from agent work. Help unlock useful
+procedures that are already present in session histories but the learner does not yet recognize.
+Improving that automatic discovery is central to the product.
+
+Our working hypothesis is that specialized repositories and workflows offer clearer patterns
+to learn: their own commands, conventions, checks and recovery paths. We want to explore where
+those patterns produce better reflexes and greater benefit, using representative traces from
+more kinds of projects.
+
+A useful contribution can start with one repeated workflow:
+
+1. Show what the agent keeps rediscovering, omitting or getting wrong, and when a reflex would help.
+2. Capture representative examples, including subagent work and cases where the pattern should
+   not apply. Reduce them to fixtures that reproduce what the learner misses.
+3. Teach the learner to detect the pattern automatically, with evidence for its applicability.
+4. Measure the reflex on new tasks, checking quality alongside repeated work, time or cost.
+   Share broadly applicable behavior as a pack when it makes sense.
+
+Reports of unnecessary suggestions and regressions help refine the same loop. An experiment
+that finds no benefit is useful too; it tells us where to look next.
 
 Read the [README](README.md), then the current [architecture](docs/architecture.md) and
 [testing guide](docs/testing.md). The [repository map](docs/repository.md) helps locate an area;

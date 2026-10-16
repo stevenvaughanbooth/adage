@@ -23,7 +23,8 @@ test.describe("/evidence", () => {
     await page.goto("/evidence");
     await expect(page.getByRole("heading", { level: 1 })).toContainText(`About ${adv.fewer_requests_percent}% fewer model calls.`);
     await expect(page.locator(".ev-q")).toHaveText("Can Adage handle predictable steps on your CPU so the agent needs fewer model calls, without hurting correctness?");
-    await expect(page.locator("#question .lede")).toContainText("These are results from specific experiments, not a promise of faster coding");
+    await expect(page.locator("#question .lede")).toContainText("Bring a repository, a recurring workflow, or a pattern the learner missed");
+    await expect(page.locator(".ev-q-note")).toContainText("Our working hypothesis");
     // The running example: one dot per model call, the agent alone against advisory mode.
     const example = page.locator("#question");
     await expect(example.locator(".ev-run").first()).toContainText(`${adv.mean_requests_alone.toFixed(1)} calls per session`);
@@ -228,7 +229,7 @@ test.describe("the results at a glance", () => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/evidence#mod");
     const sec = page.locator("#mod");
-    await expect(sec.getByRole("heading", { level: 2 })).toHaveText("A separate harness experiment. Let approved steps run directly.");
+    await expect(sec.getByRole("heading", { level: 2 })).toHaveText(`${Math.round(mod.mod_vs_alone.fewer_requests_percent)}% fewer model requests. With the Claude Code mod prototype.`);
     // One dot per model call in each arm, and a ring per step Adage took itself.
     const runs = sec.locator(".ev-run");
     await expect(runs).toHaveCount(3);

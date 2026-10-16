@@ -1,9 +1,14 @@
 # Benchmarks and evidence
 
-Adage is an experiment, and its results are mixed. Some repeated tasks used fewer model
-requests; other studies found little benefit or reduced correctness. These results do not
-establish a savings rate for a new repository, model or harness. The [README](../README.md#evidence-so-far)
-has the short version.
+These studies explore how much useful work a harness can learn to reuse. Recurring repository
+procedures have produced concrete gains and exposed gaps in learning and delivery. The next
+opportunity is to find more of that value automatically in agent and subagent histories.
+
+Our working hypothesis is that more specialized repositories and workflows offer clearer
+commands, conventions, checks and recovery paths, making higher-quality reflexes and greater
+benefit possible. The studies below are starting points for testing that hypothesis, not an
+established relationship between specialization and savings. They retain the gains, cases with
+little benefit and quality regressions. The [README](../README.md#evidence-so-far) has the short version.
 
 ## What the evidence can establish
 
@@ -16,6 +21,11 @@ has the short version.
 
 The records below identify the kind of result, the task and model scope, and known limitations.
 Repeated trials of a small set of tasks are not independent evidence across many kinds of work.
+
+To contribute, start with a recurring workflow Adage misses: collect representative examples,
+improve automatic detection, and compare the learned reflex on new tasks. Record task quality
+as well as time, requests or cost. The [contribution guide](../CONTRIBUTING.md) explains how to
+turn traces into fixtures and learner improvements; useful shared behavior can also become a pack.
 
 ## Learning coverage: October 2026
 
@@ -35,6 +45,33 @@ not live-agent speed or quality studies. Raw histories are not included.
 - [The history audit](../evals/evidence/history-swarm-2026-10-15.json) records the remaining
   attribution gaps and recovery patterns. Related subagents remain part of one parent group;
   more child calls do not automatically mean stronger independent support.
+
+## Claude Code mod prototype
+
+The deeper Claude Code integration demonstrated a substantial reduction in repeated model
+requests. In [development run 4](claude-mod/evaluation-results.md#run-4-the-lookup-at-index-0-and-the-instinct-dead-end-replaced-2026-10-07),
+the mod used **47.7% fewer model requests than the agent alone** and **39.2% fewer than Adage's
+command hooks**, with **all 12 runs passing hidden checks in each arm**. Reported API cost was 21.6%
+lower than the agent alone and 18.3% lower than command hooks.
+
+| Arm | Model requests per session | Reported API cost per session | Runs passing hidden checks |
+| --- | ---: | ---: | ---: |
+| Agent alone | 7.17 | $0.0677 | 12/12 |
+| Adage command hooks | 6.17 | $0.0650 | 12/12 |
+| Claude Code mod prototype | 3.75 | $0.0531 | 12/12 |
+
+The mod supplied 27 approved steps across its 12 sessions: 12 work-item lookups, 12 linked-file
+reads and three code-generation runs. It could act before a model request was sent, a capability
+the portable command hooks do not expose. This helps explain the opportunity: a learned routine
+can replace a request when the harness has the right point to execute it.
+
+The study used Claude Sonnet 5.5 in Claude Code 2.1.292 on six tasks in the `acme-billing` sandbox,
+each repeated twice per arm, with 60 sessions across five arms. Training used 12 sessions and
+the mod had three person-approved grants. This fourth run reused the tasks after fixes informed
+by runs 1–3, so it is development evidence, not a fresh held-out confirmation. The figures measure
+model requests and reported API cost, not a 48% reduction in elapsed time or an expected result
+for every Adage installation. The [preserved summary](../web/site/public/evidence/claude-mod.json)
+links to the original source revision and records the study's scope.
 
 ## Earlier live-agent studies
 

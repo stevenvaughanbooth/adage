@@ -27,9 +27,10 @@ a separate, optional feature.
 
 ## Evidence and experiments
 
-[Benchmarks and evidence](benchmarks.md) is the starting point for results. Positive, negative
-and inconclusive results have different implications; none establishes a general savings rate
-for a new repository. A deterministic replay is not a live-agent comparison.
+[Benchmarks and evidence](benchmarks.md) records what worked and what needs improvement.
+Our working hypothesis is that specialized workflows can yield better reflexes with greater
+benefit. Help test it with representative traces, improved automatic detection and comparisons
+on new tasks; the records distinguish learning coverage from live-agent benefit.
 
 - [Evaluation methods](evals.md) and [evidence repository layout](../evals/README.md).
 - [Learning infrastructure](learning-infrastructure.md) and [learning experiments](learning-experiments.md).

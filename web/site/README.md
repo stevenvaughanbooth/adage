@@ -107,6 +107,28 @@ of its own.
 The CSP allows scripts from the site only, so Vercel's preview toolbar (from vercel.live) is blocked
 on preview deployments; turn it off in Settings → General → Vercel Toolbar to keep the console quiet.
 
+### Updating the teaser's evidence card
+
+The 45-second v12 film has an evidence card at 36–42 seconds. On macOS, the renderer below
+replaces that card in both cuts with the current numbers from `public/evidence/heldout.json` and
+`public/evidence/claude-mod.json`, the same sources as the website. It keeps the original animation elsewhere and copies the
+original soundtrack without re-encoding it. The video is encoded again for web delivery.
+
+```bash
+swiftc -parse-as-library -O scripts/teaser-stats.swift -o /tmp/adage-teaser-stats
+/tmp/adage-teaser-stats public/evidence/heldout.json public/evidence/claude-mod.json path/to/v12-dark.mp4 path/to/v12-day.mp4 /tmp/adage-teaser-review
+```
+
+Use the original 1920×1080, 24 fps v12 masters. The renderer checks the 45-second duration,
+replaces exactly 144 frames, checks that the compressed audio is identical, and exports stills
+from the encoded films for visual review. It refuses an existing output file and refuses evidence
+that no longer supports the card's wording. Review the stills and both films before publishing new,
+versioned Blob URLs through `VITE_FILM_DARK_URL` and `VITE_FILM_DAY_URL`; leave rendered media out of git.
+The card separates the report-only advisory comparison from the Claude Code mod prototype's development
+study. Both compare against the agent alone, report runs passing hidden tests and name their own study
+scope. It links the full results, including the separate execution-mode quality failure.
+Its numbers are not a general speed or quality claim.
+
 ## Files
 
 | Path | What |
@@ -129,4 +151,5 @@ on preview deployments; turn it off in Settings → General → Vercel Toolbar t
 | `src/page.ts`, `src/signup.ts` | Section reveals, copy button, repository links, and recoverable early-access registration. |
 | `api/waitlist.ts` | `GET` returns only registration availability; `POST` validates and forwards to `WAITLIST_WEBHOOK_URL`. |
 | `scripts/media.mjs` | Encodes, and optionally uploads, the films. |
+| `scripts/teaser-stats.swift` | Updates both v12 teaser evidence cards from the website's advisory and mod data; preserves the score and exports review frames. |
 | `public/` | Favicon, Open Graph image, posters, `robots.txt`. |

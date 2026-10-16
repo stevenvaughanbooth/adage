@@ -26,6 +26,12 @@ reason through again?** Skills and workflows are useful instructions. Adage expl
 some of their repeatable steps—and steps learned from actual work—into behavior the harness can
 recognize and reuse. The model still handles new problems and judgment.
 
+We think there is substantial value still trapped in this repeated work. Our working hypothesis
+is that more specialized repositories and workflows offer clearer commands, conventions, checks
+and recovery paths to learn, producing better reflexes with greater benefit. The open-source
+experiment is to find that value, improve the learner so it discovers the patterns automatically,
+and measure what changes on the next task.
+
 Adage integrates with Claude Code, Codex and OpenCode. Their capabilities differ; Claude Code
 has the most live evaluation coverage. See [harness support](docs/harnesses.md).
 
@@ -122,14 +128,22 @@ arbitrary remote marketplaces is still planned. Sharing a pack never shares exec
 
 ## Evidence so far
 
-**Results are promising in some settings and mixed overall. There is no established general
-speedup or cost saving.** Learning a pattern, delivering advice, and improving a real task are
-three different results.
+The studies give us concrete places to build from: reusable repository procedures, better
+verification and less repeated discovery. They also show where the learner and delivery need
+work. We track learning a pattern, delivering it and improving a real task separately, so each
+experiment can tell us what to improve next.
 
+- **Claude Code mod prototype: 48% fewer model requests and 22% lower reported API cost** than
+  the agent alone, with **all 12 runs passing hidden checks in both arms**. The mod supplied approved
+  steps before the model needed to request them. This was development run 4 on six sandbox
+  tasks, each repeated twice, using Claude Sonnet 5.5; earlier runs informed the fixes. It used
+  the deeper mod integration, separate from the portable command-hook path.
+  [Study and comparison](docs/benchmarks.md#claude-code-mod-prototype).
 - In one held-out comparison on Marshmallow with Claude Haiku 4.5, advisory mode used about
-  **22% fewer model requests**, with hidden tests passing **19/20 in both arms**. This covered
+  **22% fewer model requests**, with **19 of 20 runs passing hidden checks in each arm**. This covered
   four tasks repeated five times, not twenty independent tasks.
-- In the same study, optional execution used fewer requests but passed **17/20 versus 19/20**.
+- In the same study, optional execution used fewer requests but passed hidden checks in
+  **17/20 runs versus 19/20** for the agent alone.
   It failed the study's quality rule. An earlier five-repository study also saved cost while
   reducing the pass rate. We retain both results.
 - Recent history audits recovered previously missed subagent commands and a custom verification
@@ -138,8 +152,8 @@ three different results.
 
 The [evidence page](docs/benchmarks.md) includes the methods, limitations, negative results and
 links to the records. Model-request counts and API-list costs are not measurements of energy
-use or a promise about a subscription bill. A useful contribution is a reproducible case where
-Adage helps, misses a pattern, adds noise, or causes a regression.
+use or a promise about a subscription bill. Help us test the specialization hypothesis with
+representative histories and new tasks from your own repository.
 
 ## Your data and control
 
@@ -172,9 +186,10 @@ Start with the [documentation index](docs/README.md), or go directly to:
 
 ## Contributing
 
-Adage is an early experiment, and contributions are welcome. Start with
-[CONTRIBUTING.md](CONTRIBUTING.md). Small, reproducible learning failures and honest evaluations
-are particularly useful. Please remove private data from shared traces and sign off commits
-with `git commit -s`.
+**Help teach Adage what useful work looks like.** Find a recurring workflow it misses, capture
+representative examples, improve automatic detection, and measure the resulting reflex on new
+tasks. High-value reflexes can become shareable packs; improvements to the learner help other
+repositories discover their own. [CONTRIBUTING.md](CONTRIBUTING.md) has the starting points.
+Please remove private data from shared traces and sign off commits with `git commit -s`.
 
 Licensed under [Apache-2.0](LICENSE). Third-party notices are in [NOTICE](NOTICE).
