@@ -5,9 +5,10 @@
 # optionalDependencies; no postinstall download. Packages are published with --provenance (Sigstore,
 # via this job's OIDC token).
 #
-# Off until you turn it on: set the repository variable ADAGE_NPM_PUBLISH to "true" and add the
-# NPM_TOKEN secret (an automation token that can publish to the `adage-sh` npm org; the package
-# name, `@adage-sh/cli`, is set in npm/config.mjs). The license comes from Cargo.toml (Apache-2.0).
+# Enable with the repository VARIABLE ADAGE_NPM_PUBLISH=true (a same-named secret does not count).
+# Prefer npm trusted publishing: configure all six packages for the calling workflow release.yml,
+# with direct npm publish allowed. An optional NPM_TOKEN granular token can bootstrap the first
+# publish before the packages exist. See docs/release.md. The name is set in npm/config.mjs.
 name: Publish npm
 
 on:
@@ -33,8 +34,9 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false
       - name: Fetch release artifacts
         uses: actions/download-artifact@v8
         with:
@@ -54,10 +56,18 @@ jobs:
         run: |
           set -euo pipefail
           name=$(jq -r .name npm-out/cli/package.json)
-          mkdir -p smoke/node_modules
+          mkdir -p "smoke/node_modules/$(dirname "$name")"
           cp -R npm-out/cli "smoke/node_modules/$name"
           cp -R npm-out/linux-x64 "smoke/node_modules/$name-linux-x64"
           test "$(node "smoke/node_modules/$name/bin/adage.js" version)" = "adage $VERSION"
+      - name: Inspect package contents before publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          while read -r dir; do
+            npm pack "./npm-out/$dir" --dry-run --json --ignore-scripts > "npm-out/$dir-pack.json"
+            node npm/scripts/check-tarball.mjs "npm-out/$dir/package.json" "npm-out/$dir-pack.json"
+          done < npm-out/publish-order.txt
       - name: Publish (platform packages first, then the main package)
         shell: bash
         env:
@@ -72,5 +82,5 @@ jobs:
               echo "$name@$VERSION is already published; skipping"
               continue
             fi
-            npm publish "npm-out/$dir" --provenance --access public --tag "$tag"
+            npm publish "./npm-out/$dir" --provenance --access public --tag "$tag"
           done < npm-out/publish-order.txt

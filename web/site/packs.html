@@ -33,7 +33,7 @@
       <a href="/get-started">Get started</a>
     </div>
     <button class="themebtn" id="theme" type="button">Day</button>
-    <a class="pill" href="/early-access">Get early access</a>
+    <a class="pill" href="/get-started">Try Adage</a>
   </nav>
 </header>
 
@@ -42,7 +42,7 @@
   <div class="wrap">
     <h1 class="kicker reveal">Packs</h1>
     <h2 class="display reveal" id="packs-h">Share what your agents learned. <span class="soft">Get instincts on day one.</span></h2>
-    <p class="lede reveal">A skill is a page of instructions your agent has to read. A reflex is a small rule Adage matches for it, with its evidence attached. Reflexes travel as <b>packs</b>: a folder of plain text files, signed, that a teammate installs with one command. Adage's built-in instincts are packs too.</p>
+    <p class="lede reveal">A <b>pack</b> is a shareable folder of Adage rules, their evidence and the conditions where they apply. Export learned reflexes for a team, or start with built-in rules called <b>instincts</b>. Skills still carry instructions and judgment; packs make supported, repeatable steps explicit.</p>
 
     <div class="pack-explorer reveal" id="pack-explorer">
       <div class="pack-pick" role="group" aria-label="Open a pack">
@@ -94,7 +94,7 @@ imported = 0</code></pre>
       <li class="step reveal">
         <span class="num">01 / share</span>
         <h3>Package it</h3>
-        <p>One command builds the pack, checks every byte for secrets and machine paths, and signs it with your SSH key.</p>
+        <p>One command builds the pack, scans for recognized secrets and machine paths, and signs it with your SSH key. Review the files before sharing: a scanner cannot guarantee that every private detail was removed.</p>
         <code>adage share work-items --out packs/work-items</code>
       </li>
       <li class="step reveal">
@@ -112,7 +112,7 @@ imported = 0</code></pre>
     </ol>
 
     <h3 class="subhead reveal">Instincts come in the box</h3>
-    <p class="pack-lead reveal">Adage's own repository is its first marketplace: eight instinct packs, each pinned by its digest, the way a Claude Code marketplace lists plugins. Every copy of Adage carries it, so nothing is downloaded. Each pack names a detector that reads your repository's files (Makefile, <code>package.json</code>, <code>pyproject.toml</code>, lockfiles) and turns on only where it finds what it needs. Nothing runs, and a reflex Adage learns from your own work replaces it.</p>
+    <p class="pack-lead reveal">Adage's own repository is its first marketplace: eight instinct packs, each pinned by its digest, the way a Claude Code marketplace lists plugins. Every copy of Adage carries it, so nothing is downloaded. Each pack names a detector that reads your repository's files (Makefile, <code>package.json</code>, <code>pyproject.toml</code>, lockfiles) and turns on only where it finds what it needs. Most provide guidance; the verified Python environment rule can rewrite a supported command before the agent runs it. Separately delegated execution requires approval. A matching reflex learned from your own work takes precedence.</p>
     <ul class="base-packs reveal" aria-label="Adage's base instinct packs">
       <li><code>adage/python-env</code><span>Run tests inside the project's Python environment.</span></li>
       <li><code>adage/test-wrapper</code><span>Use the test target that sets what the tests need.</span></li>
@@ -123,6 +123,7 @@ imported = 0</code></pre>
       <li><code>adage/generated-files</code><span>Don't hand-edit generated files.</span></li>
       <li><code>adage/lockfiles</code><span>Don't hand-edit lockfiles.</span></li>
     </ul>
+    <p class="pack-lead reveal">Two optional packs, <code>adage/verification-discovery</code> and <code>adage/verification-recovery</code>, flag empty test runs and suspicious fail-then-pass retries. They are off by default and provide advice, not proof that a check is sufficient or permission to skip it.</p>
     <p class="pack-lead reveal">See the marketplace with <code>adage marketplace</code>, which packs apply with <code>adage packs</code>, and turn any off with <code>adage packs off adage/lockfiles</code>.</p>
 
     <details class="mmore reveal">
@@ -133,14 +134,14 @@ imported = 0</code></pre>
           <tbody>
             <tr><th scope="row">Who decides it applies</th><td>The model, from a description</td><td>Adage, on your CPU, when its trigger matches</td></tr>
             <tr><th scope="row">What reaches the agent</th><td>The whole text, each time it loads</td><td>One line from a fixed template, only on a match</td></tr>
-            <tr><th scope="row">Evidence</th><td>None</td><td>Per reflex: sessions seen, a confidence bound, how much telling the agent helps</td></tr>
-            <tr><th scope="row">Can it run anything?</th><td>Whatever the model does with it</td><td>No. It can ask; only a person on that machine can allow it</td></tr>
+            <tr><th scope="row">Evidence</th><td>Depends on the skill and its evaluations</td><td>Per reflex: sessions seen, a confidence bound, how much telling the agent helps</td></tr>
+            <tr><th scope="row">Execution</th><td>The agent uses its tools and permissions</td><td>Guidance by default; supported command rewrites, or separately approved execution</td></tr>
           </tbody>
         </table>
       </div>
       <p class="caveat">A pack is trusted one of two ways: an SSH signature from someone you trust, or a digest pinned by a marketplace you trust (Adage's own, for its instincts). Where it is stored doesn't matter. Commit it to your repository, send the folder, or keep a team marketplace in a git repository. Adding a marketplace by name comes next.</p>
     </details>
-    <p class="ctarow reveal"><a class="btn primary" href="/evidence">See what it saves</a><a class="btn" href="/early-access">Get early access</a></p>
+    <p class="ctarow reveal"><a class="btn primary" href="/evidence">Read the evidence</a><a class="btn" href="/get-started">Get started</a></p>
   </div>
 </section>
 </main>

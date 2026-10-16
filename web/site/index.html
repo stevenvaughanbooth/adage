@@ -6,14 +6,14 @@
 <meta name="color-scheme" content="dark light">
 <meta name="theme-color" content="#050507" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ececef" media="(prefers-color-scheme: light)">
-<title>Adage · Agent traces become reflexes</title>
-<meta name="description" content="Adage gives coding agents instincts on day one and learns reflexes from their own traces, so the right step arrives at the right moment. For Claude Code, with Codex and OpenCode in preview.">
+<title>Adage · Learn from the work your agent repeats</title>
+<meta name="description" content="An experiment in teaching coding agents reusable steps from past work. Learn locally, inspect the evidence, and use small rules when the same situation returns.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="canonical" href="__SITE_URL__/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Adage">
-<meta property="og:title" content="Adage · Agent traces become reflexes">
-<meta property="og:description" content="Instincts on day one. Reflexes learned from your agents' own traces. For Claude Code, with Codex and OpenCode in preview.">
+<meta property="og:title" content="Adage · Learn from the work your agent repeats">
+<meta property="og:description" content="Learn reusable steps from coding agent history. Local, inspectable and experimental.">
 <meta property="og:url" content="__SITE_URL__/">
 <meta property="og:image" content="__SITE_URL__/og.jpg">
 <meta property="og:image:width" content="1200">
@@ -47,7 +47,7 @@
       <a href="/get-started">Get started</a>
     </div>
     <button class="themebtn" id="theme" type="button">Day</button>
-    <a class="pill" href="/early-access">Get early access</a>
+    <a class="pill" href="/get-started">Try Adage</a>
   </nav>
 </header>
 
@@ -59,11 +59,11 @@
   </div>
 
   <div class="copy">
-    <span class="eyebrow">For Claude Code · Codex and OpenCode in preview</span>
-    <h1 id="h" tabindex="-1">Agent traces become <em>reflexes.</em></h1>
-    <p class="sub">A local learning layer for coding agents. Give yours <b>instincts</b> on day one, turn past work into <b>reflexes</b>, and deliver the next useful step exactly when it matters. Memories aren't enough. Train the moves.</p>
+    <span class="eyebrow">Experimental · Claude Code · Codex and OpenCode in preview</span>
+    <h1 id="h" tabindex="-1">Learn from the work <br>your agent <em>repeats.</em></h1>
+    <p class="sub">Adage reads your coding agent's past sessions and learns small, reusable rules called <b>reflexes</b>. When the same situation returns, it can suggest a step that worked before. You can inspect the evidence and choose what to trust.</p>
     <div class="cta">
-      <a class="btn primary" href="/early-access">Get early access</a>
+      <a class="btn primary" href="/get-started">Get started</a>
       <a class="btn" href="#shortcuts">See a reflex happen</a>
       <a class="textlink" id="teaser" href="#film"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 1l9 5-9 5z"/></svg>Watch the teaser <span aria-hidden="true">· 45s</span></a>
     </div>
@@ -90,7 +90,7 @@
   <div class="wrap">
     <p class="kicker">The same repo. The next task.</p>
     <h2 class="display" id="shortcuts-h">Past sessions. <span class="soft">Future shortcuts.</span></h2>
-    <p class="lede">Your agent figured it out yesterday. Why make it rediscover the path today?</p>
+    <p class="lede">For example: after changing a schema, regenerate the files before running the checks. A repeated recovery can become advice for the next session.</p>
     <div class="reflex-story" data-stage="0">
       <div class="story-controls" role="group" aria-label="Follow a learned reflex">
         <button type="button" aria-pressed="true" aria-controls="story-output" data-story="0"><span>01 / observe</span><b>The agent finds a path</b><small>Edits, dead ends, commands that work.</small></button>
@@ -124,7 +124,7 @@ $ make check
       <summary>What actually moves off the model?</summary>
       <p><b>By default:</b> local CPU matching delivers guidance; supported pre-call instincts can correct a command to the repository's verified environment without another model request. The agent still executes its tools.</p>
       <p><b>With separate execution approval:</b> <code>adage-exec</code> can prefetch a read-only result or run a staged action in a sandbox and apply permitted outputs. Choosing and running that invocation needs no model request; the agent may still reason over its result.</p>
-      <p>A learned command is not automatically approved to run. A delivered directive is not proof of a saved model turn. Each behavior has its own evidence. Adage saves model calls by handling learned reflexes and instincts on your CPU; we count that in model requests, tokens and API cost. GPU use and energy are not measured. <a href="/evidence#tested">How we tested it →</a></p>
+      <p>A learned command is not automatically approved to run. A delivered directive is not proof of a saved model turn. Each behavior has its own evidence. The experiment is whether this reduces repeated work. We measure model requests, tokens and API cost, and check that the task still passes its tests. GPU use and energy are not measured. <a href="/evidence#tested">How we tested it →</a></p>
     </details>
     <div class="story-inputs">
       <p><span>Ready on day one</span><b>Instincts</b>Bind known moves to your repository's tools.</p>
@@ -137,22 +137,27 @@ $ make check
 <section class="band" id="how" aria-labelledby="how-h">
   <div class="wrap">
     <p class="kicker reveal">How it works</p>
-    <h2 class="display reveal" id="how-h">Your agents already wrote the manual. <span class="soft">Adage reads it.</span></h2>
-    <ol class="steps">
+    <h2 class="display reveal" id="how-h">Observe. Learn. Review. <span class="soft">Use it again.</span></h2>
+    <ol class="steps learning-steps">
       <li class="step reveal">
         <span class="num">01</span>
         <h3>Read the traces</h3>
-        <p>Claude Code leaves a transcript of every session, and Adage reads it where it already is, on your machine. There is nothing to instrument. Codex and OpenCode adapters are in preview.</p>
+        <p>Adage reads the session histories your coding agent already writes, including supported subagent histories. Learning runs locally and makes no model requests. Claude Code is the primary integration; Codex and OpenCode are in preview.</p>
       </li>
       <li class="step reveal">
         <span class="num">02</span>
-        <h3>Condition reflexes</h3>
-        <p>After each session, one learner keeps the steps that got work done and compiles them into reflexes: small, typed rules with their evidence attached. Dead ends become inhibit reflexes, and a task the repository keeps repeating gets a procedure card.</p>
+        <h3>Learn repeatable steps</h3>
+        <p>The learner looks for patterns: which check follows an edit, which command recovers from a familiar failure, and which steps recur together. Each candidate keeps its source evidence. An unknown result stays unknown.</p>
       </li>
       <li class="step reveal">
         <span class="num">03</span>
-        <h3>Deliver at the hooks</h3>
-        <p>When the same moment comes back, a hook matches it and hands the agent a one-line directive. The model still decides; it just doesn't have to rediscover the repository.</p>
+        <h3>Review what it learned</h3>
+        <p>Inspect the sessions behind a reflex, where it applies and what it would say. Keep useful guidance and turn off noisy rules. Learning a command never grants permission to run it.</p>
+      </li>
+      <li class="step reveal">
+        <span class="num">04</span>
+        <h3>Use it when it matches</h3>
+        <p>A local rule matches the current situation and delivers guidance through your agent's hooks. The agent normally runs its own tools. Exact actions can be delegated separately, with your approval.</p>
       </li>
     </ol>
 
@@ -194,11 +199,11 @@ $ make check
 <section class="band" id="trust" aria-labelledby="trust-h">
   <div class="wrap">
     <p class="kicker reveal">Built to stay out of the way</p>
-    <h2 class="display reveal" id="trust-h">It speaks up only when it matches. <span class="soft">Otherwise it isn't there.</span></h2>
+    <h2 class="display reveal" id="trust-h">Small rules. Clear boundaries. <span class="soft">Your agent keeps control.</span></h2>
     <ul class="grid">
       <li class="card reveal"><h3>Your agent keeps control</h3><p>By default, your agent executes the suggested steps through its own tools and permissions. One change is on by default in Claude Code: a Python test run under the system Python is pointed at the project's verified <code>.venv</code>, shown to you each time; <code>adage delegate rewrites off</code> turns it off. Delegating a step is opt-in, per reflex, inside an OS sandbox.</p></li>
       <li class="card reveal"><h3>Fails open</h3><p>If Adage errors or runs out of time at a hook, the agent carries on as if it were not installed.</p></li>
-      <li class="card reveal"><h3>Evidence attached</h3><p>Every reflex carries its distinct sessions, a Wilson lower bound and its uplift, what telling the agent changes. Review any of them, then strengthen, weaken or extinguish it.</p></li>
+      <li class="card reveal"><h3>Evidence attached</h3><p>Inspect the supporting sessions, confidence and measured response to guidance. A pattern being frequent is not proof that a reminder helps, or that executing it is safe.</p></li>
       <li class="card reveal"><h3>Yours, on disk</h3><p>Traces stay on your machine. Reflexes live in tracks on disk and travel as signed packs you can review, commit and share.</p></li>
     </ul>
   </div>
@@ -207,14 +212,14 @@ $ make check
 <section class="band alt" id="next" aria-labelledby="next-h">
   <div class="wrap">
     <p class="kicker reveal">Keep going</p>
-    <h2 class="display reveal" id="next-h">Be first in line. <span class="soft">Or look around first.</span></h2>
-    <p class="lede reveal">Adage isn't released yet. Join the early-access list and we'll email you once, when the first release is ready.</p>
-    <p class="ctarow next-cta reveal"><a class="btn primary" href="/early-access">Get early access</a></p>
+    <h2 class="display reveal" id="next-h">An experiment you can inspect. <span class="soft">And help improve.</span></h2>
+    <p class="lede reveal">Can an agent harness learn the routine parts of a job, instead of asking the model to interpret instructions every time? That's what Adage explores. Early results are mixed: some tasks need fewer calls, others gain little or get slower. We publish the limits alongside the wins.</p>
+    <p class="ctarow next-cta reveal"><a class="btn primary" href="/get-started">Get started</a></p>
     <ul class="grid pagelinks">
       <li class="card reveal"><h3><a href="/how">How it works <span aria-hidden="true">→</span></a></h3><p>Follow one session from transcript to hook, step by step, with the math behind every threshold.</p></li>
       <li class="card reveal"><h3><a href="/packs">Packs <span aria-hidden="true">→</span></a></h3><p>Share what your agents learned as signed packs, and get Adage's instincts on day one.</p></li>
-      <li class="card reveal"><h3><a href="/evidence">Evidence <span aria-hidden="true">→</span></a></h3><p>What Adage saves, measured against the same tasks without it, and exactly how we tested it.</p></li>
-      <li class="card reveal"><h3><a href="/get-started">Get started <span aria-hidden="true">→</span></a></h3><p>Install it once it ships, or try the live pane, the control room and the map with sample traces.</p></li>
+      <li class="card reveal"><h3><a href="/evidence">Evidence <span aria-hidden="true">→</span></a></h3><p>Results from specific tasks, including failed comparisons, and how we measured them.</p></li>
+      <li class="card reveal"><h3><a href="/get-started">Get started <span aria-hidden="true">→</span></a></h3><p>The npm and binary install paths, supported platforms, and a local demo to explore first.</p></li>
     </ul>
   </div>
 </section>

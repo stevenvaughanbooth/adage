@@ -10,37 +10,46 @@ second keeps all of them current.
 
 ### Install
 
-No release has been tagged yet. Today Adage installs from source, which needs Rust, a C compiler
-and, while the repository is private, access to it:
+The recommended download path is `@adage-sh/cli` on npm. It contains the native Adage binaries;
+you do not need Rust or a checkout:
 
-```bash
+```sh
+npm install -g @adage-sh/cli
+adage init
+```
+
+**First publication is pending.** The npm command and release downloads below are ready to use
+only after their artifacts are published. Until then, install from source with Rust, a C compiler
+and access to this repository:
+
+```sh
 cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli adage-exec adage-train
 ```
 
-Three binaries land in `~/.cargo/bin`: `adage`, the command you run, which decides; `adage-exec`,
-which runs only the reflexes you let act (`adage delegate`; macOS and Linux); and `adage-train`,
-which compiles a skill into reflexes (`adage train`). `adage` finds the other two beside it.
+On macOS and Linux, packages include all three commands: `adage` for setup, learning and review;
+`adage-exec` for separately approved execution; and `adage-train` for compiling supported skill
+steps. Windows packages include `adage` and `adage-train`; execution is unsupported.
+`adage` finds its companions beside it. Source installs place them in `~/.cargo/bin`.
 
-Once v0.1.0 is tagged ([docs/release.md](release.md)), two routes need no Rust:
+A published [GitHub release](https://github.com/stevenvaughanbooth/adage/releases) also provides
+standalone binaries and installers. The shell installer installs `adage`; `adage init` offers to
+fetch matching companions and checks their published checksums:
 
-- **In Claude Code:** `/plugin marketplace add stevenvaughanbooth/adage`, then
-  `/plugin install adage@adage`. The plugin carries all three binaries for macOS (arm64, x64) and
-  Linux (x64, arm64; static), each checked against its `SHA256SUMS` before it runs; nothing is
-  downloaded, and the first session starts learning by itself.
-- **In a terminal:** the release's installer, then `adage init`:
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
+adage init
+```
 
-  ```bash
-  curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
-  adage init
-  ```
+The release's Claude Code plugin bundles the same platform binaries. Once its marketplace branch
+is published, install it inside Claude Code with:
 
-  The installer puts `adage` in `~/.cargo/bin`, and `adage init` fetches `adage-exec` and
-  `adage-train` from the same release, each checked against the `.sha256` published beside it. For
-  Windows the release has a PowerShell installer (`adage-cli-installer.ps1`); there Adage advises
-  but executes nothing, and its hook invocation is untested.
+```text
+/plugin marketplace add stevenvaughanbooth/adage
+/plugin install adage@adage
+```
 
-If that release also publishes the npm package (optional at the first tag),
-`npm install -g @adage-sh/cli` installs all three binaries in one step.
+Windows release artifacts provide advisory operation only. Automatic execution is unsupported,
+and Windows hook invocation has not been verified. See [harness support](harnesses.md).
 
 **From a checkout**, to work on Adage or try a branch:
 
@@ -292,8 +301,9 @@ execution permission does not.
 
 ## Defaults and measurement
 
-**What is measured, honestly.** Adage stays quiet in 1 session in 10 (the control), so its effect
-can be measured. Until a repository has 10 quiet sessions and 30 with Adage, the card shows counts
+**Measurement is optional.** Controls are off by default. To reserve roughly one session in ten
+as a quiet comparison, run `adage config set runtime.control 0.1`. Until a repository has 10 quiet
+sessions and 30 with Adage, the card shows counts
 of what happened, never dollars (`○ measuring: 4 of 10 quiet sessions so far`). After that
 it shows the saving per session with a 95% interval, or "no measurable difference yet", or, if
 that is what the sessions say, "Adage appears to add ~$x per session". Dollars are API-list
@@ -736,8 +746,10 @@ locally. `adage condition` keeps extinguished reflexes out of service until they
 weakenings and strengthenings. An extinguished reflex also keeps a teammate's import of the same
 reflex out of the index. Decisions refuse to run inside an agent session. Listing is allowed there.
 
-**Experiment:** `runtime.control = 0.1` (default; `ADAGE_CONTROL` overrides) makes 10% of sessions the control — Adage computes what it would
-have said and logs it, but says nothing — so every claimed effect is measured against a control.
+**Optional comparison:** `adage config set runtime.control 0.1` reserves roughly 10% of new
+sessions as quiet controls. Adage records what it would have said but delivers no intervention.
+The default is `0` (off); `ADAGE_CONTROL` overrides the setting. Observed delivery counts alone
+are not evidence of savings.
 
 ## The demo
 

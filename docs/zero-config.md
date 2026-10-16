@@ -1,16 +1,11 @@
 # Adage zero-config design: "install it and it just works"
 
-For the current behavior reference, see [How Adage works](how-it-works.md); the gap tables below
-describe the original design audit, not an outstanding issue list. Current onboarding is two
-commands after the install ([usage](usage.md#installing-and-updating)): `adage init` once, which
-installs the Claude Code plugin (staged from the binary as a local marketplace and installed with
-Claude Code's own `claude plugin`), writes the Codex and OpenCode hook files, and conditions the
-selected repository; and `adage update` later, which updates the binaries, the hook registrations
-and that plugin together, with `--rollback` to go back. Manual `sense` and
-`condition` discover configured Claude Code, Codex and OpenCode history consistently; `condition`
-inside a repository with no default history binds available instincts from its files. An explicit
-empty history source still fails. See [First run and existing history](live-learning.md#first-run-and-existing-history)
-for source overrides and the distinction between manual and automatic Codex discovery.
+This is a design record, including the original friction audit and proposed behavior. It is not
+the setup guide. Use [installation and updating](usage.md#installing-and-updating),
+[the first-session guide](first-reflex.md) and [How Adage works](how-it-works.md) for current
+behavior. In particular, quiet control sessions are now **off by default**; the 10% assignment
+and illustrative savings card below describe the original design. Distribution availability is
+recorded in the installation guide, not inferred from this plan.
 
 > **Status (2026-09-28): P0 implemented.** Items 1–10 of §6 and acceptance tests 1–9
 > (`crates/adage-cli/tests/zero_config_plugin.rs`) are in. Differences from the text below: the

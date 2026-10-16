@@ -9,12 +9,28 @@ Nothing has been released yet, so this file describes the first version as it st
 there is in the git history and in `docs/` (the Implementation Plan, and the track documents
 under `docs/tracks/`).
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-10-15
 
 **Agent traces become reflexes.** Adage reads the traces coding agents leave behind, finds the
 paths that get work done, and compiles them into reflexes: small, typed, deterministic responses
 with their evidence attached. At each decision point the matching reflex tells the agent what to
 do next. Adage never runs the commands it directs; execution is a separate, opt-in binary.
+
+### Trying and sharing Adage
+
+- Rewritten README, guides and website explain Adage as an experiment in learning reusable
+  responses from agent history. They distinguish advice, approved execution and the separate
+  Claude Code mod prototype, and keep negative and mixed study results visible.
+- The planned `@adage-sh/cli` npm package installs platform binaries without Rust or a Git
+  checkout. Release staging verifies archive checksums and package contents; scoped-package
+  smoke tests and Node 24 publishing support token bootstrap and npm trusted publishing.
+  Public installation instructions remain marked pending until a release is verified.
+- A documentation index separates setup, reference and research. The historical launch
+  handoff now summarizes the study and its limitations without personal working notes.
+- Offline route evaluation can recognize a reviewed contextual execution contract only when the full
+  ordered context, fixed command and qualifying execution evidence agree. These contracts
+  do not count toward planted-convention discovery or prove live savings. Existing quality
+  and safety thresholds remain unchanged.
 
 ### Verification learning
 

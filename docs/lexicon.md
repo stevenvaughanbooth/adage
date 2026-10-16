@@ -1,105 +1,79 @@
-# Adage lexicon
+# Adage terms
 
-> Status: approved 2026-09-28. **Agent traces become reflexes.** Every user-facing word, from the
-> CLI and TUI to the map page, docs and review screens, follows this table. Text the *agent* sees
-> (directive templates) stays plain and factual: the theme is for people, not the model.
+These names describe ordinary software behavior. Use plain language when introducing them;
+readers should not need to learn a metaphor before they can use Adage. The CLI retains some
+short labels, explained below.
 
-The theme is the nervous system. Traces are experience. Reflexes are conditioned responses learned
-from them. Instincts are innate responses that ship with Adage.
+## Core terms
 
-## Nouns
+| Term | Meaning |
+| --- | --- |
+| **Session history / trace** | The transcript an agent records: prompts, tool calls and the results available in that recording |
+| **Reflex** | A reusable condition and response, with evidence; it can be learned from history or authored and reviewed |
+| **Instinct** | A packaged reflex template that gets its facts from repository declarations rather than learned session history |
+| **Candidate** | A pattern the learner has identified; it may need more evidence or review before it becomes active |
+| **Trigger** | The situation in which a reflex applies, such as an edit, a failed command or a sequence of events |
+| **Guidance / directive** | Text Adage delivers to the agent; the agent still decides how to use it |
+| **Action** | A supported operation Adage performs under separate local execution permission |
+| **Procedure card** | A reflex that supplies the files, commands and failed approaches associated with a recurring kind of task |
+| **Pack** | A versioned, reviewable collection of reflexes, their requirements and optional evidence, used for sharing |
+| **Marketplace** | A catalogue of packs pinned to specific content; the built-in catalogue ships with Adage |
+| **Track** | The internal storage namespace for a set of reflexes and their learning/review state |
+| **Family** | A group of similar tasks used in learning; related subagents are not automatically independent examples |
+| **Control** | A session in which Adage withholds its interventions so an enabled measurement can compare outcomes |
 
-| Concept | Word | Replaces |
-| --- | --- | --- |
-| A session transcript | **trace** | session, transcript (in user copy) |
-| A learned route | **reflex** | route, learned route |
-| A shipped route | **instinct** | built-in route |
-| Trigger → response path, in docs | **reflex arc** | route (in explanations) |
-| What starts a reflex | **stimulus** (docs), **trigger** (CLI) | trigger |
-| What a reflex does when it matches | **response**; **directive** for advice, **action** for execution | directive used for every behavior |
-| A versioned collection of reflexes | **reflex set** | track (product explanations) |
-| An unqualified behavior proposed by learning | **candidate** | |
-| Internal files and storage identifiers | **tracks** | (unchanged implementation term) |
-| Signed, shareable artefact | **pack** | shared track |
-| An instinct's route, with blanks its detector fills from a repository's files | **template** | |
-| The instinct packs Adage ships (`adage/python-env`, …) | **base instincts**, **base packs** | core instincts, built-in routes |
-| A repository's list of the packs it offers, pinned by digest | **marketplace** (`.adage/marketplace.toml`) | |
-| Holdout arm | **control** | holdout |
-| Traces of similar tasks | **family** (of similar tasks) | cluster |
-| What a family's traces had in common, said at the next such task | **procedure card**: a reflex, whose response is the card | recipe, playbook |
-| The web view (`adage map`) | **the map** | signal box |
+A skill is instructions the agent interprets. A reflex makes a supported condition and response
+explicit. `adage train` can extract some procedural steps from skills, but arbitrary judgment
+remains with the model. A pack's signature establishes its origin and integrity, not that its
+behavior is useful or correct.
 
-## Strength (formerly aspects)
+## Evidence strength
 
-| Colour | Word | Meaning |
-| --- | --- | --- |
-| Green | **fire** | Do this: strong evidence |
-| Yellow | **prime** | Consider this: suggestion |
-| Red | **inhibit** | Don't do this: a known dead end |
+These labels describe how strongly guidance is phrased. None grants execution permission.
 
-Strength describes evidence and how advice is phrased. **Fire does not mean a script is allowed
-to execute.** Accepting evidence and granting execution are separate decisions.
+| CLI label | Plain meaning |
+| --- | --- |
+| **fire** | Recommend the step based on qualifying evidence |
+| **prime** | Suggest the step for the agent to consider |
+| **inhibit** | Warn about a known failed approach |
+
+## Lifecycle labels
+
+| CLI label | Plain meaning |
+| --- | --- |
+| **nascent** | New; awaiting review |
+| **forming** | In probation |
+| **firm** | Active |
+| **dormant** | Stale |
+| **extinguished** | Retired |
+| **ignored** | The agent did not follow the guidance |
+| **misfired** | The agent followed it and the recorded step failed |
+
+These are observations about a reflex, not a guarantee about task quality. A passing command
+can be incomplete verification; an ignored suggestion can be the right decision.
 
 ## Execution status
 
 | Status | Meaning |
 | --- | --- |
-| **Suggest** | The agent receives applicable guidance; an execution grant is absent or automatic execution is off |
-| **Automatic** | A matching local grant (or explicit inert-observe policy) and execution enabled make the route eligible, subject to runtime checks |
-| **Needs review** | Saved execution authority no longer matches the executable or current policy |
-| **Needs recovery** | An interrupted E2 operation pauses further application in this worktree until inspected and acknowledged |
-| **Grant saved** | A grant exists, but the current view cannot validate that repository's scripts |
-| **Disabled** | A kill switch prevents interventions |
-| **Observe** | New sessions default to quiet controls; existing session assignments and explicit evaluation arm overrides still apply |
-| **Inactive** | The route is not active in the runtime index |
-| **Unavailable** | Required execution authority or sandbox state cannot be read or established |
+| **Suggest** | Guidance is available; automatic execution is off or has no matching grant |
+| **Automatic** | Local permission and policy make an action eligible, subject to runtime checks |
+| **Needs review** | Saved permission no longer matches the command or current policy |
+| **Needs recovery** | An interrupted staged action pauses further application until inspected and acknowledged |
+| **Grant saved** | Permission exists, but this view cannot validate the repository's scripts |
+| **Disabled** | A switch prevents interventions |
+| **Observe** | New sessions default to quiet controls; existing session assignments still apply |
+| **Inactive** | The reflex is not active in the runtime index |
+| **Unavailable** | Execution permission or sandbox state cannot be established |
 
-An **execution receipt** records what actually happened. **Unknown** means an attempt may have
-had an effect without a confirmed terminal receipt; it is never rendered as success or retried
-automatically. [How Adage works](how-it-works.md) defines the product contract behind these terms.
+An **execution receipt** records what ran and its result. **Unknown** means no confirmed outcome;
+it must not be described as success. See [execution](execution.md) for the exact rules.
 
-## Lifecycle (formerly route states)
+## Command names
 
-| State | Word |
-| --- | --- |
-| draft | **nascent** (waits for review) |
-| probation | **forming** |
-| active | **firm** |
-| stale | **dormant** |
-| retired | **extinguished** |
-| derailed (judgement) | **ignored** |
-| followed-and-failed | **misfired** |
+`adage condition` learns from history; `adage sense` previews what it could learn.
+`adage review` inspects evidence. `adage packs` manages instincts and imported packs.
+`adage delegate` manages optional execution. See [usage](usage.md#commands) for the full reference.
 
-## Verbs
-
-| Command | Themed | Notes |
-| --- | --- | --- |
-| `adage survey` | `adage sense` | Read-only: which reflexes your traces would form |
-| `adage learn` | `adage condition` | Removed: `learn` is gone |
-| `adage-train run` | `adage train` | Compile a skill into reflexes (`adage train <SKILL.md>`); skill-steered sessions are `plan`, `--plan`, `report` |
-| | `adage train accept` | Install a compiled skill's pack, as reviewed (the person accepts the review) |
-| | `adage train cards` | Replay the commands of a repository's procedure cards on a clean checkout |
-| | `adage packs` | The packs Adage binds: base instincts and added packs; `on`, `off`, `show` |
-| | `adage marketplace` | Where packs come from: the adage marketplace, built in; `show`, `update` |
-| `adage review promote` / `demote` / `reject` | `adage review strengthen` / `weaken` / `extinguish` | |
-| `adage graph --serve` | `adage map` | |
-| `adage exec enable` / `review allow-exec` | `adage delegate` / `adage review delegate` | Reflexes that act |
-| `adage watch`, `doctor`, `init`, `share`, `add`, `eval` | unchanged | Already fit |
-
-## Rules
-
-Adage has not been released, so there is no compatibility baggage (decision 2026-09-28):
-
-- **No aliases.** Old verbs (`survey`, `learn`, `promote`, `demote`, `reject`, `graph --serve`,
-  `exec enable`, `allow-exec`) are removed, not deprecated. `condition` is the only verb for
-  learning.
-- **On-disk formats migrate.** Track, pack, index, review and spool fields use the new words
-  (`firm`, `forming`, `nascent`, `dormant`, `extinguished`; `fire`, `prime`, `inhibit`). No
-  reader for the old values is kept. Committed fixtures and datasets are rewritten once by a
-  migration script, which is then deleted.
-- **Old formats go.** v1 tracks (`--format v1`, the v1 upgrader path in `add`) and the
-  `<adage-signal>` wrapper are replaced by packs and a new wrapper, `<adage-reflex>`. Recorded
-  traces in datasets are rewritten to the new wrapper, and fidelity baselines are re-recorded.
-- **Agent-facing text stays plain and factual.** The theme is for people, not the model.
-- Where a themed word is less clear than a plain one in a specific sentence, the plain one wins
-  (Design Spec §17.3).
+The [terminology migration](rebrand-reflexes-and-instincts.md) records older names for historical
+context. It is not a list of supported command aliases.

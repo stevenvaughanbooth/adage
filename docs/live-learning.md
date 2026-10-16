@@ -60,7 +60,7 @@ enabled = true            # bind Adage's instincts from each repository's files
 notices = "daily"         # one-line notices at session start (Claude Code), at most daily; or "off"
 
 [runtime]
-control = 0.1             # share of sessions held out as the control arm (0–1)
+control = 0               # controls are off; set 0.1 to hold out roughly 1 session in 10
 
 [update]
 check = "daily"           # after a learn, at most daily, ask whether a newer Adage is out; or "off"

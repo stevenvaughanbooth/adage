@@ -169,7 +169,9 @@ jobs:
           echo "$out" | grep -q "1 passed"
       - name: npm launcher
         shell: bash
-        run: node npm/test/launcher.test.mjs
+        run: |
+          node npm/test/stage.test.mjs
+          node npm/test/launcher.test.mjs
       # The one plugin's shim links its three binaries (plan A8, onboarding plan O1): build them,
       # whatever was affected.
       - name: Claude Code session-start hook

@@ -1,162 +1,166 @@
 # Releasing Adage
 
-How a version of Adage is cut, what the release workflow builds and publishes, the checks that
-guard it, and the checklist for the first release, v0.1.0, which no one has run yet. Maintainers
-only; [CONTRIBUTING.md](../CONTRIBUTING.md#releasing-maintainers) has the three-line version.
+Adage is an early experiment. A release should make it easy to try, state what has actually
+been tested, and leave people a way to report failures. It does not need to claim a general
+speedup or replace the agent's reasoning.
 
-## What one tag produces
+The first planned release is `0.1.0`. Until a public release and npm package have been
+verified, keep the README and website clear that downloads are pending.
 
-A tag `v<version>` on a commit whose versions agree runs `.github/workflows/release.yml`, which
-[dist](https://github.com/axodotdev/cargo-dist) generates from `dist-workspace.toml`:
+## The install path
 
-| Job | What it does |
-| --- | --- |
-| `plan` | `dist host --steps=create` on a tag; on a pull request only `dist plan` (`pr-run-mode = "plan"`), so a pull request builds and publishes nothing |
-| `build-local-artifacts` | For each of the five targets (macOS arm64 and x64, Linux arm64 and x64 as static musl, Windows x64): `adage-cli-<target>`, `adage-exec-<target>` and `adage-train-<target>` archives (`.tar.xz`, `.zip` on Windows), each with a `.sha256` beside it and a Sigstore build-provenance attestation |
-| `build-global-artifacts` | The shell and PowerShell installers of each app, `sha256.sum`, `source.tar.gz`, and a CycloneDX SBOM (`.cdx.xml`) per app |
-| `host` | Creates the GitHub Release with every file above; its notes are CHANGELOG.md's section for the version |
-| `custom-publish-marketplace` | `.github/workflows/publish-marketplace.yml`: stages the Claude Code plugin with all three binaries for every target (`scripts/stage-plugin.mjs`, each archive checked against its `.sha256` before it is unpacked, every binary against `dist/SHA256SUMS` after), checks the tree (`node scripts/check-plugin.mjs --staged`), and commits it to the `marketplace` branch, which `/plugin install adage@adage` installs from |
-| `custom-publish-npm` | `.github/workflows/publish-npm.yml`: `@adage-sh/cli` and one package per platform, all three binaries in it. Skipped unless the repository variable `ADAGE_NPM_PUBLISH` is `true` |
-| `announce` | Waits for the publish jobs; a skipped job does not fail it |
-
-There is no Homebrew job: Homebrew is off the release until macOS signing exists (below).
-
-## The checks that guard a release
-
-| Check | Fails when | Where it runs |
-| --- | --- | --- |
-| `cargo test -p xtask` (`xtask/src/release.rs`) | `Cargo.toml`, the lockfile's members, `plugin/claude-code/.claude-plugin/plugin.json`, `.claude-plugin/marketplace.json` (metadata and every plugin) or the npm templates (`npm/cli/package.json`, `npm/platform/package.json`) disagree; `release.yml` names Homebrew, lacks a custom publish job, does not plan on a pull request, or lacks the SBOM patch | every CI run |
-| `cargo xtask release-check --require-dist` | the above, and `release.yml` differs from what the pinned dist generates from `dist-workspace.toml` by more than the documented SBOM patch, or the release plan would build a Homebrew formula | CI's `plugin` job, with the dist version `dist-workspace.toml` pins |
-| `node scripts/check-plugin.mjs` | the marketplace lists anything but the one `adage` plugin, a description says the plugin needs a binary on `PATH` or names Homebrew, the shim stops placing a binary, versions disagree, a hook points nowhere | CI's `plugin` job |
-| `node scripts/test-stage-plugin.mjs` | staging accepts a target without `adage-train`, or an archive without (or with a wrong) `.sha256` | CI's `plugin` job |
-| `plugin/test/session-start.test.sh` | the shim mislinks any of its three binaries, or a missing or tampered `adage-train` stops `adage` serving | CI's `test` job |
-
-dist reads the CHANGELOG section headed `## <version> - <date>`: with the heading still
-`## <version> - Unreleased` the GitHub Release gets install instructions and no notes.
-`cargo xtask bump` renames it.
-
-## Every release
+The primary package is `@adage-sh/cli`, in the `adage-sh` npm organization:
 
 ```bash
-cargo xtask bump 0.1.1            # writes every version file, dates CHANGELOG's Unreleased heading, runs the checks
-git commit -s -am "Release 0.1.1"
-git tag v0.1.1
-git push origin HEAD v0.1.1
+npm install -g @adage-sh/cli
+cd your-project
+adage init
 ```
 
-`bump` changes exactly `Cargo.toml`, `Cargo.lock`, the two plugin manifests, the two npm templates
-and CHANGELOG.md, and writes nothing if it refuses (a malformed version, no Unreleased section, a
-version already released). `--date YYYY-MM-DD` sets the date; `--no-changelog` leaves CHANGELOG.md
-alone (to undo a bump). A pushed tag is never moved or deleted: if a release goes wrong, fix it
-and cut the next patch version.
+It installs prebuilt binaries. Users need neither Rust nor a Git checkout. npm selects one
+of five platform packages: macOS arm64 and x64, Linux arm64 and x64, or Windows x64.
+The platform packages include `adage` and `adage-train`, plus `adage-exec` on macOS and
+Linux. Windows supports advice only. There are no install-time download scripts.
 
-After `dist-workspace.toml` changes, regenerate the workflow: dist refuses while `allow-dirty`
-names `ci`, so remove that line, run `dist generate --mode ci` with the pinned dist, put the line
-back, and re-apply the one patch (`steps.cargo-cyclonedx.output.paths` becomes `outputs.paths`).
-`cargo xtask release-check` then passes.
+GitHub Releases also provide archives and shell/PowerShell installers. The Claude Code
+marketplace branch contains the plugin with its binaries bundled. Homebrew is not a
+release channel yet.
 
-## Dry runs that need no tag
+## What a release tag does
+
+`.github/workflows/release.yml` is generated by cargo-dist from `dist-workspace.toml`.
+Pull requests only plan the release; they do not publish it. A `v<version>` tag:
+
+1. Builds the five target platforms, with an archive per binary, SHA-256 checksums,
+   build-provenance attestations and CycloneDX dependency inventories.
+2. Creates a GitHub Release with those assets, source, installers and the matching
+   CHANGELOG section.
+3. Stages and publishes the bundled Claude Code plugin to the `marketplace` branch.
+4. Publishes the npm platform packages, then the launcher, if the repository variable
+   `ADAGE_NPM_PUBLISH` is `true`.
+
+Both plugin and npm staging verify each release archive against its adjacent `.sha256`
+file. npm also checks the package contents and runs the Linux launcher before publishing.
+The launcher has exact-version optional dependencies, so its platform packages must be
+published first. Prereleases use npm's `next` tag; stable releases use `latest`.
+
+## Configure npm publishing
+
+Set **Actions → Variables → `ADAGE_NPM_PUBLISH=true`**. This must be a repository
+**variable**: putting the same name in Secrets does not enable the workflow.
+
+Prefer [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/). For each of
+`@adage-sh/cli`, `cli-darwin-arm64`, `cli-darwin-x64`, `cli-linux-arm64`, `cli-linux-x64`
+and `cli-win32-x64` (all under `@adage-sh`), configure:
+
+- GitHub owner: `stevenvaughanbooth`
+- Repository: `adage`
+- Workflow filename: **`release.yml`**, the calling workflow. npm checks the caller of
+  the reusable `publish-npm.yml` workflow.
+- Allowed actions: allow direct `npm publish`. Stage-only permission is not enough for
+  this release workflow.
+
+The workflow uses Node 24 and has `id-token: write` in both the caller and publisher.
+npm requires at least Node 22.14.0 and npm 11.5.1 for trusted publishing. A new trusted
+publisher must complete its first successful publish within two days; configure it close
+to the release. Public provenance requires a public source repository and public packages.
+These are npm's current requirements; recheck the linked documentation when releasing.
+
+For the **first publish**, package settings may not exist yet. The workflow accepts an
+optional `NPM_TOKEN` secret for bootstrapping: a granular token authorized to publish to
+`adage-sh`, with the required bypass-2FA permission for a noninteractive publish. Check
+its scope and expiry in npm; the presence of the secret alone proves neither. Classic
+"automation tokens" are obsolete. After the packages exist, configure trusted publishing
+and retire the bootstrap token once the OIDC path has been verified. See npm's
+[access-token guidance](https://docs.npmjs.com/about-access-tokens/).
+
+An authenticated maintainer can instead publish the reviewed package artifacts manually
+with npm's interactive authentication. Do not copy tokens into files in this repository,
+and do not publish an empty placeholder package to make the install command appear live.
+
+## Prepare the release
+
+1. Make sure the intended changes are on `main`, the required checks pass, and GitHub
+   Actions can run. Check account billing or spending limits if jobs never start.
+2. Review the public source and history for private material. Make the repository public
+   before publishing the public download links and provenance.
+3. Set the version and release date together:
+
+   ```bash
+   cargo xtask bump 0.1.0
+   cargo xtask release-check --require-dist
+   ```
+
+   `bump` updates the workspace, lockfile, plugin manifests, npm templates and CHANGELOG.
+   The initial versions already say `0.1.0`, so the first bump may only date the changelog.
+   Use a new version for every later release; never reuse a published version or move a tag.
+4. Run the repository's checks from [CONTRIBUTING.md](../CONTRIBUTING.md), including npm
+   staging and launcher tests. Read the release plan to confirm all five targets.
+5. Commit with DCO sign-off, merge the release change, then tag the reviewed `main`:
+
+   ```bash
+   git fetch origin
+   git tag v0.1.0 origin/main
+   git push origin v0.1.0
+   ```
+
+6. Watch the Release workflow. Check the actual artifacts and npm package versions;
+   a successful GitHub Release does not prove the optional npm job ran.
+7. In a fresh directory with a fresh npm prefix, install from the registry and run
+   `adage version` and `adage init`. Check the documented plugin route too. Verify
+   installation on the supported operating systems before claiming platform coverage.
+8. Once those public paths work, remove the pending-release wording from the README
+   and website, deploy the website, and add the next Unreleased section to CHANGELOG.
+
+If a publish job fails, investigate before rerunning it. Already-published npm versions
+are skipped; confirm their provenance and contents belong to this release. A broken
+published version is fixed with a new patch release, not an overwritten tag.
+
+## Dry runs without publishing
+
+Build the three binaries and test the npm wrapper locally:
 
 ```bash
 cargo build --release --locked -p adage-cli -p adage-exec -p adage-train
-plugin/build.sh --no-build --dist /tmp/adage-dist                    # this machine's three, with SHA256SUMS, into a scratch dist/
-mkdir -p /tmp/adage-bins/<target> && cp target/release/adage target/release/adage-exec target/release/adage-train /tmp/adage-bins/<target>/
-node scripts/stage-plugin.mjs --bins /tmp/adage-bins --out /tmp/adage-staged --allow-missing   # the marketplace tree for this target; runs `adage version`
-echo '{"session_id":"dry","hook_event_name":"SessionStart","source":"startup"}' \
-  | /tmp/adage-staged/plugin/claude-code/scripts/session-start /tmp/adage-staged/plugin/claude-code /tmp/adage-data
-ls -l /tmp/adage-data/bin                                           # adage, adage-exec, adage-train -> <name>-<sha256>; hook -> adage
-cargo xtask release-check --dist "$(command -v dist)"               # with the pinned dist installed
+node npm/test/stage.test.mjs
+node npm/test/launcher.test.mjs target/release/adage
+plugin/test/session-start.test.sh target/release/adage
 ```
 
-`<target>` is the release triple (`x86_64-unknown-linux-musl`, `aarch64-apple-darwin`, …, as in
-`npm/config.mjs`). `check-plugin.mjs --staged` needs all five targets, so it fails on a one-target
-dry run, naming the four missing ones; the release workflow stages all five.
+For a package preview, place the binaries under `<bins>/<target>/`, where `<target>` is
+one of the triples in `npm/config.mjs`. Use fresh temporary output directories:
 
-## Homebrew, later
+```bash
+node npm/scripts/stage.mjs --version 0.1.0 --bins <bins> --out <staged> --allow-missing
+npm pack <staged>/cli --dry-run --json --ignore-scripts
+```
 
-Homebrew bottles of unsigned macOS binaries are quarantined, and dist's Homebrew publish job would
-fail every tag that has no `HOMEBREW_TAP_TOKEN`, so the release has no Homebrew (onboarding plan O2
-and §5). To bring it back: macOS signing first (`macos-sign = true` and its three secrets, see
-`dist-workspace.toml`); then the `stevenvaughanbooth/homebrew-tap` repository and the
-`HOMEBREW_TAP_TOKEN` secret; then in `dist-workspace.toml` add `homebrew` to `installers` and to
-the front of `publish-jobs` and set `tap` and `formula = "adage"`, and `formula = "adage-exec"` /
-`"adage-train"` under `[package.metadata.dist]` in those crates; regenerate; drop the Homebrew
-rules from `xtask/src/release.rs` and `scripts/check-plugin.mjs`; and give `adage update` its brew
-arm.
+`--allow-missing` is for local tests only. A release must stage all five platforms and
+their required companion binaries. To preview actual release archives, use
+`--artifacts <artifacts>` instead of `--bins`; every archive needs its `.sha256` file.
+The workflow's `check-tarball.mjs` rejects missing binaries/notices and unexpected files.
 
-## First release: v0.1.0 (onboarding plan O3)
+The plugin has its own staging check:
 
-The owner runs this once. It waits for O0 (the live check, `docs/claude-mod/impl/O0-live-notes.md`),
-O1 and O2; nothing else. Mark each line done with the date, the machine and what was seen.
+```bash
+node scripts/stage-plugin.mjs --bins <bins> --out <plugin-staged> --allow-missing
+node scripts/check-plugin.mjs --staged <plugin-staged>
+```
 
-**Before the tag (settings, outside the repository)**
+The final plugin check requires all five targets. It deliberately fails on a local
+one-target preview rather than treating that preview as a complete release.
 
-- [ ] The repository is readable by the people installing: public at the tag. `/plugin marketplace
-      add stevenvaughanbooth/adage` clones it, and `releases/latest/download/…` and the update
-      check read it. (The reserve, from `docs/zero-config.md`: push the `marketplace` branch to a
-      public `stevenvaughanbooth/adage-marketplace` and point `marketplace.json`'s source at it;
-      the release assets then need a public mirror for the curl line.)
-- [ ] Optional for this tag: npm. Add the `NPM_TOKEN` secret (an automation token that can publish
-      to the `adage-sh` org) and the repository variable `ADAGE_NPM_PUBLISH=true`. Without them
-      `custom-publish-npm` is skipped and nothing fails.
-- [ ] No `HOMEBREW_TAP_TOKEN` is needed.
+## Release configuration maintenance
 
-**The release commit (one pull request into `main`)**
+`cargo xtask release-check` checks version agreement and the generated workflow. Install
+the cargo-dist version pinned in `dist-workspace.toml` to use `--require-dist`.
 
-- [ ] On an up-to-date `main`: `cargo xtask bump 0.1.0`. Expected: `wrote CHANGELOG.md` only (every
-      version file already says 0.1.0); the heading `## 0.1.0 - Unreleased` becomes
-      `## 0.1.0 - <today>`; `plugin adage 0.1.0: ok`.
-- [ ] The words that become true with the tag, in the same commit (O3's files): `README.md`
-      Install says the two routes (in Claude Code, `/plugin marketplace add stevenvaughanbooth/adage`
-      then `/plugin install adage@adage`; in a terminal, the curl installer line, then `adage init`)
-      with no "not published yet"; `docs/usage.md`'s install section likewise (the checkout route
-      moves under Contributing); `npm/cli/README.md` (it is packed into the npm package from the
-      tagged commit); CHANGELOG.md's "Platforms and distribution" bullets rewritten as released.
-      npm is named only if it is switched on; Homebrew is not named.
-- [ ] `git commit -s`, open the pull request, and wait for CI: the `plugin` job (check-plugin,
-      both staging tests, `cargo xtask release-check --require-dist`, `claude plugin validate`,
-      `VALIDATE.txt`, `claude plugin test`) and the Release workflow's `plan` job on the pull
-      request (it plans; no build job runs). Merge.
+After changing the dist configuration, temporarily remove `allow-dirty = ["ci"]`, run
+`dist generate --mode ci`, restore it, then reapply the documented SBOM correction:
+`steps.cargo-cyclonedx.output.paths` must be `steps.cargo-cyclonedx.outputs.paths`.
+`release-check` regenerates in a scratch directory and allows only this difference.
 
-**The tag**
-
-- [ ] `git fetch origin && git tag v0.1.0 origin/main && git push origin v0.1.0`.
-- [ ] `gh run watch $(gh run list --workflow Release --limit 1 --json databaseId -q '.[0].databaseId')`.
-      Expected: `plan`, five `build-local-artifacts`, `build-global-artifacts`, `host`,
-      `custom-publish-marketplace` succeed; `custom-publish-npm` succeeds or is skipped; `announce`
-      succeeds.
-
-**Check what was published**
-
-- [ ] `gh release view v0.1.0 --json assets -q '.assets[].name'` lists, for each of `adage-cli`,
-      `adage-exec` and `adage-train`: five archives and five `.sha256`, the `-installer.sh` and
-      `-installer.ps1`, and the `.cdx.xml`; plus `sha256.sum` and `source.tar.gz`. No `.rb`.
-- [ ] `gh release download v0.1.0 -p 'adage-cli-x86_64-unknown-linux-musl.tar.xz*'`,
-      `sha256sum -c adage-cli-x86_64-unknown-linux-musl.tar.xz.sha256`, and
-      `gh attestation verify adage-cli-x86_64-unknown-linux-musl.tar.xz --repo stevenvaughanbooth/adage`.
-- [ ] The release notes are CHANGELOG's 0.1.0 section (not only install instructions).
-- [ ] `git ls-remote origin marketplace` resolves. `git fetch origin marketplace`, then
-      `git worktree add /tmp/mkt origin/marketplace && node scripts/check-plugin.mjs --staged /tmp/mkt`
-      passes (every target, three binaries, every sum), then `git worktree remove /tmp/mkt`.
-- [ ] If npm is on: `npm view @adage-sh/cli version` prints `0.1.0`.
-
-**Install it for real (T-O3-01 to T-O3-03, on macOS arm64 and Linux x86_64)**
-
-- [ ] In Claude Code with no `adage` on `PATH`: `/plugin marketplace add stevenvaughanbooth/adage`,
-      `/plugin install adage@adage` (the spelling O0 recorded). The marketplace lists one plugin.
-      In a repository with history, a new session shows `adage: learning from N past sessions in
-      this repo; …`; `ls -l <plugin data>/bin` shows `adage`, `adage-exec`, `adage-train` linked to
-      `<name>-<sha256>` and `hook -> adage`; `<plugin data>/bin/adage train --help` prints
-      adage-train's usage. Record it in `evals/launch/fresh-install.md` (B1 closed).
-- [ ] In a terminal: `curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh`,
-      then `adage version` prints `adage 0.1.0` from `~/.cargo/bin`. On macOS record what
-      Gatekeeper does with the unsigned binary.
-- [ ] On the tagged commit: `cargo test --release --locked -p adage-cli --test zero_config_plugin
-      release_plugin_startup -- --nocapture` (three binaries staged; first start under 1500 ms,
-      repeated p95 under 200 ms).
-
-**After**
-
-- [ ] Add `## 0.1.1 - Unreleased` above `## 0.1.0 - <date>` in CHANGELOG.md for what comes next.
-- [ ] If anything above failed: fix forward. `cargo xtask bump 0.1.1`, tag `v0.1.1`. A failed publish
-      job alone can be re-run with `gh run rerun <run id> --failed`.
+macOS Developer ID signing is not configured yet. Direct downloads can encounter
+Gatekeeper prompts. Enable `macos-sign` only after the Apple credentials described in
+`dist-workspace.toml` exist. Homebrew can follow signing; its configuration and checks
+must be updated together. npm and the bundled plugin remain the intended first paths.

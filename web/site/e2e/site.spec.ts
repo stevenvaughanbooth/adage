@@ -38,7 +38,7 @@ test("the page opens on the film; skipping lands on the hero", async ({ page }) 
   await skipFilm(page);
   await expect(page.locator("#h")).toBeFocused();
   await expect(page.locator("main")).toHaveJSProperty("inert", false);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Agent traces become reflexes.");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Learn from the work your agent repeats.");
   await expect(page.getByRole("tab")).toHaveCount(5);
 });
 
@@ -209,10 +209,8 @@ test.describe("every tab is a page of its own", () => {
         if (t.path === at) await expect(link).toHaveAttribute("aria-current", "page");
         else await expect(link).not.toHaveAttribute("aria-current");
       }
-      const pill = nav.getByRole("link", { name: "Get early access" });
-      await expect(pill).toHaveAttribute("href", "/early-access");
-      if (at === "/early-access") await expect(pill).toHaveAttribute("aria-current", "page");
-      else await expect(pill).not.toHaveAttribute("aria-current");
+      const pill = nav.getByRole("link", { name: "Try Adage" });
+      await expect(pill).toHaveAttribute("href", "/get-started");
     }
   });
 
@@ -229,18 +227,18 @@ test.describe("every tab is a page of its own", () => {
       expect(await page.evaluate(() => scrollY)).toBe(0);
     }
     await page.goto("/");
-    await page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Get early access" }).click();
-    await expect(page).toHaveURL(/\/early-access$/);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Get early access");
+    await page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Try Adage" }).click();
+    await expect(page).toHaveURL(/\/get-started$/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Get started");
   });
 
   test("the home page ends with where to go next", async ({ page }) => {
     await films(page, "fail");
     await page.goto("/");
     const next = page.locator("#next");
-    await expect(next.getByRole("link", { name: "Get early access" })).toHaveAttribute("href", "/early-access");
+    await expect(next.locator(".next-cta").getByRole("link", { name: "Get started" })).toHaveAttribute("href", "/get-started");
     for (const t of TABS) {
-      await expect(next.getByRole("link", { name: t.name })).toHaveAttribute("href", t.path);
+      await expect(next.locator(".pagelinks").getByRole("link", { name: t.name })).toHaveAttribute("href", t.path);
     }
   });
 
