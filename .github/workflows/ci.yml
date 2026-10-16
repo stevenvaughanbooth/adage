@@ -280,6 +280,8 @@ jobs:
         run: node scripts/test-check-plugin.mjs
       - name: release staging, three binaries per target, checksum enforcement
         run: node scripts/test-stage-plugin.mjs
+      - name: publisher recovery, large manifests and release identity checks
+        run: node --test scripts/test-release-publish.mjs
       # The release guard (onboarding plan O2): every version file agrees with Cargo.toml, and
       # release.yml is what the pinned dist generates from dist-workspace.toml plus the one
       # documented SBOM patch. dist is installed at the version dist-workspace.toml pins.
