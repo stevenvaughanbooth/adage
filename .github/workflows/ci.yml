@@ -91,6 +91,22 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
+      - name: prepare the Linux staging sandbox
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap
+          # Ubuntu 24.04 restricts user namespaces for newly built executables. Allow only
+          # this job's binaries to create their sandbox; keep the system policy enabled.
+          # https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions
+          if [ -f /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            cat > "$RUNNER_TEMP/adage-ci-userns" <<EOF
+          abi <abi/4.0>,
+          profile adage-ci-userns "$GITHUB_WORKSPACE/target/debug/**" flags=(unconfined) {
+            userns,
+          }
+          EOF
+            sudo apparmor_parser -r "$RUNNER_TEMP/adage-ci-userns"
+          fi
       - name: clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: test (adage-store, the Windows-ported store, on every platform)
@@ -142,9 +158,7 @@ jobs:
         if: runner.os == 'Linux'
         env:
           ADAGE_REQUIRE_COMPLETION_STAGING: "1"
-        run: |
-          sudo apt-get update && sudo apt-get install -y bubblewrap
-          cargo test --locked -p adage-exec --lib required_completion -- --nocapture
+        run: cargo test --locked -p adage-exec --lib required_completion -- --nocapture
       - name: test
         if: steps.affected.outputs.args != ''
         env:
