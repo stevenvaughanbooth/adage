@@ -94,7 +94,7 @@ jobs:
       - name: prepare the Linux staging sandbox
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update && sudo apt-get install -y bubblewrap
+          sudo apt-get update && sudo apt-get install -y bubblewrap strace
           # Ubuntu 24.04 restricts user namespaces for newly built executables. Allow only
           # this job's binaries to create their sandbox; keep the system policy enabled.
           # https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions
@@ -159,6 +159,29 @@ jobs:
         env:
           ADAGE_REQUIRE_COMPLETION_STAGING: "1"
         run: cargo test --locked -p adage-exec --lib required_completion -- --nocapture
+      # Temporary diagnosis of the repeated actions timeout; the normal suite below remains
+      # the required check. Trace only syscall names, paths and timing, never file payloads.
+      - name: diagnose Linux action startup
+        if: runner.os == 'Linux' && github.event_name == 'pull_request' && github.head_ref == 'codex/plugin-https-install'
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v python3
+          python3 -c 'import sys, site; print(sys.executable); print(sys.version); print(site.getsitepackages())'
+          time python3 -c 'import pathlib; print("stdlib startup completed")'
+          cargo build --locked -p adage-cli -p adage-exec
+          cargo test --locked -p adage-cli --test actions --no-run --message-format=json-render-diagnostics > "$RUNNER_TEMP/actions-build.jsonl"
+          actions_test=$(jq -r 'select(.reason == "compiler-artifact" and .target.name == "actions" and .executable != null) | .executable' "$RUNNER_TEMP/actions-build.jsonl")
+          test -x "$actions_test"
+          strace -f -tt -T -s 256 -e trace=%process,unshare,mount,umount2,wait4,waitid,clock_nanosleep,openat,newfstatat \
+            -o "$RUNNER_TEMP/actions-startup.strace" "$actions_test" --nocapture
+      - name: save Linux action startup diagnosis
+        if: always() && runner.os == 'Linux' && github.event_name == 'pull_request' && github.head_ref == 'codex/plugin-https-install'
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-actions-startup
+          path: ${{ runner.temp }}/actions-startup.strace
+          if-no-files-found: warn
       - name: test
         if: steps.affected.outputs.args != ''
         env:
