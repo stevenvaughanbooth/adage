@@ -70,7 +70,45 @@ pub fn gone(path: &Path) -> bool {
 /// Is `cwd` one of `roots` or inside one (by path components)?
 pub fn inside(cwd: &Path, roots: &[PathBuf]) -> bool {
     let cwd = adage_core::repo::lexical_normalise(cwd);
-    roots.iter().any(|r| cwd.starts_with(adage_core::repo::lexical_normalise(r)))
+    roots.iter().any(|r| {
+        let root = adage_core::repo::lexical_normalise(r);
+        cwd.starts_with(&root)
+            || cwd.ancestors().any(|ancestor| {
+                ancestor.to_string_lossy().eq_ignore_ascii_case(&root.to_string_lossy())
+                    && same_directory(ancestor, &root)
+            })
+    })
+}
+
+/// Case spelling alone is not repository identity: on case-sensitive filesystems those can be
+/// different checkouts. Accept an alias only when the filesystem proves it is the same directory.
+fn same_directory(a: &Path, b: &Path) -> bool {
+    let (Ok(a_meta), Ok(b_meta)) = (std::fs::metadata(a), std::fs::metadata(b)) else { return false };
+    if !a_meta.is_dir() || !b_meta.is_dir() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        a_meta.dev() == b_meta.dev() && a_meta.ino() == b_meta.ino()
+    }
+    #[cfg(not(unix))]
+    {
+        matches!((std::fs::canonicalize(a), std::fs::canonicalize(b)), (Ok(a), Ok(b)) if a == b)
+    }
+}
+
+fn project_slugs(roots: &[PathBuf]) -> Vec<(String, bool)> {
+    roots
+        .iter()
+        .map(|root| {
+            let text = root.to_string_lossy();
+            let has_case_alias = [text.to_ascii_lowercase(), text.to_ascii_uppercase()]
+                .iter()
+                .any(|alias| alias.as_str() != text && same_directory(root, Path::new(alias)));
+            (claude_slug(root), has_case_alias)
+        })
+        .collect()
 }
 
 /// The first working directory a transcript records: a Claude Code record's `cwd`, a Codex
@@ -100,15 +138,19 @@ pub fn recorded_cwd(path: &Path) -> Option<PathBuf> {
 }
 
 /// A project directory named for a checkout, or for a directory below one.
-fn slug_matches(name: &str, slugs: &[String]) -> bool {
-    slugs.iter().any(|s| name == s || name.strip_prefix(s.as_str()).is_some_and(|rest| rest.starts_with('-')))
+fn slug_matches(name: &str, slugs: &[(String, bool)]) -> bool {
+    slugs.iter().any(|(slug, case_alias)| {
+        let Some(prefix) = name.get(..slug.len()) else { return false };
+        (prefix == slug || (*case_alias && prefix.eq_ignore_ascii_case(slug)))
+            && (name.len() == slug.len() || name[slug.len()..].starts_with('-'))
+    })
 }
 
 /// The Claude Code transcripts under `projects` (`~/.claude/projects`) recorded inside one of
 /// `roots`: project directories are filtered by name first, then each file by its recorded cwd.
 /// Sub-agent transcripts (`<session>/subagents/*.jsonl`) are included.
 pub fn claude_transcripts(projects: &Path, roots: &[PathBuf]) -> Vec<PathBuf> {
-    let slugs: Vec<String> = roots.iter().map(|r| claude_slug(r)).collect();
+    let slugs = project_slugs(roots);
     let mut out = Vec::new();
     for d in std::fs::read_dir(projects).into_iter().flatten().flatten() {
         if !slug_matches(&d.file_name().to_string_lossy(), &slugs) {
@@ -128,7 +170,7 @@ pub fn claude_transcripts(projects: &Path, roots: &[PathBuf]) -> Vec<PathBuf> {
 /// names alone (no file is opened): what the first-session notice counts. Sub-agent transcripts
 /// are not counted.
 pub fn count_claude_sessions(projects: &Path, roots: &[PathBuf]) -> usize {
-    let slugs: Vec<String> = roots.iter().map(|r| claude_slug(r)).collect();
+    let slugs = project_slugs(roots);
     std::fs::read_dir(projects)
         .into_iter()
         .flatten()
@@ -216,6 +258,30 @@ mod tests {
         assert!(inside(Path::new("/r/app/src/../lib"), &roots));
         assert!(!inside(Path::new("/r/app2"), &roots), "by component, not by string prefix");
         assert!(!inside(Path::new("/r"), &roots));
+    }
+
+    #[test]
+    fn filesystem_case_aliases_are_scoped_without_merging_distinct_directories() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("Repo");
+        let alias = d.path().join("rEPO");
+        let projects = d.path().join("projects");
+        std::fs::create_dir(&root).unwrap();
+        let same = same_directory(&root, &alias);
+        let dir = projects.join(claude_slug(&alias));
+        std::fs::create_dir_all(&dir).unwrap();
+        let trace = dir.join("session.jsonl");
+        std::fs::write(&trace, format!("{}\n", serde_json::json!({"type":"user","cwd":alias}))).unwrap();
+        let roots = vec![root.clone()];
+        assert_eq!(inside(&alias.join("removed-worktree/src"), &roots), same);
+        assert_eq!(count_claude_sessions(&projects, &roots), usize::from(same));
+        assert_eq!(claude_transcripts(&projects, &roots), if same { vec![trace] } else { vec![] });
+        assert!(!inside(&d.path().join("rEPOMore/src"), &roots), "path components remain the boundary");
+        if !same {
+            std::fs::create_dir(&alias).unwrap();
+            assert!(!inside(&alias, &roots), "distinct case-sensitive directories never share evidence");
+            assert_eq!(count_claude_sessions(&projects, &roots), 0);
+        }
     }
 
     #[test]

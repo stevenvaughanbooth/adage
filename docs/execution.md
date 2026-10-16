@@ -1,15 +1,20 @@
 # Execution (`adage-exec`)
 
-Track C milestones C2 (the execution core), C3 (E1 prefetch) and C5 (E2 actions, vendored
-scripts, attestations). This is the optional, separate binary that may run a reflex, and only one a
-person approved, inside an OS sandbox. Adage acts only from the hooks it already owns: there is no
-server and no tool for the agent to call.
+Automatic execution is optional and experimental. The separate `adage-exec` binary can run a
+supported reflex inside an OS sandbox after a person approves it on that machine. Ordinary
+learning and guidance do not require it. Begin with the [first-session guide](first-reflex.md)
+before enabling an action.
+
+Execution can remove a routine step from the agent's work, but running successfully does not
+prove that it saved time or preserved task quality. The [evidence](benchmarks.md) includes a
+held-out study where execution reduced model requests and also reduced correctness. Review one
+action at a time and inspect what happens in your own repository.
 
 | Level | What happens | When |
 | --- | --- | --- |
-| E0 | The directive, as text | Always (the `adage` binary) |
-| E1 | Prefetch: a read-only run whose typed output arrives beside the directive | At the stimulus (a prompt) |
-| E2 | Action: a verify or regenerate step run staged, verified against its declared outputs, and applied | When its stimulus fires in a hook (an edit, or its finish line at Stop) |
+| E0 | Guidance, as text | When a reflex matches and its delivery rules allow it |
+| E1 | A read-only command whose declared output reaches the agent | At its approved trigger |
+| E2 | A verification or generation step in a disposable stage; only permitted outputs can be applied | At its approved trigger, or a supported finish check |
 
 The design is [Track C §3–§6](tracks/track-c-compiled-skills.md); this page is what is built and
 how to use it.

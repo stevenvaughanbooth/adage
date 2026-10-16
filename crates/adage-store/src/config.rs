@@ -23,7 +23,7 @@
 //!
 //! [instincts]
 //! enabled = true             # bind Adage's built-in defaults from each repository's files
-//! packs = ["auto"]           # instinct packs to bind: auto (every one installed) or their names
+//! packs = ["auto"]           # instinct packs to bind: auto (default and added packs) plus explicit names
 //! disabled = []              # packs or instinct ids never to bind, e.g. ["adage/lockfiles", "U3"]
 //!
 //! [update]
@@ -286,7 +286,7 @@ pub const KEYS: &[Key] = &[
         kind: Kind::Ids,
         default: "auto",
         env: None,
-        doc: "instinct packs to bind, comma-separated: auto (every installed instinct pack) or names, e.g. adage/python-env",
+        doc: "instinct packs to bind, comma-separated: auto (default and added packs) plus optional pack names",
         guarded: true,
     },
     Key {

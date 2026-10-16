@@ -117,6 +117,29 @@ Day 0 and live learning use the same path. `adage init` and `adage condition` in
   the learner does.
 - `adage_graph::learn(sessions, params) -> Learned` is pure: the same sessions in, the same
   routes out (`tests/determinism.rs`).
+- `adage_graph::procedures::learn` runs alongside command mining in normal conditioning. It
+  records verification procedure proposals: claimed clean-state checks, claimed negative controls,
+  accidental empty test runs, failures followed by differently scoped checks, and unexplained
+  failure-to-pass retries. The retry recognizer shares its bounded call-state logic with the runtime:
+  the same recorded command and cwd must report failing test cases then a complete pass with
+  equal positive executed counts. Edits, opaque work, changed scope, directed evidence and
+  potentially concurrent calls invalidate the learner comparison. No observed invalidating action
+  is not proof of unchanged source or environment, flakiness, repair or task success. Runner reports
+  are distinct from shell transport status; shared or filtered output may leave attribution unknown.
+  Tool descriptions supply method leads, not proof that a mutation or a clean checkout existed.
+  Persistence-equivalence leads require a reported executed test plus either an owned method
+  description or a bounded Cargo case-name observation consistent with recorded task context.
+  Case-name observations are stored separately from claimed purposes and whole-call outcomes;
+  they do not certify a persistence invariant, bug, repair, or the case's invocation ownership.
+  Each proposal retains exact call references, independent evidence groups and missing requirements.
+  Native subagents keep their own assignments and calls; siblings share their parent's evidence
+  group. Accepted handbacks do not become successful task grades.
+- Procedure proposals appear in `condition` and its JSON report, and `Store::write_procedures`
+  persists them privately in `<repo>/.procedures.json`, outside track directories so evidence
+  alone cannot suppress legacy-track migration. They do not enter the runtime
+  index or pack exports. A live trigger, setup evidence and a matching recheck must still be
+  qualified before a procedure can become a deliverable reflex. Target selection also requires
+  actual execution under the selected runner; filename and co-change matches only suggest candidates.
 - `adage_learn::plan` turns sessions into planned tracks. A learn run reads what earlier runs
   left, and materializes what it decides, through one **`Store`** (`adage_learn::store`). It
   reads earlier tracks, a person's review decisions, proposals, the explanation of each route,

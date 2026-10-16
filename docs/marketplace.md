@@ -1,19 +1,21 @@
 # Packs and the marketplace
 
-> Status: built 2026-10-01: base instincts as packs; the Adage repository as the first marketplace,
-> built into the binary and synced to each machine with install records; `adage marketplace` and
-> `adage packs`. Remote marketplaces are designed here and come next. The format reference is
-> [packs.md](packs.md); the instincts themselves are [instincts.md](instincts.md).
+A **pack** is how Adage shares behavior: learned reflexes, compiled skill steps, authored rules
+and built-in instincts use the same reviewable format. A pack includes the trigger, response,
+requirements and available evidence. It carries no permission to execute on another machine.
 
-Everything Adage moves between machines is a **pack**: learned reflexes you share, skills compiled
-by `adage train`, and the instincts Adage ships. A **marketplace** is a repository's list of the
-packs it offers, each pinned by its digest, the way a Claude Code marketplace lists plugins. The
-Adage repository is the first one: its packs are Adage's **base instincts**, and every Adage binary
-carries a verified copy of it.
+A **marketplace** is a catalogue of packs, with each version pinned to a content digest. Today,
+Adage bundles its own catalogue and supports exporting and importing signed packs. You can host
+pack files in a Git repository and distribute them to your team. Discovery and installation from
+arbitrary remote marketplaces are planned; a hosted storefront and payments are not implemented.
+
+Start with `adage packs` to see what is available and what applies to your repository. For format
+details see [packs.md](packs.md), or browse the [instinct catalogue](instincts.md).
 
 ## What a packaged reflex looks like
 
-A pack is a directory of text files plus a signature. Tar or zip is only for moving it.
+A shared pack is a directory of text files with a signature. Built-in packs are pinned by the
+bundled catalogue. An archive is only a way to transport the directory.
 
 ```text
 acme-work-items/
@@ -37,16 +39,20 @@ steps:   [{ id: read, read: { from: files, max: 5 }, effect: observe }]
 strength: prime
 ```
 
-Next to a Claude Code skill:
+Skills and packs serve different parts of the same work:
 
-| | Skill (`SKILL.md`) | Pack |
+| | Skill (`SKILL.md`) | Adage pack |
 | --- | --- | --- |
-| What it holds | Instructions in prose | Typed routes: trigger, steps, effect, strength |
-| Who decides it applies | The model, from a description | Adage, on the CPU, when the trigger matches |
-| What reaches the agent | The whole text, every time it loads | One line, from a fixed template, only on a match |
-| Evidence | None | Per reflex: sessions, a Wilson lower bound, uplift |
-| Can it run anything | Whatever the model does with it | No. It can ask for an execution level; only your machine grants one |
-| Integrity | None | Content-addressed, closed, signed or pinned |
+| Contents | Instructions the agent interprets | Explicit triggers, steps, effects and available evidence |
+| Applicability | The agent selects or is asked to use the skill | Adage matches supported triggers locally |
+| Delivery | Skill text enters the agent's context | The matching response: guidance, a procedure card or an approved result |
+| Evidence | The format does not require evaluation records | Can retain learning support, replay results and provenance per reflex |
+| Execution | Through the agent and its harness permissions | Guidance by default; automatic actions need separate local grants |
+| Integrity | Depends on distribution and review | Content digests, dependency validation and signatures or catalogue pins |
+
+A pack is not inherently better than a skill. A procedural step with a clear trigger is a useful
+candidate for a reflex; a judgment call may be better left in the skill. Integrity checks show
+which bytes you received, not that the behavior will improve an agent's work.
 
 ## Instincts are packs too
 
@@ -101,8 +107,8 @@ remote marketplace is fetched from and updated against.
 
 ## Adage's base instincts
 
-The Adage repository's marketplace lists one pack per instinct that is built. Each binds only where
-its detector finds what it needs in the repository's own files.
+The bundled catalogue contains eight default packs and two optional verification packs. Each
+binds only where its detector finds the required facts in the repository's own files.
 
 | Pack | Instinct | What it says | Applies when the repository has |
 | --- | --- | --- | --- |
@@ -114,6 +120,8 @@ its detector finds what it needs in the repository's own files.
 | `adage/regenerate` | U5 | Run the declared generator after editing its inputs | Makefile prerequisites, or the input paths a generator script names |
 | `adage/generated-files` | U4 | Don't hand-edit generated files | A generated-file header, or files a declared generator writes |
 | `adage/lockfiles` | U6 | Don't hand-edit lockfiles | A lockfile at the repository's root |
+| `adage/verification-discovery` (off by default) | U12 | Inspect discovery when a test command collects no tests | A supported declared pytest, Jest or Vitest invocation and a recognized empty-test report |
+| `adage/verification-recovery` (off by default) | U13 | Investigate a passing retry without an observed repair | A supported declared invocation and attributable failing-then-passing results in the same session |
 
 Instincts are prime at most, never block an agent from stopping, and give way to any reflex Adage
 learns ([instincts.md](instincts.md)).
@@ -200,7 +208,8 @@ Base instincts · the adage marketplace, built into Adage 0.1.0
   session).
 - `adage packs show <name>` prints a pack's files, as installed.
 - `adage init` lists the packs that apply to the repository before it binds anything.
-- Settings: `instincts.packs` is `auto` (every installed instinct pack) or a list of names;
+- Settings: `instincts.packs` is `auto` (default built-in packs and added instinct packs), explicit names, or both.
+  Optional built-ins need an explicit name, which `adage packs on <name>` adds;
   `instincts.disabled` takes pack names (`adage/lockfiles`) and instinct ids (`U3`);
   `instincts.enabled = false` turns them all off.
 

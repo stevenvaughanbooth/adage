@@ -1,7 +1,82 @@
 # Benchmarks and evidence
 
-Every number Adage publishes, with its caveats and links to the data and code. The [README](../README.md#evidence-so-far) carries the short version, and the launch site's
-"How we tested" page explains each study in plain words.
+These studies explore how much useful work a harness can learn to reuse. Recurring repository
+procedures have produced concrete gains and exposed gaps in learning and delivery. The next
+opportunity is to find more of that value automatically in agent and subagent histories.
+
+Our working hypothesis is that more specialized repositories and workflows offer clearer
+commands, conventions, checks and recovery paths, making higher-quality reflexes and greater
+benefit possible. The studies below are starting points for testing that hypothesis, not an
+established relationship between specialization and savings. They retain the gains, cases with
+little benefit and quality regressions. The [README](../README.md#evidence-so-far) has the short version.
+
+## What the evidence can establish
+
+- **Learning coverage:** the importer preserves more of what happened, or the learner finds a
+  previously missed candidate. This does not show that a future task will improve.
+- **Mechanism:** a replay or controlled test proves that a trigger delivers the intended response,
+  or that an approved action runs. This does not show that a live agent uses the result.
+- **Task benefit:** a comparison of real agent sessions measures requests, time or cost alongside
+  independent task-quality checks. Fewer requests with worse answers is a regression, not a win.
+
+The records below identify the kind of result, the task and model scope, and known limitations.
+Repeated trials of a small set of tasks are not independent evidence across many kinds of work.
+
+To contribute, start with a recurring workflow Adage misses: collect representative examples,
+improve automatic detection, and compare the learned reflex on new tasks. Record task quality
+as well as time, requests or cost. The [contribution guide](../CONTRIBUTING.md) explains how to
+turn traces into fixtures and learner improvements; useful shared behavior can also become a pack.
+
+## Learning coverage: October 2026
+
+These are offline audits of private histories, published as small aggregate records. They are
+not live-agent speed or quality studies. Raw histories are not included.
+
+- [Codex wrapper ingestion](../evals/evidence/codex-wrapper-learning-2026-10-15.json) recovered
+  1,387 native calls, including 546 child-agent calls, that had been hidden inside a supported
+  orchestration wrapper. The active reflex index did not gain a new reflex. A second frozen
+  repository was unchanged.
+- [Declared verification discovery](../evals/evidence/declared-validator-learning-2026-10-15.json)
+  found one custom checker candidate in 142 usable sessions across 19 evidence groups. Its one
+  supporting parent group is not independent validation. The candidate remains inactive with
+  an unknown historical outcome; a second repository produced none. A separate controlled check
+  showed that the current checker detects a deliberately introduced version mismatch, not that
+  an agent benefits from the learned candidate.
+- [The history audit](../evals/evidence/history-swarm-2026-10-15.json) records the remaining
+  attribution gaps and recovery patterns. Related subagents remain part of one parent group;
+  more child calls do not automatically mean stronger independent support.
+
+## Claude Code mod prototype
+
+The deeper Claude Code integration demonstrated a substantial reduction in repeated model
+requests. In [development run 4](claude-mod/evaluation-results.md#run-4-the-lookup-at-index-0-and-the-instinct-dead-end-replaced-2026-10-07),
+the mod used **47.7% fewer model requests than the agent alone** and **39.2% fewer than Adage's
+command hooks**, with **all 12 runs passing hidden checks in each arm**. Reported API cost was 21.6%
+lower than the agent alone and 18.3% lower than command hooks.
+
+| Arm | Model requests per session | Reported API cost per session | Runs passing hidden checks |
+| --- | ---: | ---: | ---: |
+| Agent alone | 7.17 | $0.0677 | 12/12 |
+| Adage command hooks | 6.17 | $0.0650 | 12/12 |
+| Claude Code mod prototype | 3.75 | $0.0531 | 12/12 |
+
+The mod supplied 27 approved steps across its 12 sessions: 12 work-item lookups, 12 linked-file
+reads and three code-generation runs. It could act before a model request was sent, a capability
+the portable command hooks do not expose. This helps explain the opportunity: a learned routine
+can replace a request when the harness has the right point to execute it.
+
+The study used Claude Sonnet 5.5 in Claude Code 2.1.292 on six tasks in the `acme-billing` sandbox,
+each repeated twice per arm, with 60 sessions across five arms. Training used 12 sessions and
+the mod had three person-approved grants. This fourth run reused the tasks after fixes informed
+by runs 1–3, so it is development evidence, not a fresh held-out confirmation. The figures measure
+model requests and reported API cost, not a 48% reduction in elapsed time or an expected result
+for every Adage installation. The [preserved summary](../web/site/public/evidence/claude-mod.json)
+links to the original source revision and records the study's scope.
+
+## Earlier live-agent studies
+
+The following studies predate the latest learner changes. Their outcomes remain useful evidence
+about those tested versions; they are not a fresh evaluation of the current checkout.
 
 ## Launch evidence: CPU execution and cross-session learning
 
@@ -12,10 +87,9 @@ task. Automatic argument binding also abstains when a prompt contains multiple d
 values. See [complete lookup results](execution.md#e1-prefetch-adage-exec-hook)
 and the [action-elimination gate](../evals/reflex-proof/harness/ACTION-GATE.md).
 
-This is the full launch history, in order, misses included; the [README](../README.md#evidence-so-far)
-has the result. **What we measure, and what we don't.** Adage saves model calls by handling learned
-reflexes and instincts on your CPU; we measure that in model requests, tokens and API cost. GPU use
-and energy are not measured. The launch studies used Claude Haiku 4.5 on one repository,
+This is the September–October 1 study sequence, including failed gates. It measures model
+requests, tokens and reported API cost. Local matching or execution alone does not establish
+savings; GPU use and energy were not measured. These launch studies used Claude Haiku 4.5 on one repository,
 [Marshmallow](https://github.com/marshmallow-code/marshmallow); the
 [launch evidence index](../evals/reflex-proof/LAUNCH-STATUS.md) keeps every record, failures included,
 and the [launch gate protocol](launch-gate-protocol.md) has every pass rule as it was written
@@ -37,7 +111,7 @@ before dispatch.
   that followed compiles candidates from the same histories, and a
   [five-session follow-up](../evals/reflex-proof/harness/results/20260930-cumulative-guided/FINDINGS.md)
   certifies one pytest routine from ten guided sessions (**9/10 qualifying continuations**).
-  Unguided sessions have not produced an executable routine yet.
+  That study had not produced an executable routine from its unguided sessions.
 - **Running it on new tasks.** In the [real-repository transfer study](../evals/reflex-proof/harness/results/20260930-live-cpu-transfer/FINDINGS.md),
   the routine ran successfully in 4/4 automatic sessions, but every agent ran the same tests
   again: **0/4 action eliminations**.
@@ -171,9 +245,9 @@ The research that led to cards (prototype, before the shipped product):
 
 ### Compiled skills: a skill's effect without its text in context
 
-`adage train <SKILL.md>` compiles a skill's procedural steps into verified reflexes. It checks every
-command by replaying it in a sandbox on a clean checkout, drops stale ones and keeps judgment as
-text. The skill tested here is a repository workflow skill (look up the work item, regenerate after
+`adage train <SKILL.md>` extracts supported procedural steps and attempts replay in a sandbox
+on a clean checkout. Its report distinguishes verified, stale and not-replayed steps; judgment
+remains text. The skill tested here is a repository workflow skill (look up the work item, regenerate after
 schema edits, `make test`, `make ci` before finishing), run with the shipped `adage train`, 12
 sessions per arm:
 
@@ -254,7 +328,9 @@ Hidden tests scored every run. Round 2 learned from every earlier session.
 Round 1 showed the loop at work: removing exploration exposed a dead end (agents that no longer read
 the Makefile tried `pytest` first: 1.44 failed runs per session). Round 2 conditioned it as an inhibit reflex
 and it disappeared (0.00). Without Adage, 4 of 18 round-1 agents gave up asking what the ticket was.
-Full data: [demo/results](../demo/results/); interactive results page published as an artifact.
+The original raw run directory is not distributed in this repository. The
+[demo setup and scoring code](../demo/SANDBOX.md) and the
+[method limitations](evals.md#known-limitations-of-the-published-numbers) remain available.
 
 ### A second demo: a stronger model, a different stack
 
@@ -289,4 +365,6 @@ turns before the first edit and cut cost by 24%, with quality unchanged. In thes
 Adage added more for the agent that was weaker at finding conventions; two sandboxes do not show
 how that carries to other models or repositories.
 
-Results are in [demo/results/20260923-1249-harbor-dispatch-claude-sonnet-5](../demo/results/20260923-1249-harbor-dispatch-claude-sonnet-5/).
+The original raw run directory is not distributed in this repository. The
+[Harbor sandbox and scoring setup](../evals/live/sandboxes/harbor-dispatch/template/README.md)
+remains available; it is not a replacement for the original run record.

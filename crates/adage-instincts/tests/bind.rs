@@ -146,7 +146,12 @@ fn pnpm_repository_gets_package_manager_discipline() {
     assert!(r.skipped.iter().any(|(i, w)| i == "N1" && w.starts_with("npm test runs the same script")));
     assert_eq!(route(&r, "dead-end-68b3e9").state, RouteState::Forming);
     let kinds: BTreeSet<&str> = r.advisories().iter().map(|a| a.template_id).collect();
-    assert_eq!(kinds, ["lockfile", "package-manager"].into_iter().collect());
+    assert_eq!(
+        kinds,
+        ["lockfile", "package-manager", "verification-discovery", "verification-unexplained-recovery"]
+            .into_iter()
+            .collect()
+    );
     let pm = r.advisories().into_iter().find(|a| a.template_id == "package-manager").unwrap();
     assert_eq!(*pm.trigger, Trigger::AfterCommand { command: "exec npm install".into() });
     assert_eq!(

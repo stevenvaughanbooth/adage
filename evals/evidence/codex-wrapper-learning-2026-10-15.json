@@ -1,0 +1,245 @@
+{
+  "schema": "adage-learning-coverage-evidence/1",
+  "date": "2026-10-15",
+  "change": "Bounded literal Codex single-command orchestration decoding, for parent agents and subagents.",
+  "implementation": {
+    "files": [
+      "crates/adage-ingest/src/codex.rs",
+      "crates/adage-ingest/src/codex_exec.rs",
+      "crates/adage-ingest/src/cache.rs"
+    ],
+    "cache_format": 11,
+    "source_manifest_sha256": "ca1cceb724e8c86b8acd3faa3bd91c7a81c7a12666d94ec6848b7fdcd8381469",
+    "before_binary_sha256": "749b9d084fd1957b5ea1f4f8986db4c49fb36fbf2081aa6e59f40a4f3a8a02ac",
+    "after_binary_sha256": "f2efe517261830d08a00558a62fbb20ba81e70e09e700a54144db6ef74a14729"
+  },
+  "frozen_input_files": 574,
+  "decoder_revisions": [
+    {
+      "revision": 1,
+      "recovered_calls": 0,
+      "reason": "Native completed-header plus emitted-result blocks remained opaque."
+    },
+    {
+      "revision": 2,
+      "recovered_calls": 1387,
+      "transport": "Recognizes the exact completed native two-block envelope as well as a single result JSON string."
+    }
+  ],
+  "adage": {
+    "native_sessions": 161,
+    "changed_sessions": 27,
+    "recovered_native_calls": 1387,
+    "recovered_child_calls": 546,
+    "recovered_children": 23,
+    "recovered_parent_lineages": 4,
+    "nonzero_exit_calls": 122,
+    "normalized_steps_from_recovered_calls": 4422,
+    "unchanged_identity_and_task_metadata": true,
+    "unrelated_native_calls_unchanged": true,
+    "thresholds_unchanged": true,
+    "intent_model_unchanged": true,
+    "before": {
+      "sessions_used": 142,
+      "engine": {
+        "routes": 3,
+        "candidates": 18,
+        "compiled": 4,
+        "reflexes": 16,
+        "contexts": 1,
+        "evidence_groups": 19
+      },
+      "procedures": {
+        "checks": 1855,
+        "unattributed_checks": 1762,
+        "transport_disagreements": 89,
+        "delegated_sessions": 123
+      },
+      "proposal_count": 4,
+      "proposal_kinds": {
+        "persistence_equivalence": 4
+      }
+    },
+    "after": {
+      "sessions_used": 142,
+      "engine": {
+        "routes": 2,
+        "candidates": 19,
+        "compiled": 4,
+        "reflexes": 17,
+        "contexts": 1,
+        "evidence_groups": 19
+      },
+      "procedures": {
+        "checks": 1870,
+        "unattributed_checks": 1769,
+        "transport_disagreements": 89,
+        "delegated_sessions": 123
+      },
+      "proposal_count": 4,
+      "proposal_kinds": {
+        "persistence_equivalence": 4
+      }
+    },
+    "stored_routes_added": [],
+    "stored_routes_removed": [
+      "github-com-stevenvaughanbooth-adage/learned/routes/intent-a897d5.yaml"
+    ],
+    "stored_routes_changed": [],
+    "stored_routes_before": {
+      "github-com-stevenvaughanbooth-adage/learned/routes/intent-a897d5.yaml": "a771583198737a8a05c901b1ccb9a192db6ad5efd75da4e8bbfb3e9d5d98372f",
+      "github-com-stevenvaughanbooth-adage/learned/routes/finish-line-0ba99a.yaml": "5aa11b62777eb94c604a9e168fb6c88921b50c4b481f9f48e1ee67c0d1067017"
+    },
+    "stored_routes_after": {
+      "github-com-stevenvaughanbooth-adage/learned/routes/finish-line-0ba99a.yaml": "5aa11b62777eb94c604a9e168fb6c88921b50c4b481f9f48e1ee67c0d1067017"
+    },
+    "canonical_before_sha256": "725f82d8b0a9b0e29286d62534167b924018aa9803e3cad7f177771829e802a4",
+    "canonical_after_sha256": "6f828802acbece0b5e50285b510e76dafaf503a9900edad0f5c3cafd4cbd891c",
+    "condition_sha256": "c37d194dd4f880026e101c21e2b4f3a5aa4100344248590515e850ca12aeefc5",
+    "indexed_routes_before": [
+      "finish-line-0ba99a"
+    ],
+    "indexed_routes_after": [
+      "finish-line-0ba99a"
+    ],
+    "new_indexed_routes": []
+  },
+  "goodform_control": {
+    "native_sessions": 231,
+    "changed_sessions": 0,
+    "recovered_native_calls": 0,
+    "recovered_child_calls": 0,
+    "recovered_children": 0,
+    "recovered_parent_lineages": 0,
+    "nonzero_exit_calls": 0,
+    "normalized_steps_from_recovered_calls": 0,
+    "unchanged_identity_and_task_metadata": true,
+    "unrelated_native_calls_unchanged": true,
+    "thresholds_unchanged": true,
+    "intent_model_unchanged": true,
+    "before": {
+      "sessions_used": 226,
+      "engine": {
+        "routes": 1,
+        "candidates": 25,
+        "compiled": 4,
+        "reflexes": 12,
+        "contexts": 0,
+        "evidence_groups": 3
+      },
+      "procedures": {
+        "checks": 577,
+        "unattributed_checks": 565,
+        "transport_disagreements": 12,
+        "delegated_sessions": 223
+      },
+      "proposal_count": 3,
+      "proposal_kinds": {
+        "clean_state": 2,
+        "negative_control": 1
+      }
+    },
+    "after": {
+      "sessions_used": 226,
+      "engine": {
+        "routes": 1,
+        "candidates": 25,
+        "compiled": 4,
+        "reflexes": 12,
+        "contexts": 0,
+        "evidence_groups": 3
+      },
+      "procedures": {
+        "checks": 577,
+        "unattributed_checks": 565,
+        "transport_disagreements": 12,
+        "delegated_sessions": 223
+      },
+      "proposal_count": 3,
+      "proposal_kinds": {
+        "clean_state": 2,
+        "negative_control": 1
+      }
+    },
+    "stored_routes_added": [],
+    "stored_routes_removed": [],
+    "stored_routes_changed": [],
+    "stored_routes_before": {
+      "github-com-stevenvaughanbooth-goodform/learned/routes/intent-c23a3b.yaml": "de077540804e1db546e5a8dd4ee20dc5a5218e2716242a408d32076228ffcd1e"
+    },
+    "stored_routes_after": {
+      "github-com-stevenvaughanbooth-goodform/learned/routes/intent-c23a3b.yaml": "de077540804e1db546e5a8dd4ee20dc5a5218e2716242a408d32076228ffcd1e"
+    },
+    "canonical_before_sha256": "b2158712119ca270e1e90a225773299432c011cc7c1a4a7366b0760ea11c79c5",
+    "canonical_after_sha256": "b2158712119ca270e1e90a225773299432c011cc7c1a4a7366b0760ea11c79c5",
+    "condition_sha256": "8eb49af7c76ec774302b1f801a2d4e2b6c3038ea60b72a38669c8cc580e31de5",
+    "indexed_routes_before": [
+      "intent-c23a3b"
+    ],
+    "indexed_routes_after": [
+      "intent-c23a3b"
+    ],
+    "new_indexed_routes": []
+  },
+  "fresh_goodform": {
+    "source_path_union_raw_files": 331,
+    "journal_files": 11,
+    "new_raw_files": 92,
+    "replaced_raw_files": 6,
+    "sessions_used": 315,
+    "delegated_sessions": 312,
+    "evidence_groups": 3,
+    "checks": 848,
+    "unattributed_checks": 824,
+    "proposals": 4,
+    "new_proposal": "negative-control lead with shared/filtered output; needs setup, attribution and matching recheck evidence",
+    "new_nascent_route": "run-9455d8",
+    "new_nascent_route_limitation": "repository-specific workflow state update with a literal work-item identifier; withheld by normal nascent review, not a general-purpose instinct or validated task-quality benefit",
+    "indexed_routes": [
+      "intent-c23a3b"
+    ],
+    "default_thresholds_and_intent_model_unchanged": true,
+    "condition_sha256": "f149c9e132aec1a4d243a25bed47e103a4a05dddd94afff7c466a913439f6e6b"
+  },
+  "limits": [
+    "1387 native calls recovered, not 1387 successful verifications or learned reflexes. 4422 flattened actions still share native-call outcomes.",
+    "122 nonzero native exits previously hidden by the wrapper, not 122 independently graded task failures.",
+    "15 additional known-runner observations; eight additional attributable outcomes and seven Unknown results.",
+    "Same frozen histories, model and thresholds. No new indexed reflex. The prior nascent git-status prompt-intent route no longer qualifies after fuller history is visible; the active finish-line route is byte-identical.",
+    "Good Form frozen control unchanged. Fresh Good Form is a separate data-growth experiment, not an effect of Codex decoding.",
+    "No recorded command was executed by ingestion or the replay. No global hook configuration, approval, execution grant, repository history or release was changed."
+  ],
+  "conservative_exclusions": [
+    "dynamic JavaScript, variables, loops or multiple calls",
+    "missing or relative workdir",
+    "duplicate requests/results, result before request, or missing native ID",
+    "yielded, incomplete, transformed, multiple or explicitly truncated results",
+    "elevated permissions, custom shell, nondefault login/tty context",
+    "shared test output does not certify each shell subcommand"
+  ],
+  "validation": {
+    "final_ingest_tests_passed": 59,
+    "cli_corpus_tests_passed": 2,
+    "affected_ingest_trace_learning_suites": "passed before final transport-only correction; final ingestion and corpus integration rerun passed",
+    "workspace_all_targets_clippy": "passed after final code changes",
+    "format": "passed",
+    "independent_review": "no material blocker; raw transport limitation subsequently found by replay and covered by new regression tests",
+    "private_full_result_sha256": "56b66512c21f79ae3c9c4543c49522d2b5d4c0b0b8aaf50cb48ea2c002df8456",
+    "prior_unresolved_workspace_evaluation_assertions": 4,
+    "launch_ready_claimed": false
+  },
+  "next_candidates": {
+    "missing_external_timeout": {
+      "failures": 6,
+      "children": 6,
+      "parent_groups": 4,
+      "constraint": "Any repair must preserve the deadline through a supported harness mechanism. Not a qualified learned correction."
+    },
+    "bsd_in_place_sed": {
+      "failures": 2,
+      "children": 2,
+      "parent_groups": 1,
+      "constraint": "A corrected edit did not establish successful verification or task completion."
+    }
+  }
+}

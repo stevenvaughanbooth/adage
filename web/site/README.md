@@ -4,11 +4,11 @@ Every tab in the header is a page of its own, so no page scrolls forever:
 
 | Page | File | What it holds |
 | --- | --- | --- |
-| `/` | `index.html` | The teaser film, the 3D hero, a reflex happening, how it works in brief, why it stays out of the way, and where to go next |
+| `/` | `index.html` | The experiment in plain language, a concrete reflex example, the observe → learn → review → use loop, boundaries, and where to go next |
 | `/how` | `how.html` | How Adage plugs into Claude Code (a diagram that follows the hooks as the page scrolls), then the nine chapters in 3D, with the math behind every threshold |
 | `/packs` | `packs.html` | What a pack is, file by file, sharing one, and the base instincts |
 | `/evidence` | `evidence.html` | The results at a glance, what we tested and how, the held-out result in advisory and execution mode, what the Claude Code mod changes, the limits and the data (`/how-we-tested` redirects here) |
-| `/get-started` | `get-started.html` | Installing (once released), the source preview and the demos |
+| `/get-started` | `get-started.html` | The npm and release-binary install paths (clearly pending until published), source fallback and local demos |
 | `/early-access` | `early-access.html` | The early-access list |
 
 Every page carries the same header, with the page you are on marked; on a phone its pages slide
@@ -25,6 +25,17 @@ pnpm test:api     # registration availability contract; no requests leave the te
 pnpm test:evidence  # the held-out converter against synthetic reports
 pnpm test:e2e     # builds, serves with `vite preview`, runs Playwright and axe (both themes, phone width)
 ```
+
+## Launch wording
+
+The site describes Adage as an experiment. Claims of savings belong to a named study, and failed
+comparisons remain visible. Skills can carry judgment and their own evaluations; packs are a
+complementary way to distribute rules, not proof that inference is unnecessary.
+
+`get-started.html` deliberately marks npm and release downloads as pending. Remove that notice
+only after verifying the public `@adage-sh/cli` package, its platform packages and release assets.
+Set `VITE_REPO_URL` only when the repository is public. The main CTA goes to installation; the
+existing `/early-access` route remains available for older links.
 
 ## How the page behaves
 
@@ -80,7 +91,7 @@ re-read `heldout.json` when they open, so a cached page shows a new result. `--p
    | `VITE_MEDIA_BASE` | for the film | Where the films are served from, ending in `/` (printed by `pnpm media --upload`). |
    | `VITE_FILM_DARK_URL`, `VITE_FILM_DAY_URL` | or these | Each cut by its full URL, whatever name it was uploaded with (set on the project: the `adage-media` Blob store). |
    | `WAITLIST_WEBHOOK_URL` | for sign-ups | Where each sign-up is POSTed as JSON (`email`, `source`, `at`, plus `text`/`content` for Slack or Discord webhooks; Zapier or Make work too). Unset: the availability check shows registration is closed before asking for an address. Nothing is stored by the site. |
-   | `VITE_REPO_URL` | when the repository is public | Shows the README and lexicon links under "Get started". |
+   | `VITE_REPO_URL` | when the repository is public | Shows the README, release downloads and terms links under "Get started". |
    | `SITE_URL` | optional | The canonical URL for Open Graph tags. Defaults to the production domain Vercel provides. |
    | `VITE_FILM=off` | optional | Builds the site without the opening film. |
 4. **Domain:** Settings → Domains → add your domain. Preview deployments for every branch come free.
@@ -95,6 +106,28 @@ of its own.
 
 The CSP allows scripts from the site only, so Vercel's preview toolbar (from vercel.live) is blocked
 on preview deployments; turn it off in Settings → General → Vercel Toolbar to keep the console quiet.
+
+### Updating the teaser's evidence card
+
+The 45-second v12 film has an evidence card at 36–42 seconds. On macOS, the renderer below
+replaces that card in both cuts with the current numbers from `public/evidence/heldout.json` and
+`public/evidence/claude-mod.json`, the same sources as the website. It keeps the original animation elsewhere and copies the
+original soundtrack without re-encoding it. The video is encoded again for web delivery.
+
+```bash
+swiftc -parse-as-library -O scripts/teaser-stats.swift -o /tmp/adage-teaser-stats
+/tmp/adage-teaser-stats public/evidence/heldout.json public/evidence/claude-mod.json path/to/v12-dark.mp4 path/to/v12-day.mp4 /tmp/adage-teaser-review
+```
+
+Use the original 1920×1080, 24 fps v12 masters. The renderer checks the 45-second duration,
+replaces exactly 144 frames, checks that the compressed audio is identical, and exports stills
+from the encoded films for visual review. It refuses an existing output file and refuses evidence
+that no longer supports the card's wording. Review the stills and both films before publishing new,
+versioned Blob URLs through `VITE_FILM_DARK_URL` and `VITE_FILM_DAY_URL`; leave rendered media out of git.
+The card separates the report-only advisory comparison from the Claude Code mod prototype's development
+study. Both compare against the agent alone, report runs passing hidden tests and name their own study
+scope. It links the full results, including the separate execution-mode quality failure.
+Its numbers are not a general speed or quality claim.
 
 ## Files
 
@@ -118,4 +151,5 @@ on preview deployments; turn it off in Settings → General → Vercel Toolbar t
 | `src/page.ts`, `src/signup.ts` | Section reveals, copy button, repository links, and recoverable early-access registration. |
 | `api/waitlist.ts` | `GET` returns only registration availability; `POST` validates and forwards to `WAITLIST_WEBHOOK_URL`. |
 | `scripts/media.mjs` | Encodes, and optionally uploads, the films. |
+| `scripts/teaser-stats.swift` | Updates both v12 teaser evidence cards from the website's advisory and mod data; preserves the score and exports review frames. |
 | `public/` | Favicon, Open Graph image, posters, `robots.txt`. |

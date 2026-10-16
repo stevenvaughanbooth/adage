@@ -168,6 +168,45 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
                 l = l.quiet(format!(" ({} with a context trigger)", e.contexts));
             }
             o.line(&l)?;
+            if !e.procedures.proposals.is_empty() {
+                o.line(
+                    &Line::new()
+                        .text("  ")
+                        .faint("verification")
+                        .pad_to(16)
+                        .text(words::count(e.procedures.proposals.len(), "procedure proposal"))
+                        .quiet("; evidence review required, not active reflexes"),
+                )?;
+                for proposal in e.procedures.proposals.iter().take(6) {
+                    o.line(&Line::new().text("    ").text(&proposal.name).quiet(format!(
+                        " · {} traces, {} evidence groups",
+                        proposal.sessions, proposal.evidence_groups
+                    )))?;
+                }
+            }
+            if !e.procedures.declared_validators.is_empty() {
+                o.line(
+                    &Line::new()
+                        .text("  ")
+                        .faint("declared checks")
+                        .pad_to(18)
+                        .text(words::count(e.procedures.declared_validators.len(), "declared check lead"))
+                        .quiet("; results and applicability unverified, not active reflexes"),
+                )?;
+                for lead in e.procedures.declared_validators.iter().take(6) {
+                    o.line(&Line::new().text("    ").text(declared_check_label(&lead.name)).quiet(format!(
+                        " · {}, {}",
+                        words::count(lead.sessions, "trace"),
+                        words::count(lead.evidence_groups, "evidence group")
+                    )))?;
+                }
+                if e.procedures.declared_validators.len() > 6 {
+                    o.line(&Line::new().text("    ").quiet(format!(
+                        "{} in the JSON report",
+                        words::count(e.procedures.declared_validators.len() - 6, "additional lead")
+                    )))?;
+                }
+            }
         }
     }
     if !rep.conflicts.is_empty() {
@@ -354,6 +393,12 @@ fn short_name(name: &str, repo: &str) -> String {
 /// How wide a reflex's gist may be on a line before it is clipped.
 const GIST: usize = 58;
 
+/// Declaration labels come from evidence: keep them short and unable to control the terminal.
+pub(crate) fn declared_check_label(s: &str) -> String {
+    let clean: String = s.chars().take(160).map(|c| if c.is_control() { ' ' } else { c }).collect();
+    clip(clean.trim(), GIST)
+}
+
 /// `s` in at most `n` characters, ending in `…` when cut.
 fn clip(s: &str, n: usize) -> String {
     if s.chars().count() <= n {
@@ -464,6 +509,58 @@ mod tests {
             (Some("run-1"), Some("new"), Some("fire"))
         );
         assert_eq!(c["gist"], "after editing src/*.rs, run make test", "the gist, which learn.log never holds");
+    }
+
+    #[test]
+    fn declared_check_leads_are_visible_bounded_and_do_not_become_reflexes_to_approve() {
+        let mut rep = adage_learn::Report { sessions_read: 8, sessions_used: 8, ..Default::default() };
+        let rr = rep.repos.entry("acme".into()).or_default();
+        rr.sessions = 8;
+        for i in 0..7 {
+            rr.engine.procedures.declared_validators.push(
+                serde_json::from_value(serde_json::json!({
+                    "id": format!("declared-{i}"),
+                    "name": format!("check-{i}\u{1b}[2J"),
+                    "command_key": "exec node tools/check.mjs",
+                    "declaration_path": ".github/workflows/check.yml",
+                    "declaration_field": "jobs.check.steps[0].run",
+                    "script": "tools/check.mjs",
+                    "working_directory": ".",
+                    "declared_argv": ["node", "tools/check.mjs"],
+                    "observed_argv": ["node", "tools/check.mjs"],
+                    "sessions": 8,
+                    "evidence_groups": 1,
+                    "observations": [],
+                    "observations_omitted": 0,
+                    "status": "review_required",
+                    "requirements": []
+                }))
+                .unwrap(),
+            );
+        }
+        let after = BTreeMap::new();
+        let changes = BTreeMap::new();
+        let run = Run {
+            command: "condition",
+            report: &rep,
+            after: &after,
+            changes: &changes,
+            elapsed_ms: 1,
+            waiting: (0, 0),
+            next: true,
+        };
+        let mut o = Out::raw(Vec::new(), adage_term::Theme::plain());
+        render(&mut o, &run).unwrap();
+        let text = String::from_utf8(o.into_inner()).unwrap();
+        assert!(text.contains("7 declared check leads"), "{text}");
+        assert!(text.contains("results and applicability unverified, not active reflexes"), "{text}");
+        assert!(text.contains("check-5") && !text.contains("check-6"), "{text}");
+        assert!(text.contains("1 additional lead in the JSON report"), "{text}");
+        assert!(!text.contains('\u{1b}') && !text.contains("adage review"), "{text}");
+        let json = serde_json::to_value(json(&run)).unwrap();
+        assert_eq!(json["repos"]["acme"]["engine"]["procedures"]["declared_validators"].as_array().unwrap().len(), 7);
+        assert_eq!(json["repos"]["acme"]["engine"]["routes"], 0);
+        assert_eq!(json["waiting"], serde_json::json!({ "needs_you": 0, "to_look_over": 0 }));
     }
 
     #[test]

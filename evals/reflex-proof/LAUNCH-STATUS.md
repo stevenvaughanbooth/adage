@@ -42,8 +42,8 @@ comparison was superseded by the completed `transfer-v3` study linked above. Ear
 records remain historical; the human issued all four grants and every assigned session completed.
 The [launch-experience follow-up](harness/results/20260930-launch-experience/FINDINGS.md) adds the
 first-reflex guide and TUI next steps, covers pytest's hidden cache metadata explicitly, and records
-112 passing Rust/onboarding checks plus a fresh unchanged-history replay. The current study is
-`transfer-v3`; the [continuation handoff](../../docs/launch-handoff.md) has its exact commands and scope.
+112 passing Rust/onboarding checks plus a fresh unchanged-history replay. This historical study is
+`transfer-v3`; the [study harness](harness/README.md) documents the reproduction procedure.
 This page is the launch evidence index. Preserve earlier reports, failed attempts and protocols
 when a later experiment supersedes them.
 
@@ -173,7 +173,7 @@ two runs per arm observed verifier requests in baseline 2/2, generic receipt 2/2
 receipt 1/2, and structured receipt plus startup responsibility 0/2; all eight fixes passed.
 Pre-fix behavioral comparisons are excluded, with their raw records preserved. The candidate
 production integration is implemented and locally tested, but needs a fresh real-repository
-cohort and negative controls. The [handoff](../../docs/launch-handoff.md) is the current resume point.
+cohort and negative controls. The [historical study summary](../../docs/launch-handoff.md) records the launch decision and its limits.
 
 The [cold-start pilot and fixed replication](harness/results/20260930-cold-start-replication/FINDINGS.md)
 completed sixteen assignments on four distinct Marshmallow tasks, twice per arm. Shipped instincts

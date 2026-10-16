@@ -4,7 +4,7 @@
 //! agent ended by asking for help ([`asks_for_help`]).
 
 use adage_core::keys::{self, template_key};
-use adage_core::{repo, Normalized};
+use adage_core::{repo, CanonicalAction, Effect, Normalized};
 use adage_trace::session::{Directed, PromptObs, StepObs, FINISH_LINE_STOP, MAX_PROMPTS, MAX_PROMPT_BYTES};
 use adage_trace::{wire, Call};
 use once_cell::sync::Lazy;
@@ -213,9 +213,19 @@ impl Signals {
 /// against the repository root. A failed call's failure is attributed to its last sub-action only,
 /// unless the command has an `||` ([`keys::sub_action_failed`]): `make gen && pytest` failing
 /// does not make `make gen` a failed run. Every importer (Claude Code, OpenCode, Codex) builds its
-/// steps here.
+/// steps here. An invocation with no normalized actions remains an opaque boundary: omitting
+/// an `export`, assignment or empty shell call would invent adjacency between its neighbors.
 pub fn call_steps(turn: u32, prompt: u16, call: &Call, actions: Vec<Normalized>, root: &Path) -> Vec<StepObs> {
-    let flat = keys::flatten(&actions);
+    let mut flat = keys::flatten(&actions);
+    if flat.is_empty() {
+        flat.push(Normalized {
+            action: CanonicalAction::Unknown { raw: call.tool.clone() },
+            effect: Effect::Environment,
+            mutating: false,
+            confidence: 0.0,
+            note: "native call has no normalized action; retained as an opaque boundary".into(),
+        });
+    }
     let count = flat.len();
     let or_chain = keys::has_or_chain(&call.input);
     flat.into_iter()
@@ -237,3 +247,7 @@ pub fn call_steps(turn: u32, prompt: u16, call: &Call, actions: Vec<Normalized>,
         })
         .collect()
 }
+
+#[cfg(test)]
+#[path = "signals_tests.rs"]
+mod tests;

@@ -384,6 +384,26 @@ answered with a command the agent then ran. The oracle checks every directive's 
 When a change moves a number on purpose, re-measure, then update the threshold, this table and the
 gate's comment together, and say why in the commit.
 
+### Reviewed execution contracts
+
+The route scorer also accepts explicit `execution` contracts for reviewed procedures that are
+not covered by existing conventions. A contract specifies the complete ordered context and exact
+verification command; the candidate must carry consistent, nonzero execution evidence and have no
+unbound slots. Reordering edits, broadening paths or the time window, changing the command, or
+removing execution evidence fails that contract's match. The candidate can still match a separate
+existing convention whose response is valid at the final event, such as the established
+failed-runner recovery rule. A route matching neither remains false. Neither form grants execution
+or establishes that advice would help an agent.
+
+The Acme fixture now includes the contract “edit `acme/*.py`, then `tests/*.py`, within eight events,
+then `make test`”. The sandbox's source and test files and `make test` target establish what this
+check covers; the recorded round-two candidate has six supported continuations in six sessions.
+The regression check also requires that the candidate is not delivered under the default policy.
+This contract was reviewed after inspecting that history, so it is excluded from planted-convention
+recall and is not a held-out discovery result. Existing precision, recall and safety thresholds are
+unchanged. The scorer retains full contexts for these contracts while keeping last-event matching
+for the older advisory conventions.
+
 ## Bench (L0): `adage eval bench`
 
 The gates above ask "did this change make anything worse?". The bench asks "which setting of the
@@ -485,6 +505,14 @@ the same bytes. A sweep writes `run`, `aggregate` and `scorecard` records per se
 adds trials and directives).
 
 ### Baseline and gate
+
+The 2026-10-15 remeasurement records the current `control_share = 0.0` default (the old
+baseline still recorded `0.1`) and the revised learning/scoring inputs. J remains **0.6307**,
+route precision and F1 remain **1.0**, false directives remain **0.4906 per session**, and
+unsafe directives and fast-path mismatches remain **zero**. Calibration ECE changed from
+**0.2709 to 0.2796**. The temporal final J remains **0.5937**. Dataset hashes now include the
+reviewed contextual execution contract above. This updates a reproducibility baseline; it is
+not new live-agent evidence. No quality or safety threshold was changed.
 
 `evals/baselines/l0-core.jsonl` holds the aggregates and scorecard of `bench run --suite core`
 with the defaults, and why it was blessed. `cargo test -p adage-eval --test bench` reproduces it

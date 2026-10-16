@@ -1200,6 +1200,16 @@ fn validate_run(
 }
 
 fn validate_shape(r: &RouteV2, kinds: &[StepKind]) -> Result<()> {
+    if kinds.iter().any(|k| matches!(k, StepKind::Advise(a) if a.template == "verification-unexplained-recovery"))
+        && !matches!(r.trigger, TriggerV2::AfterCommand { .. })
+    {
+        bail!("recovery advice follows a successful command with qualified prior failure evidence");
+    }
+    if kinds.iter().any(|k| matches!(k, StepKind::Advise(a) if a.template == "verification-discovery"))
+        && !matches!(r.trigger, TriggerV2::AfterFailure { .. })
+    {
+        bail!("discovery advice follows a failure with a recognized no-tests report");
+    }
     use TriggerV2 as T;
     let run = |k: &StepKind| matches!(k, StepKind::Run(_));
     let read = |k: &StepKind| matches!(k, StepKind::Read(_));

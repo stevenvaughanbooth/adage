@@ -210,6 +210,7 @@ code { font: 0.92em var(--mono); background: var(--raised); border: 1px solid va
 
 /* ---- how it works ---- */
 .steps { list-style: none; margin: clamp(40px, 5vw, 64px) 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.steps.learning-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .step { border: 1px solid var(--line); border-radius: 16px; padding: 24px; background: var(--raised); }
 .step .num { font: 500 12px var(--mono); color: var(--memory); letter-spacing: 0.1em; }
 .step h3 { margin: 10px 0 8px; font: 700 21px/1.2 var(--display); letter-spacing: -0.01em; }
@@ -337,7 +338,7 @@ code { font: 0.92em var(--mono); background: var(--raised); border: 1px solid va
 .muted { color: var(--ink-3); margin-left: auto; }
 
 @media (max-width: 960px) {
-  .steps, .runs, .split { grid-template-columns: 1fr; }
+  .steps, .steps.learning-steps, .runs, .split { grid-template-columns: 1fr; }
   .grid { grid-template-columns: 1fr 1fr; }
   .pipe-row { grid-template-columns: 1fr 1fr 1fr; row-gap: 18px; }
   .pipe-row li:nth-child(3n)::after { content: none; }

@@ -1,12 +1,13 @@
 # Training: compile your skill
 
-`adage train <SKILL.md>` compiles a skill (or a runbook, `CONTRIBUTING.md`) into **one reviewed
-pack of reflexes**: the parts of the skill that are procedure (which command, after which edit, in
-which order, never which runner) become reflexes Adage delivers just in time, so the agent follows
-the procedure without the whole skill in its context. The compile is deterministic and free: no
-model and no agent session. Every compiled command is **replayed** on a clean checkout in
-adage-exec's sandbox, so a stale instruction is caught before any agent sees it. Nothing is
-installed until you have read the review and accepted it.
+`adage train <SKILL.md>` extracts supported procedural steps from a skill or runbook into a
+reviewable pack of reflexes. These are steps with an explicit command or condition that Adage can
+represent. Guidance that needs judgment remains text; some skills yield no candidates.
+
+Compilation is deterministic and makes no model request. It attempts to replay supported
+commands in `adage-exec`'s sandbox on a clean checkout. The report separates verified, stale and
+not-replayed steps; a successful replay verifies that invocation in that checkout, not the whole
+skill or its value on future tasks. Nothing is installed until you read the review and accept it.
 
 ```text
 adage train .claude/skills/work-item/SKILL.md     # compile, replay, review; installs nothing
@@ -19,8 +20,8 @@ Terminology:
 | | Where it comes from | Evidence |
 | --- | --- | --- |
 | **Reflex** | Conditioned on traces (`adage condition`), or compiled from a skill (`adage train`) | Distinct sessions, Wilson lower bound; a compiled reflex: its replay |
-| **Instinct** | Prebuilt reflex bound from the repository's declared files ([instincts.md](instincts.md)) | None: a capped default |
-| **Skill** | Text a person wrote | None until `adage train` compiles and replays it |
+| **Instinct** | Prebuilt reflex bound from the repository's declared files ([instincts.md](instincts.md)) | Repository declarations; no learned session support |
+| **Skill** | Instructions the agent interprets | Depends on the author's evaluation; the format does not require it |
 
 **Principle.** The `adage` binary, which hooks run, starts no process on the agent's behalf (Design
 principle 1; `adage-exec/tests/no_spawn.rs` pins it). `adage train` hands over to `adage-train`, a

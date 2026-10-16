@@ -6,6 +6,20 @@ repository = "github.com/stevenvaughanbooth/adage"
 description = "Adage's base instincts: defaults that bind from a repository's own files, before it has any history. Each is a pack; a first run turns on the ones whose detectors find what they need."
 
 [[pack]]
+name = "adage/verification-recovery"
+source = "packs/verification-recovery"
+version = "0.1.0"
+digest = "07185d5ffd93d9a829a650b8bb2180f7c482c051af7d6c03ecbbabdf3bdbd9d2"
+default = "off"
+
+[[pack]]
+name = "adage/verification-discovery"
+source = "packs/verification-discovery"
+version = "0.1.0"
+digest = "ff007bc80f3100c1cd1f061fc3c2d76cbbff21a5a2cd0fab901674c0e7628d95"
+default = "off"
+
+[[pack]]
 name = "adage/python-env"
 source = "packs/python-env"
 version = "0.1.0"

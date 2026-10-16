@@ -88,6 +88,11 @@ pub trait Store {
     /// the last learn recorded, before the index is compiled (which reads them). Nothing else
     /// writes them.
     fn write_candidates(&self, candidates: &CandidateFile) -> Result<()>;
+    /// Private evidence proposals for stateful verification. They never enter the index or a
+    /// shared pack. Result-only stores can retain them in the returned report instead.
+    fn write_procedures(&self, _repo: &str, _learning: &adage_graph::procedures::Learning) -> Result<()> {
+        Ok(())
+    }
     /// Compile the index from every track the store holds and publish it.
     fn compile_index(&self) -> Result<Compiled>;
     /// The generation of the index published now (empty when there is none).
@@ -187,6 +192,12 @@ impl Files {
 }
 
 impl Store for Files {
+    fn write_procedures(&self, repo: &str, learning: &adage_graph::procedures::Learning) -> Result<()> {
+        // Evidence alone must not establish a learned track: holds() also protects decision-only
+        // directories, so creating learned/ here would suppress a later legacy-track migration.
+        let path = self.tracks_root.join(adage_tracks::layout::slug(repo)).join(".procedures.json");
+        write_private(&path, &serde_json::to_vec_pretty(learning)?)
+    }
     fn computation_stamp(&self) -> Option<String> {
         // Hash once per process. A new implementation cannot reuse old calculations merely
         // because its package version or executable size/timestamp happened to stay the same.

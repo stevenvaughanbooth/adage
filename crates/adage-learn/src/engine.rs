@@ -46,6 +46,10 @@ use std::collections::{BTreeMap, BTreeSet};
 /// What learning did for one repository.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct EngineReport {
+    /// Stateful verification proposals, with exact call joins and explicit evidence gaps.
+    /// These are never routes and do not authorize or silently activate a procedure.
+    #[serde(default)]
+    pub procedures: adage_graph::procedures::Learning,
     /// Traces mined.
     pub sessions: usize,
     /// Pure mining was reused; compilation and qualification still read current evidence/state.
@@ -125,8 +129,16 @@ fn edited(st: &crate::import::StepObs) -> Option<&str> {
     adage_core::keys::is_author(&st.norm.action).then_some(st.rel_path.as_deref()).flatten()
 }
 
+fn succeeded(st: &crate::import::StepObs) -> bool {
+    st.verification().map_or(!st.call.failed, |r| r.status() == Some(true))
+}
+
+fn failed_check(st: &crate::import::StepObs) -> bool {
+    st.verification().map_or(st.call.failed, |r| r.status() == Some(false))
+}
+
 fn ok_literal(st: &crate::import::StepObs) -> Option<String> {
-    if st.call.failed {
+    if !succeeded(st) {
         return None;
     }
     argv(st).map(|av| shell_join(av))
@@ -174,7 +186,7 @@ fn ok_parts(st: &crate::import::StepObs) -> Vec<(String, Effect)> {
         }
     }
     let mut out = Vec::new();
-    if !st.call.failed {
+    if succeeded(st) {
         walk(&st.norm, &mut out);
     }
     out
@@ -265,7 +277,7 @@ fn recovered(steps: &[crate::import::StepObs], from: usize, want: &Want) -> bool
     let own = runner(&steps[hit]);
     steps[from + 1..hit]
         .iter()
-        .any(|st| st.call.failed && st.norm.effect == Effect::Verify && runner(st).is_some() && runner(st) != own)
+        .any(|st| failed_check(st) && st.norm.effect == Effect::Verify && runner(st).is_some() && runner(st) != own)
 }
 
 /// The traces in which `command` (or a variant it covers) ran successfully within five steps of a
@@ -277,7 +289,7 @@ fn recovery_traces(command: &str, ss: &[&Session]) -> u32 {
     ss.iter()
         .filter(|s| {
             s.steps.iter().enumerate().any(|(i, st)| {
-                st.call.failed
+                failed_check(st)
                     && st.norm.effect == Effect::Verify
                     && runner(st).is_some_and(|r| Some(&r) != own.as_ref() && !command.starts_with(&r))
                     && s.steps.iter().skip(i + 1).take(5).any(|b| want.hit(b))
@@ -399,7 +411,7 @@ fn count_after_command(r: &Route, sessions: &[&Session]) -> Option<Count> {
     let Trigger::AfterCommand { command: key } = &r.trigger else { return None };
     let (mut opp, mut support, mut open) = (0, BTreeSet::new(), BTreeSet::new());
     for s in sessions {
-        let Some(i) = s.steps.iter().position(|st| &st.key == key && !st.call.failed) else { continue };
+        let Some(i) = s.steps.iter().position(|st| &st.key == key && succeeded(st)) else { continue };
         opp += 1;
         open.insert(s.id.clone());
         if ran_after(&s.steps[..(i + 9).min(s.steps.len())], i, &r.step, None) {
@@ -410,8 +422,18 @@ fn count_after_command(r: &Route, sessions: &[&Session]) -> Option<Count> {
 }
 
 /// An avoid over the traces: those that ran an avoided runner (the opportunities), and those
-/// where a run of it failed and the working command then succeeded within five steps (support).
+/// where it failed and the working command succeeded. Typed environment failures use the bounded
+/// native recovery witness; other failures retain the legacy five-step recount.
 fn count_avoid(runners: &[&str], instead: &str, sessions: &[&Session]) -> Count {
+    let target = adage_core::shell::plain_pipeline(instead).and_then(|parts| match parts.as_slice() {
+        [one] => {
+            let action = adage_core::action::classify_argv(&one.argv);
+            (action.role == adage_core::action::Role::TestRun
+                && action.env.class() == adage_core::action::EnvClass::Project)
+                .then_some(action.runner)
+        }
+        _ => None,
+    });
     let (mut opp, mut support) = (0, BTreeSet::new());
     for s in sessions {
         let runs: Vec<usize> = s
@@ -425,17 +447,36 @@ fn count_avoid(runners: &[&str], instead: &str, sessions: &[&Session]) -> Count 
             continue;
         }
         opp += 1;
-        // The recovery is the first check that then passed (within five steps): a later check
-        // that also passed is not what replaced the runner.
+        // The first productive check must establish the repair. A later passing test cannot
+        // replace an earlier failed test or bypass an invalidating action.
         let recovered = runs.iter().any(|&i| {
             let failed = &s.steps[i];
-            failed.call.failed
+            if target.as_ref().is_some_and(|family| crate::outcome::runner(failed).is_some_and(|r| r.family == *family))
+                && failed
+                    .verification()
+                    .is_some_and(|r| r.outcome == adage_core::outcome::VerificationOutcome::SetupFailure)
+                && crate::outcome::env_signature(&failed.call.output).is_some()
+            {
+                // A delayed, observed repair qualifies the existing mined shape, not Q(Sat)
+                // or unaided prevention. Never fall back when its native witness abstains.
+                return crate::outcome::recovery_witness(s, i).is_some_and(|w| {
+                    debug_assert_eq!(w.at, i);
+                    debug_assert!((1..=crate::outcome::HORIZON).contains(&w.calls));
+                    let goal = &s.steps[w.goal_at];
+                    ok_literal(goal).is_some_and(|literal| {
+                        literal == instead
+                            || (goal.project_pytest_root_cwd
+                                && adage_core::execution_equivalence::project_pytest_equivalent(instead, &literal))
+                    })
+                });
+            }
+            failed_check(failed)
                 && s.steps
                     .iter()
                     .skip(i + 1)
                     .take(5)
                     .find(|b| {
-                        argv(b).is_some() && !b.call.failed && b.norm.effect == Effect::Verify && b.key != failed.key
+                        argv(b).is_some() && succeeded(b) && b.norm.effect == Effect::Verify && b.key != failed.key
                     })
                     .and_then(ok_literal)
                     .as_deref()
@@ -455,6 +496,10 @@ fn count_avoid(runners: &[&str], instead: &str, sessions: &[&Session]) -> Count 
     }
 }
 
+#[cfg(test)]
+#[path = "recovery_recount_tests.rs"]
+mod recovery_recount_tests;
+
 /// A read batch over the traces: those whose run of `key` listed files (in JSON, or repository
 /// paths in its text) are the opportunities, those that then read at least half of them within
 /// sixteen steps the support. The field most supporting runs listed them in is the slot's.
@@ -466,7 +511,7 @@ pub fn judge_read_batch(r: &Route, sessions: &[&Session], cfg: &LearnConfig) -> 
     let mut fields: BTreeMap<String, u32> = BTreeMap::new();
     let mut saved: Vec<f64> = Vec::new();
     for s in sessions {
-        let Some(pos) = s.steps.iter().position(|x| &x.key == key && !x.call.failed) else { continue };
+        let Some(pos) = s.steps.iter().position(|x| &x.key == key && succeeded(x)) else { continue };
         let output = &s.steps[pos].call.output;
         let mut listed: Vec<(String, Vec<String>)> = extract_json(output)
             .and_then(|j| j.as_object().cloned())
@@ -650,7 +695,7 @@ fn execution_evidence(r: &Route, ss: &[&Session], cfg: &LearnConfig) -> Result<E
                 Trigger::Context { .. } if r.slots.is_empty() => {
                     let syms = if let Some(path) = edited(st) {
                         symbols.edit(path)
-                    } else if st.call.failed {
+                    } else if failed_check(st) {
                         symbols.fail(&st.key, &st.call)
                     } else {
                         symbols.act(&st.key)
@@ -690,7 +735,7 @@ fn execution_evidence(r: &Route, ss: &[&Session], cfg: &LearnConfig) -> Result<E
                 if matches!(
                     next.norm.effect,
                     Effect::Author | Effect::Environment | Effect::Regenerate | Effect::Publish
-                ) || (next.norm.effect == Effect::Verify && !next.call.failed)
+                ) || (next.norm.effect == Effect::Verify && succeeded(next))
                 {
                     break;
                 }
@@ -1052,6 +1097,7 @@ fn run_inner(
     // test over every trace finds it, and judges it.
     let lookup = crate::graph::lookup_routes(ss, cfg);
     let mut report = EngineReport {
+        procedures: adage_graph::procedures::learn(ss),
         sessions: ss.len(),
         mining_cache_hit,
         evidence_groups: ss.iter().filter_map(|s| s.evidence_group().map(|g| g.key)).collect::<BTreeSet<_>>().len(),

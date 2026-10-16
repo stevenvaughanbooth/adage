@@ -108,6 +108,10 @@ pub struct Obligation {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SessionState {
+    /// A bounded observed test failure, never proof of unchanged source or inputs. Lost state
+    /// resets this watch rather than reconstructing outcomes from abbreviated command keys.
+    #[serde(default, skip_serializing_if = "adage_tracks::recovery::RecoveryState::is_initial")]
+    pub recovery: adage_tracks::recovery::RecoveryState,
     pub arm: Option<Arm>,
     pub repo: Option<String>,
     pub prompts: u32,

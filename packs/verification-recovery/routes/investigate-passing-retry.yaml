@@ -1,0 +1,15 @@
+id: investigate-passing-retry
+summary: Investigate an unexplained passing retry of a declared test invocation
+shape: advise
+detector: U13
+trigger:
+  on: after_command
+  command: '{runner}'
+steps:
+- id: advise
+  advise:
+    template: verification-unexplained-recovery
+    slots:
+      command: '{command}'
+  effect: observe
+strength: prime

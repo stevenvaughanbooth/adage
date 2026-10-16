@@ -14,6 +14,7 @@
 pub mod harness;
 pub mod identity;
 pub mod session;
+mod verification;
 pub mod wire;
 
 pub use harness::{Capabilities, EventKind, Harness};

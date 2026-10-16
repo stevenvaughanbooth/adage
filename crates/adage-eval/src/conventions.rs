@@ -45,6 +45,13 @@
 //! failure); one ending at a prompt has no such trigger and is listed apart, neither true nor
 //! false.
 //!
+//! An `execution` contract instead compares the complete ordered context and exact command,
+//! requires a fixed verification candidate carrying execution evidence, and never grants
+//! execution. These reviewed contracts are not planted discovery targets, so they are listed
+//! separately from discovery recall. Existing conventions remain independently applicable:
+//! when a terminal event already establishes the response, additional context does not invalidate
+//! that match. A mismatch against one explicit contract does not veto another valid convention.
+//!
 //! Route precision is the share of learned routes that match some convention; route recall is
 //! the share of conventions some learned route matches. Intent conventions are listed but not
 //! counted in recall: offline learning has no embedding model, so it cannot learn them.
@@ -75,6 +82,9 @@ pub enum Kind {
     EnvSync,
     /// Steps run in order after an edit (Track G §8).
     Sequence,
+    /// An explicitly reviewed execution candidate. Checked separately from discovery recall:
+    /// this contract does not claim that advice was useful or grant permission to execute.
+    Execution,
 }
 
 impl Kind {
@@ -107,6 +117,7 @@ impl Kind {
             Kind::Scope => "scope",
             Kind::EnvSync => "env_sync",
             Kind::Sequence => "sequence",
+            Kind::Execution => "execution",
         }
     }
 }
@@ -170,6 +181,9 @@ pub struct Convention {
     /// Sequence: the commands, in order (`command` is the first).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub steps: Vec<String>,
+    /// Execution: the complete, ordered trigger, never only its final event.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trigger: Option<Trigger>,
     /// How a generator planted it (`evals/gen`: a dead end's `mode`, `instinct_violation` for the
     /// superseded universal default). Informational.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -217,7 +231,41 @@ impl Conventions {
             if c.command.contains('{') && c.samples.is_empty() {
                 bail!("{}: a command with a placeholder needs samples to bind it", ctx());
             }
+            if c.kind != Kind::Execution && c.trigger.is_some() {
+                bail!("{}: only an execution contract uses `trigger`", ctx());
+            }
             match c.kind {
+                Kind::Execution => {
+                    let Some(Trigger::Context { items, within }) = &c.trigger else {
+                        bail!("{}: an execution contract needs a context trigger", ctx());
+                    };
+                    if !(2..=adage_tracks::CONTEXT_MAX_ITEMS).contains(&items.len())
+                        || !(1..=adage_tracks::CONTEXT_MAX_WITHIN).contains(within)
+                        || !adage_tracks::io::safe_command(&c.command)
+                    {
+                        bail!("{}: an execution contract needs a bounded context and a fixed command", ctx());
+                    }
+                    if c.command.contains('{') {
+                        bail!("{}: execution contracts cannot contain slots", ctx());
+                    }
+                    for item in items {
+                        if let adage_tracks::CtxItem::Act { keys } | adage_tracks::CtxItem::Fail { keys, .. } = item {
+                            if keys.is_empty() || keys.len() > adage_tracks::io::CONTEXT_MAX_KEYS {
+                                bail!("{}: execution context commands need a bounded, nonempty key list", ctx());
+                            }
+                        }
+                    }
+                    if !matches!(
+                        items.last(),
+                        Some(
+                            adage_tracks::CtxItem::Edit { .. }
+                                | adage_tracks::CtxItem::Act { .. }
+                                | adage_tracks::CtxItem::Fail { .. }
+                        )
+                    ) {
+                        bail!("{}: the execution context must end at an edit, command or failure", ctx());
+                    }
+                }
                 Kind::DeadEnd if c.avoided.iter().all(|a| a.trim().is_empty()) => {
                     bail!("{}: a dead end needs `avoided`", ctx())
                 }
@@ -268,13 +316,15 @@ impl Conventions {
 pub fn decoy_hits(routes: &[&Route], conv: &Conventions, table: &CommandTable) -> Vec<String> {
     let mut out = Vec::new();
     for r in routes {
+        let projected = terminal_trigger(r);
+        let trigger = projected.as_ref().unwrap_or(&r.trigger);
         let mut cmds: Vec<&str> = match &r.step {
             Step::Run { command } => vec![command],
             Step::Sequence { commands } => commands.iter().map(String::as_str).collect(),
             Step::Avoid { instead, .. } => vec![instead],
             _ => vec![],
         };
-        if let Trigger::AfterCommand { command } = &r.trigger {
+        if let Trigger::AfterCommand { command } = trigger {
             cmds.push(command.trim_start_matches("exec "));
         }
         for d in &conv.decoys {
@@ -339,6 +389,30 @@ fn covers(paths: &str, conv: &str, cx: &Ctx) -> std::result::Result<Match, Strin
 
 /// Does `route` match convention `c`? `Err` says why not (for routes of the same kind).
 fn matches(route: &Route, c: &Convention, cx: &Ctx) -> std::result::Result<Match, String> {
+    if c.kind == Kind::Execution {
+        let evidence_valid = route
+            .evidence
+            .execution
+            .as_ref()
+            .is_some_and(|e| e.sessions > 0 && e.sessions <= e.successful && e.successful <= e.opportunities);
+        if !evidence_valid || route.effect != adage_core::Effect::Verify || !route.slots.is_empty() {
+            return Err("not a qualified, fixed verification execution candidate".into());
+        }
+        let Step::Run { command } = &route.step else {
+            return Err("an execution contract describes one command".into());
+        };
+        return if c.trigger.as_ref() == Some(&route.trigger) && command == &c.command {
+            Ok(Match::Full)
+        } else {
+            Err("the full execution trigger or command differs".into())
+        };
+    }
+    // Existing conventions establish a response from one event, including certified recoveries.
+    // Their terminal-event oracle remains independently applicable to a more specific context.
+    // Only an explicit execution contract above requires equality of the complete context.
+    if let Some(trigger) = terminal_trigger(route) {
+        return matches(&Route { trigger, ..route.clone() }, c, cx);
+    }
     // Advice not to hand-edit a generated file, naming the command that regenerates it, is the
     // regeneration convention seen from the output's side.
     if let Step::Advise { template, slots } = &route.step {
@@ -551,7 +625,7 @@ pub struct ConventionMatch {
     /// Learned routes that are this convention, but too narrow ([`Match::Narrow`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub narrowly_by: Vec<String>,
-    /// Counted in recall (intent conventions are not: offline learning has no model).
+    /// Counted in discovery recall (neither model-dependent intents nor reviewed execution contracts are).
     pub evaluable: bool,
 }
 
@@ -621,12 +695,14 @@ pub fn score_routes(
             matched_by: vec![],
             partly_by: vec![],
             narrowly_by: vec![],
-            evaluable: c.kind != Kind::Intent,
+            evaluable: !matches!(c.kind, Kind::Intent | Kind::Execution),
         })
         .collect();
     let mut rms = Vec::new();
     for r in routes {
-        let kind = Kind::of_route(r).map(|k| k.name().to_string()).unwrap_or_else(|| score::point(r));
+        let projected = terminal_trigger(r).map(|trigger| Route { trigger, ..(*r).clone() });
+        let advisory = projected.as_ref().unwrap_or(r);
+        let kind = Kind::of_route(advisory).map(|k| k.name().to_string()).unwrap_or_else(|| score::point(advisory));
         let mut rm = RouteMatch {
             id: r.id.clone(),
             kind,
@@ -652,7 +728,12 @@ pub fn score_routes(
                     rm.narrow.push(c.id.clone());
                     cm.narrowly_by.push(r.id.clone());
                 }
-                Err(why) if Kind::of_route(r) == Some(c.kind) => rm.misses.push(format!("{}: {why}", c.id)),
+                Err(why)
+                    if Kind::of_route(advisory) == Some(c.kind)
+                        || (c.kind == Kind::Execution && r.evidence.execution.is_some()) =>
+                {
+                    rm.misses.push(format!("{}: {why}", c.id));
+                }
                 Err(_) => {}
             }
         }
@@ -664,28 +745,29 @@ pub fn score_routes(
     (rms, cms)
 }
 
-/// The routes to score, and those listed apart: a context route is scored as the one-event
-/// trigger on its last item (it fires on that item's event); one ending at a prompt is listed
-/// apart.
+fn terminal_trigger(r: &Route) -> Option<Trigger> {
+    let Trigger::Context { items, .. } = &r.trigger else { return None };
+    match items.last() {
+        Some(adage_tracks::CtxItem::Edit { glob }) => Some(Trigger::AfterEdit { paths: glob.clone() }),
+        Some(adage_tracks::CtxItem::Act { keys }) => keys.first().map(|k| Trigger::AfterCommand { command: k.clone() }),
+        Some(adage_tracks::CtxItem::Fail { keys, signature }) => {
+            keys.first().map(|k| Trigger::AfterFailure { command: k.clone(), signature: signature.clone() })
+        }
+        _ => None,
+    }
+}
+
+/// Keep full contexts for execution-contract matching. Advisory conventions still compare
+/// their last event; contexts ending at a prompt are listed apart as before.
 fn live_and_inert(routes: &[&Route]) -> (Vec<Route>, Vec<String>) {
     let (mut live, mut inert) = (Vec::new(), Vec::new());
     for r in routes {
-        let Trigger::Context { items, .. } = &r.trigger else {
+        let Trigger::Context { .. } = &r.trigger else {
             live.push((*r).clone());
             continue;
         };
-        let last = match items.last() {
-            Some(adage_tracks::CtxItem::Edit { glob }) => Some(Trigger::AfterEdit { paths: glob.clone() }),
-            Some(adage_tracks::CtxItem::Act { keys }) => {
-                keys.first().map(|k| Trigger::AfterCommand { command: k.clone() })
-            }
-            Some(adage_tracks::CtxItem::Fail { keys, signature }) => {
-                keys.first().map(|k| Trigger::AfterFailure { command: k.clone(), signature: signature.clone() })
-            }
-            _ => None,
-        };
-        match last {
-            Some(t) => live.push(Route { trigger: t, ..(*r).clone() }),
+        match terminal_trigger(r) {
+            Some(_) => live.push((*r).clone()),
             None => inert.push(r.id.clone()),
         }
     }
@@ -903,6 +985,24 @@ pub fn score_prepared(p: &Prepared) -> Result<RoutesReport> {
     })
 }
 
+fn convention_verdict(c: &ConventionMatch) -> String {
+    match (c.evaluable, c.matched_by.is_empty()) {
+        (false, true) if c.kind == Kind::Execution.name() => {
+            "reviewed execution contract: unmatched (excluded from discovery recall)".into()
+        }
+        (false, false) if c.kind == Kind::Execution.name() => format!(
+            "reviewed execution contract: matched by {} (excluded from discovery recall)",
+            c.matched_by.join(", ")
+        ),
+        (false, _) => "cannot be conditioned offline (no intent model)".into(),
+        (true, true) if !c.narrowly_by.is_empty() => {
+            format!("MISSED (too narrow: {})", c.narrowly_by.join(", "))
+        }
+        (true, true) => "MISSED".into(),
+        (true, false) => format!("found by {}", c.matched_by.join(", ")),
+    }
+}
+
 /// Human-readable routes report. Deterministic, like the JSON.
 pub fn render_text(r: &RoutesReport) -> String {
     use std::fmt::Write;
@@ -948,14 +1048,7 @@ pub fn render_text(r: &RoutesReport) -> String {
     }
     let _ = writeln!(s, "\nconventions");
     for c in &r.conventions {
-        let found = match (c.evaluable, c.matched_by.is_empty()) {
-            (false, _) => "cannot be conditioned offline (no intent model)".to_string(),
-            (true, true) if !c.narrowly_by.is_empty() => {
-                format!("MISSED (too narrow: {})", c.narrowly_by.join(", "))
-            }
-            (true, true) => "MISSED".to_string(),
-            (true, false) => format!("found by {}", c.matched_by.join(", ")),
-        };
+        let found = convention_verdict(c);
         let _ = writeln!(s, "  {:<22} {:<12} {}", c.id, c.kind, found);
     }
     let _ = writeln!(
@@ -1133,6 +1226,240 @@ mod tests {
         let t = CommandTable::load();
         assert!(!Expect::of("npm run check", t).same(&Expect::of("npm run codegen", t)));
         assert!(Expect::of("python3 scripts/wi-lookup W-1", t).same(&Expect::of("./scripts/wi-lookup W-2", t)));
+    }
+
+    #[test]
+    fn execution_contracts_require_the_whole_ordered_context_and_do_not_add_discovery_recall() {
+        use serde_json::json;
+        let trigger = json!({"on":"context", "items":[
+            {"item":"edit", "glob":"src/*.py"}, {"item":"edit", "glob":"tests/*.py"}
+        ], "within":8});
+        let conv: Conventions = serde_json::from_value(json!({
+            "schema":SCHEMA, "sandbox":"x", "conventions":[{
+                "id":"check-after-source-and-tests", "kind":"execution", "command":"make test",
+                "trigger":trigger
+            }]
+        }))
+        .unwrap();
+        conv.validate().unwrap();
+        let mut yes = route("yes", trigger.clone(), json!({"do":"run", "command":"make test"}), json!([]));
+        yes.effect = adage_core::Effect::Verify;
+        yes.evidence.execution = Some(adage_tracks::ExecutionEvidence { opportunities: 6, successful: 6, sessions: 6 });
+        let mut routes = vec![yes.clone()];
+        let mut add = |id: &str, f: fn(&mut Route)| {
+            let mut r = yes.clone();
+            r.id = id.into();
+            f(&mut r);
+            routes.push(r);
+        };
+        add("advisory", |r| r.evidence.execution = None);
+        add("empty-evidence", |r| r.evidence.execution = Some(adage_tracks::ExecutionEvidence::default()));
+        add("impossible-successes", |r| r.evidence.execution.as_mut().unwrap().successful = 7);
+        add("impossible-sessions", |r| r.evidence.execution.as_mut().unwrap().sessions = 7);
+        add("other-step", |r| r.step = Step::Run { command: "make clean".into() });
+        add("different-arguments", |r| r.step = Step::Run { command: "make test EXTRA=1".into() });
+        add("different-effect", |r| r.effect = adage_core::Effect::Regenerate);
+        add("last-event-only", |r| r.trigger = Trigger::AfterEdit { paths: "tests/*.py".into() });
+        add("reversed", |r| {
+            if let Trigger::Context { items, .. } = &mut r.trigger {
+                items.reverse();
+            }
+        });
+        add("wider-window", |r| {
+            if let Trigger::Context { within, .. } = &mut r.trigger {
+                *within = 9;
+            }
+        });
+        add("broader-scope", |r| {
+            if let Trigger::Context { items, .. } = &mut r.trigger {
+                items[0] = adage_tracks::CtxItem::Edit { glob: "**/*.py".into() };
+            }
+        });
+        let refs: Vec<_> = routes.iter().collect();
+        let (live, inert) = live_and_inert(&refs);
+        assert!(inert.is_empty());
+        assert_eq!(live[0].trigger, yes.trigger, "projection must not erase execution context");
+        let (rms, cms) = score_routes(&live.iter().collect::<Vec<_>>(), &conv, &[], CommandTable::load());
+        assert_eq!(rms.iter().filter(|r| r.is_true()).map(|r| r.id.as_str()).collect::<Vec<_>>(), ["yes"]);
+        assert_eq!(cms[0].matched_by, ["yes"]);
+        assert!(!cms[0].evaluable, "reviewed contracts must not inflate planted-convention recall");
+    }
+
+    #[test]
+    fn ordinary_context_conventions_still_match_the_last_event() {
+        use serde_json::json;
+        let r = route(
+            "regenerate",
+            json!({"on":"context", "items":[
+            {"item":"edit", "glob":"notes/*.md"}, {"item":"edit", "glob":"schema/*.json"}
+        ], "within":8}),
+            json!({"do":"run", "command":"make gen"}),
+            json!([]),
+        );
+        let (live, inert) = live_and_inert(&[&r]);
+        assert!(inert.is_empty());
+        let got = verdicts(&live);
+        assert_eq!(got[0].1, ["regenerate-models"]);
+    }
+
+    #[test]
+    fn execution_candidates_keep_independently_applicable_legacy_conventions() {
+        use serde_json::json;
+        let mut candidate = route(
+            "execution-regenerate",
+            json!({"on":"context", "items":[
+                {"item":"edit", "glob":"notes/*.md"}, {"item":"edit", "glob":"schema/*.json"}
+            ], "within":8}),
+            json!({"do":"run", "command":"make gen"}),
+            json!([]),
+        );
+        candidate.effect = adage_core::Effect::Regenerate;
+        assert_eq!(verdicts(&[candidate.clone()])[0].1, ["regenerate-models"]);
+        candidate.evidence.execution =
+            Some(adage_tracks::ExecutionEvidence { opportunities: 6, successful: 6, sessions: 6 });
+        let mut direct = candidate.clone();
+        direct.id = "execution-direct".into();
+        direct.trigger = Trigger::AfterEdit { paths: "schema/*.json".into() };
+        let (live, _) = live_and_inert(&[&candidate, &direct]);
+        let refs: Vec<_> = live.iter().collect();
+        let (rms, cms) = score_routes(&refs, &acme(), &["schema/invoice.json".into()], CommandTable::load());
+        assert_eq!(rms[0].matches, ["regenerate-models"], "the terminal edit independently establishes regeneration");
+        assert_eq!(rms[1].matches, ["regenerate-models"], "preserve the existing single-event oracle");
+        let regeneration = cms.iter().find(|c| c.id == "regenerate-models").unwrap();
+        assert_eq!(regeneration.matched_by, ["execution-regenerate", "execution-direct"]);
+    }
+
+    #[test]
+    fn certified_single_event_and_contextual_recoveries_keep_the_existing_dead_end_oracle() {
+        use serde_json::json;
+        let mut recovery = route(
+            "recovery",
+            json!({"on":"after_failure", "command":"exec python3 -m pytest", "signature":"missing runner"}),
+            json!({"do":"run", "command":"make test"}),
+            json!([]),
+        );
+        recovery.effect = adage_core::Effect::Verify;
+        recovery.evidence.execution =
+            Some(adage_tracks::ExecutionEvidence { opportunities: 6, successful: 6, sessions: 6 });
+        let mut contextual = recovery.clone();
+        contextual.id = "contextual-recovery".into();
+        contextual.trigger = Trigger::Context {
+            items: vec![
+                adage_tracks::CtxItem::Edit { glob: "src/*.py".into() },
+                adage_tracks::CtxItem::Fail {
+                    keys: vec!["exec python3 -m pytest".into()],
+                    signature: "missing runner".into(),
+                },
+            ],
+            within: 8,
+        };
+        for (_, matches) in verdicts(&[recovery.clone(), contextual.clone()]) {
+            assert_eq!(matches, ["tests-through-make"]);
+        }
+        recovery.trigger = Trigger::AfterFailure { command: "exec make ci".into(), signature: "failed".into() };
+        if let Trigger::Context { items, .. } = &mut contextual.trigger {
+            items[1] = adage_tracks::CtxItem::Fail { keys: vec!["exec make ci".into()], signature: "failed".into() };
+        }
+        for (_, matches) in verdicts(&[recovery, contextual]) {
+            assert!(matches.is_empty(), "the old oracle still rejects an unrelated failure");
+        }
+    }
+
+    #[test]
+    fn a_context_does_not_hide_a_decoy_trigger() {
+        use serde_json::json;
+        let r = route(
+            "decoy-linked",
+            json!({"on":"context", "items":[
+            {"item":"edit", "glob":"src/*.py"}, {"item":"act", "keys":["exec tools/decoy"]}
+        ], "within":8}),
+            json!({"do":"read_batch", "slot":"files", "max":5}),
+            json!([]),
+        );
+        let mut conv = acme();
+        conv.decoys.push(Decoy {
+            id: "unused-lookup".into(),
+            kind: "decoy".into(),
+            mode: None,
+            command: "tools/decoy".into(),
+            notes: String::new(),
+        });
+        let (live, _) = live_and_inert(&[&r]);
+        assert_eq!(
+            decoy_hits(&live.iter().collect::<Vec<_>>(), &conv, CommandTable::load()),
+            ["decoy-linked: unused-lookup"]
+        );
+    }
+
+    #[test]
+    fn unsupported_execution_contracts_are_rejected() {
+        use adage_tracks::{CtxItem, CONTEXT_MAX_ITEMS, CONTEXT_MAX_WITHIN};
+        use serde_json::json;
+        let mut conv: Conventions = serde_json::from_value(json!({
+            "schema":SCHEMA, "sandbox":"x", "conventions":[{
+                "id":"check", "kind":"execution", "command":"make test", "trigger":{
+                    "on":"context", "items":[
+                        {"item":"edit", "glob":"src/*.py"}, {"item":"edit", "glob":"tests/*.py"}
+                    ], "within":8
+                }
+            }]
+        }))
+        .unwrap();
+        conv.validate().unwrap();
+        conv.conventions[0].kind = Kind::FinishLine;
+        assert!(conv.validate().unwrap_err().to_string().contains("only an execution"));
+        conv.conventions[0].kind = Kind::Execution;
+        let edit = CtxItem::Edit { glob: "src/*.py".into() };
+        for (items, within) in [
+            (vec![], 8),
+            (vec![edit.clone()], 8),
+            (vec![edit.clone(); CONTEXT_MAX_ITEMS + 1], 8),
+            (vec![edit.clone(); 2], 0),
+            (vec![edit.clone(); 2], CONTEXT_MAX_WITHIN + 1),
+            (vec![edit.clone(), CtxItem::Act { keys: vec![] }], 8),
+            (vec![CtxItem::Act { keys: vec![] }, edit.clone()], 8),
+            (vec![edit.clone(), CtxItem::Fail { keys: vec![], signature: "failed".into() }], 8),
+            (
+                vec![
+                    edit.clone(),
+                    CtxItem::Act { keys: vec!["exec make test".into(); adage_tracks::io::CONTEXT_MAX_KEYS + 1] },
+                ],
+                8,
+            ),
+            (
+                vec![
+                    edit.clone(),
+                    CtxItem::Intent { family: "f".into(), model: "m".into(), centroid: vec![1; 8], threshold: 0.8 },
+                ],
+                8,
+            ),
+        ] {
+            conv.conventions[0].trigger = Some(Trigger::Context { items, within });
+            assert!(conv.validate().is_err(), "accepted unsupported trigger {:?}", conv.conventions[0].trigger);
+        }
+        conv.conventions[0].trigger =
+            Some(Trigger::Context { items: vec![edit; CONTEXT_MAX_ITEMS], within: CONTEXT_MAX_WITHIN });
+        conv.validate().unwrap();
+    }
+
+    #[test]
+    fn execution_contract_reporting_is_distinct_from_missing_intent_models() {
+        let mut c = ConventionMatch {
+            id: "check".into(),
+            kind: "execution".into(),
+            matched_by: vec![],
+            partly_by: vec![],
+            narrowly_by: vec![],
+            evaluable: false,
+        };
+        assert_eq!(convention_verdict(&c), "reviewed execution contract: unmatched (excluded from discovery recall)");
+        c.matched_by.push("run-check".into());
+        assert_eq!(
+            convention_verdict(&c),
+            "reviewed execution contract: matched by run-check (excluded from discovery recall)"
+        );
+        c.kind = "intent".into();
+        assert_eq!(convention_verdict(&c), "cannot be conditioned offline (no intent model)");
     }
 
     #[test]

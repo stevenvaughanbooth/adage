@@ -10,10 +10,11 @@
 //!   declared environment, else the project-environment spelling that ran tests in the traces:
 //!   `npm test --`, `npx vitest run`), never the system interpreter a dead end names.
 //! - **The targets** are bound at hook time from the edited file through a map (edited source path
-//!   → its test files, best first, [`TestsOf`]), learned statically from the repository (a test
-//!   file named for the source, `test_core.py` for `core.py`, `x.spec.ts` for `x.ts`; files the
-//!   history changed together) and confirmed by the traces (a test file run after the source was
-//!   edited, that ran tests). The slot is `edit_tests`: a file the map does not list gets nothing.
+//!   → its test files, best first, [`TestsOf`]). Names and co-change supply candidate relations;
+//!   delivery additionally requires observed execution of each target by the selected command.
+//!   A test argument, collection report or green zero-test run alone cannot establish this.
+//!   Dynamic runner configuration is not interpreted or executed. The slot is `edit_tests`: a
+//!   file the qualified map does not list gets nothing.
 //! - **Admission and strength** come from the value of the directive at the `after-edit:source`
 //!   situation ([`crate::value`]): calls from the first source edit to a test run that ran tests,
 //!   without a directive and when the agent's next run was in the project's environment. It is
@@ -267,6 +268,34 @@ fn package(p: &str) -> String {
     p.split('/').take(2).collect::<Vec<_>>().join("/")
 }
 
+fn language(p: &str) -> Option<&'static str> {
+    match p.rsplit_once('.')?.1 {
+        "py" => Some("python"),
+        "ts" | "tsx" | "js" | "jsx" | "mjs" | "mts" | "cjs" | "cts" | "vue" => Some("javascript"),
+        "rs" => Some("rust"),
+        "go" => Some("go"),
+        "rb" => Some("ruby"),
+        _ => None,
+    }
+}
+
+/// A nearest manifest is a package boundary, not evidence that its tests cover a source file.
+fn owner<'a>(p: &'a str, files: &BTreeSet<String>) -> &'a str {
+    let mut dir = p.rsplit_once('/').map_or("", |(d, _)| d);
+    loop {
+        if ["package.json", "pyproject.toml", "setup.cfg", "Cargo.toml", "go.mod", "Gemfile"]
+            .iter()
+            .any(|name| files.contains(&if dir.is_empty() { (*name).into() } else { format!("{dir}/{name}") }))
+        {
+            return dir;
+        }
+        if dir.is_empty() {
+            return "";
+        }
+        dir = dir.rsplit_once('/').map_or("", |(d, _)| d);
+    }
+}
+
 /// The map from an edited source path to its tests, best first.
 pub type TestsOf = BTreeMap<String, Vec<String>>;
 
@@ -279,11 +308,12 @@ struct Pair {
     traces: u32,
 }
 
-/// The file → tests map (see the module documentation): for every source file with evidence, its
+/// Candidate file → tests relations, not a runner-qualified delivery map. For every source file, its
 /// best `K` test files, each scored by a trace that ran it after editing the source (2 each, at
 /// most 4), a name that matches (1, and 0.5 more in the same package), and history: from two
 /// commits that changed both, 0.5 plus half its share of the source's co-changes with tests.
-/// Ties by path.
+/// Ties by path. Names cannot cross languages or known package boundaries; co-change alone cannot
+/// cross languages. Use [`qualified_tests_of`] before binding a runner to these candidates.
 pub fn tests_of(
     files: &BTreeSet<String>,
     cochange: &BTreeMap<(String, String), u32>,
@@ -301,18 +331,28 @@ pub fn tests_of(
             continue;
         }
         for t in by_stem.get(stem).into_iter().flatten() {
+            if language(s).is_none() || language(s) != language(t) || owner(s, files) != owner(t, files) {
+                continue;
+            }
             let p = pairs.entry(s.clone()).or_default().entry((*t).clone()).or_default();
             p.named = true;
             p.same_package = package(s) == package(t);
         }
     }
     for ((s, t), n) in cochange {
-        if files.contains(s) && files.contains(t) && *n >= 2 {
+        if files.contains(s)
+            && files.contains(t)
+            && source_path(s)
+            && outcome::is_test_path(t)
+            && language(s).is_some()
+            && language(s) == language(t)
+            && *n >= 2
+        {
             pairs.entry(s.clone()).or_default().entry(t.clone()).or_default().cochange = *n;
         }
     }
     for ((s, t), n) in confirmed {
-        if files.contains(t) {
+        if files.contains(s) && files.contains(t) && source_path(s) && outcome::is_test_path(t) && *n > 0 {
             pairs.entry(s.clone()).or_default().entry(t.clone()).or_default().traces = *n;
         }
     }
@@ -349,10 +389,32 @@ fn run_files(a: &action::Action) -> Vec<String> {
         .collect()
 }
 
-/// (source, test) pairs the traces confirm: a test run that ran tests and selected the test file,
-/// after the source was the last source file edited, counted once per trace.
+/// (source, test) pairs with attributable execution evidence, counted once per trace. This
+/// aggregate is for inspection; a delivery map must use [`qualified_tests_of`] to keep runners
+/// and command spellings separate.
 pub fn confirmed(ss: &[&Session]) -> BTreeMap<(String, String), u32> {
+    observations(ss, None).0
+}
+
+/// Candidate relations qualified by actual target execution under this exact command prefix.
+/// Neither executable configuration nor a filename/argument alone is discovery evidence. A
+/// configuration that has not produced attributable test output therefore fails closed here.
+/// This records historical selection, not passing assertions, current coverage or causal value.
+pub fn qualified_tests_of(
+    files: &BTreeSet<String>,
+    cochange: &BTreeMap<(String, String), u32>,
+    ss: &[&Session],
+    command: &str,
+) -> TestsOf {
+    let (confirmed, targets) = observations(ss, Some(command));
+    // Filter before ranking: unsupported targets must not displace an evidenced one from K.
+    let eligible = files.iter().filter(|p| !outcome::is_test_path(p) || targets.contains(*p)).cloned().collect();
+    tests_of(&eligible, cochange, &confirmed)
+}
+
+fn observations(ss: &[&Session], command: Option<&str>) -> (BTreeMap<(String, String), u32>, BTreeSet<String>) {
     let mut out: BTreeMap<(String, String), u32> = BTreeMap::new();
+    let mut targets = BTreeSet::new();
     for s in ss {
         let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
         let mut last: Option<String> = None;
@@ -361,20 +423,155 @@ pub fn confirmed(ss: &[&Session]) -> BTreeMap<(String, String), u32> {
                 last = Some(p.to_string());
                 continue;
             }
-            let Some(src) = &last else { continue };
-            let Some(a) = outcome::action_of(st).filter(|a| a.role == Role::TestRun) else { continue };
-            if !outcome::executed_tests(&st.call.output) {
+            let Some(a) = attributed_run(st, s) else { continue };
+            let Some(prefix) = map_prefix(&a) else { continue };
+            if command.is_some_and(|c| c != prefix) || s.exposed_to(&[prefix.as_str()], false) {
                 continue;
             }
-            for t in run_files(&a) {
-                seen.insert((src.clone(), t));
+            for t in executed_targets(&a, &st.call.output) {
+                targets.insert(t.clone());
+                if let Some(src) = &last {
+                    seen.insert((src.clone(), t));
+                }
             }
         }
         for k in seen {
             *out.entry(k).or_default() += 1;
         }
     }
-    out
+    (out, targets)
+}
+
+/// Flattened steps can share output; ordinary normalization also erases pure pipe filters and
+/// assignment prefixes. Require one literal stage in the original canonical shell call, so no
+/// other command, filter, cwd change or environment assignment can lend it evidence.
+fn attributed_run(st: &crate::import::StepObs, session: &Session) -> Option<action::Action> {
+    if st.call.tool != "Bash"
+        || !st.call.by.is_agent()
+        || st.call.refused()
+        || st.call.input.get("cwd").and_then(|v| v.as_str()).is_some_and(|cwd| Path::new(cwd) != session.root)
+    {
+        return None;
+    }
+    let command = st.call.input.get("command")?.as_str()?;
+    let stages = adage_core::shell::plain_pipeline(command)?;
+    let [stage] = stages.as_slice() else { return None };
+    // Preserve the canonical repository-relative spelling of a project interpreter/target,
+    // after the original syntax has passed the attribution gate.
+    let mut n = st.norm.clone();
+    n.action = adage_core::CanonicalAction::Exec {
+        argv: stage.argv.clone(),
+        cwd: session.root.to_string_lossy().into_owned(),
+    };
+    adage_core::keys::canonicalise(&mut n, &session.root);
+    let adage_core::CanonicalAction::Exec { argv, .. } = &n.action else { return None };
+    let a = action::classify_argv(argv);
+    (a.role == Role::TestRun && a.env.class() == EnvClass::Project).then_some(a)
+}
+
+/// Retain only default-scope spellings. Stripping --config/--project/root/environment options
+/// would transfer evidence to a different command. Selectors and unknown flags also abstain.
+fn map_prefix(a: &action::Action) -> Option<String> {
+    if !matches!(a.runner.as_str(), "pytest" | "vitest" | "jest" | "npm test") || !a.selectors.is_empty() {
+        return None;
+    }
+    for (i, token) in a.argv.iter().enumerate() {
+        if token.contains('=') || matches!(token.as_str(), "watch" | "related" | "bench" | "list") {
+            return None;
+        }
+        if !token.starts_with('-') || token == "--" {
+            continue;
+        }
+        if token == "-m" && a.runner == "pytest" && a.argv.get(i + 1).is_some_and(|m| m == "pytest") {
+            continue;
+        }
+        let verbosity = token.strip_prefix('-').is_some_and(|s| {
+            !s.is_empty() && s.chars().all(|c| if a.runner == "pytest" { "qvxs".contains(c) } else { c == 'v' })
+        });
+        if !verbosity {
+            return None;
+        }
+    }
+    let p = prefix(a)?;
+    let parsed = action::classify_argv(&p.split_whitespace().map(str::to_string).collect::<Vec<_>>());
+    (parsed.role == Role::TestRun
+        && parsed.runner == a.runner
+        && parsed.env == a.env
+        && parsed.targets.is_empty()
+        && (a.runner != "vitest" || p.ends_with("vitest run")))
+    .then_some(p)
+}
+
+fn runner_file(family: &str, path: &str) -> bool {
+    adage_core::repo::is_safe_relative(path)
+        && path.len() <= 200
+        && path.bytes().all(|c| c.is_ascii_alphanumeric() || b"_./-@+".contains(&c))
+        && match family {
+            "pytest" => path.ends_with(".py"),
+            "vitest" | "jest" | "npm test" => matches!(language(path), Some("javascript")) && !path.ends_with(".vue"),
+            _ => false,
+        }
+}
+
+fn executed_targets(a: &action::Action, output: &str) -> Vec<String> {
+    use adage_core::outcome::{verification_report, VerificationOutcome};
+    let Some(report) = verification_report(&a.argv, output) else { return Vec::new() };
+    if !matches!(report.outcome, VerificationOutcome::Passed | VerificationOutcome::Failed)
+        || !report.tests_run.is_some_and(|n| n > 0)
+    {
+        return Vec::new();
+    }
+    let selected = run_files(a);
+    // Pytest selects an exact path. JS positional arguments are filename filters: even one
+    // filter can match a different file, so those runners always need per-file output.
+    let single = a.runner == "pytest" && a.targets.len() == 1 && selected.len() == 1;
+    selected
+        .into_iter()
+        .filter(|p| runner_file(&a.runner, p))
+        .filter(|p| single || file_reported(&a.runner, p, output))
+        .collect()
+}
+
+fn file_reported(family: &str, path: &str, output: &str) -> bool {
+    if family == "npm test" {
+        // A script's name is not its implementation. Require its own output to identify the
+        // file using a supported runner report; never infer this from package.json text.
+        return file_reported("vitest", path, output) || file_reported("jest", path, output);
+    }
+    // Only runner-shaped lines qualify, never a command echo or a traceback mentioning a path.
+    // Unknown reporter formats abstain; this deliberately does not parse arbitrary JS config.
+    adage_core::tokens::bounded(output, 64 * 1024).lines().any(|line| {
+        let line = line.trim();
+        match family {
+            "pytest" => line.strip_prefix(path).is_some_and(|rest| {
+                let rest = rest.trim_start();
+                rest.starts_with("::") && rest.split_whitespace().any(|t| matches!(t, "PASSED" | "FAILED"))
+                    || (!rest.is_empty()
+                        && rest.split_whitespace().next().is_some_and(|t| {
+                            t.chars().all(|c| ".FsxX".contains(c)) && t.chars().any(|c| c == '.' || c == 'F')
+                        }))
+            }),
+            "vitest" => line
+                .strip_prefix('✓')
+                .or_else(|| line.strip_prefix('❯'))
+                .map(str::trim_start)
+                .and_then(|s| s.strip_prefix(path))
+                .and_then(|s| s.strip_prefix(" ("))
+                .is_some_and(|s| {
+                    let Some((counts, _)) = s.split_once(')') else { return false };
+                    if counts.contains("skipped") || counts.contains("todo") {
+                        return false;
+                    }
+                    let mut words = s.split_whitespace();
+                    words.next().and_then(|n| n.parse::<u64>().ok()).is_some_and(|n| n > 0)
+                        && words.next().is_some_and(|s| s == "tests)" || s == "test)" || s == "tests" || s == "test")
+                }),
+            "jest" => line.strip_prefix("PASS ").map(str::trim_start).is_some_and(|s| {
+                s.strip_prefix(path).is_some_and(|rest| rest.is_empty() || rest.starts_with(char::is_whitespace))
+            }),
+            _ => false,
+        }
+    })
 }
 
 /// The command prefix of a test run, up to its first target or selector: `.venv/bin/python -m
@@ -471,11 +668,11 @@ pub fn plan(
             let Some(a) = outcome::action_of(st).filter(|a| a.role == Role::TestRun && a.runner == family) else {
                 continue;
             };
-            if a.env.class() != EnvClass::Project || !outcome::executed_tests(&st.call.output) {
+            if attributed_run(st, s).is_none() || executed_targets(&a, &st.call.output).is_empty() {
                 continue;
             }
-            ran = true;
-            if let Some(p) = prefix(&a) {
+            if let Some(p) = map_prefix(&a) {
+                ran = true;
                 spellings.entry(p).or_insert((0, a.env.clone())).0 += 1;
             }
         }
@@ -493,7 +690,7 @@ pub fn plan(
         Some(r) => files(r),
         None => BTreeSet::new(),
     };
-    let confirmed = confirmed(ss);
+    let (confirmed, _) = observations(ss, Some(&command));
     let files: BTreeSet<String> = if files.is_empty() {
         // No repository at hand: what the traces edited and ran.
         confirmed.keys().flat_map(|(s, t)| [s.clone(), t.clone()]).collect()
@@ -501,7 +698,7 @@ pub fn plan(
         files
     };
     let history = root.map(cochange).unwrap_or_default();
-    let map = tests_of(&files, &history, &confirmed);
+    let map = qualified_tests_of(&files, &history, ss, &command);
     // The area: the lattice over the source files the traces edited that have mapped tests.
     let edited: BTreeSet<String> = ss
         .iter()
@@ -692,7 +889,8 @@ fn exploratory(st: &crate::import::StepObs) -> bool {
         return true;
     }
     if a.role == Role::TestRun {
-        return !outcome::executed_tests(&st.call.output) && outcome::env_failure(&st.call.output).is_some();
+        return st.verification().is_some_and(|r| r.outcome == adage_core::outcome::VerificationOutcome::SetupFailure)
+            && outcome::env_failure(&st.call.output).is_some();
     }
     let text = a.argv.join(" ");
     matches!(a.role, Role::Search | Role::Read | Role::Trivial | Role::Other)
@@ -731,7 +929,7 @@ pub fn card(ss: &[&Session], statics: &Statics, provenance: &str) -> Option<(Opt
             let Some(a) = outcome::action_of(st).filter(|a| a.role == Role::TestRun && a.runner == family) else {
                 continue;
             };
-            if a.env.class() == EnvClass::Project && outcome::executed_tests(&st.call.output) {
+            if a.env.class() == EnvClass::Project && outcome::executed_tests(st) {
                 if let Some(p) = prefix(&a) {
                     *spellings.entry(p).or_default() += 1;
                 }
@@ -814,6 +1012,10 @@ pub struct Card {
 
 /// The share of training sessions in which the session-start line must have been useful.
 pub const CARD_RATE: f64 = 0.7;
+
+#[cfg(test)]
+#[path = "testmap_qualification_tests.rs"]
+mod qualification_tests;
 
 #[cfg(test)]
 mod tests {

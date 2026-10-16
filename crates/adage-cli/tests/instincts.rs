@@ -528,16 +528,15 @@ fn packs_lists_the_base_instincts_and_turns_one_off_and_on() {
         v["instincts"].clone()
     };
     let lockfiles = |v: &Value| v.as_array().unwrap().iter().find(|p| p["name"] == "adage/lockfiles").unwrap().clone();
-    // Every base pack is listed: built in, pre-installed as pinned, on; this repository's lockfile
+    // Every built-in pack is listed and pre-installed as pinned; optional verification stays off.
+    // This repository's lockfile
     // is what adage/lockfiles needs, so it bound its advice.
     let v = packs(&w);
     let names: Vec<&str> = v.as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap()).collect();
-    assert_eq!(names.len(), 8, "{names:?}");
-    assert!(v
-        .as_array()
-        .unwrap()
-        .iter()
-        .all(|p| p["source"] == "builtin" && p["on"] == true && p["installed"] == true));
+    assert_eq!(names.len(), 10, "{names:?}");
+    assert!(v.as_array().unwrap().iter().all(|p| p["source"] == "builtin"
+        && p["on"] == (p["name"] != "adage/verification-discovery" && p["name"] != "adage/verification-recovery")
+        && p["installed"] == true));
     let l = lockfiles(&v);
     assert_eq!((l["applies"].as_bool(), l["bound"].as_u64()), (Some(true), Some(1)), "{l:#}");
     assert_eq!(advised(&w, "lockfile"), 1);
@@ -561,6 +560,46 @@ fn packs_lists_the_base_instincts_and_turns_one_off_and_on() {
     assert!(code != 0 && err.contains("is not an instinct pack Adage has"), "{err}");
 }
 
+#[test]
+fn optional_pack_explicit_selection_overrides_auto_and_off_keeps_auto() {
+    for (name, template) in [
+        ("adage/verification-discovery", "verification-discovery"),
+        ("adage/verification-recovery", "verification-unexplained-recovery"),
+    ] {
+        let w = World::new();
+        std::fs::write(w.p("acme/package.json"), r#"{"scripts":{"test":"vitest run"}}"#).unwrap();
+        let listed = || -> Value {
+            let v: Value = serde_json::from_str(&w.ok(&["packs", "--json", "--repo-path", &w.repo()])).unwrap();
+            v["instincts"].as_array().unwrap().iter().find(|p| p["name"] == name).unwrap().clone()
+        };
+        w.bind();
+        assert_eq!(w.ok(&["config", "get", "instincts.packs"]).trim(), "auto");
+        let p = listed();
+        assert_eq!(
+            (p["on"].as_bool(), p["applies"].as_bool(), p["bound"].as_u64()),
+            (Some(false), Some(true), Some(0)),
+            "{p:#}"
+        );
+        assert_eq!(advised(&w, template), 0);
+
+        w.ok(&["packs", "on", name, "--repo-path", &w.repo()]);
+        assert_eq!(w.ok(&["config", "get", "instincts.packs"]).trim(), format!("auto,{name}"));
+        assert_eq!(listed()["on"], true);
+        assert!(listed()["bound"].as_u64().unwrap() > 0);
+        assert!(advised(&w, template) > 0);
+        // Repeated selection is idempotent, and disabling it does not disable the default packs.
+        w.ok(&["packs", "on", name, "--repo-path", &w.repo()]);
+        w.ok(&["packs", "off", name, "--repo-path", &w.repo()]);
+        assert_eq!(w.ok(&["config", "get", "instincts.packs"]).trim(), format!("auto,{name}"));
+        assert_eq!(w.ok(&["config", "get", "instincts.disabled"]).trim(), name);
+        assert_eq!(listed()["on"], false);
+        assert_eq!(listed()["bound"], 0);
+        assert_eq!(advised(&w, template), 0);
+        let v: Value = serde_json::from_str(&w.ok(&["packs", "--json", "--repo-path", &w.repo()])).unwrap();
+        assert!(v["instincts"].as_array().unwrap().iter().any(|p| p["name"] == "adage/lockfiles" && p["on"] == true));
+    }
+}
+
 /// The adage marketplace end to end, through the binary and its real hooks: listed before anything
 /// runs; synced by the first run (every base pack installed where `adage add` installs a pack, at
 /// its pin, and recorded as from the marketplace); what its packs bind reaches the agent with the
@@ -578,7 +617,7 @@ fn the_adage_marketplace_end_to_end() {
     let m = adage(&w);
     assert_eq!(m["repository"], "github.com/stevenvaughanbooth/adage");
     assert_eq!(m["source"], "builtin");
-    assert_eq!(m["packs"].as_array().unwrap().len(), 8);
+    assert_eq!(m["packs"].as_array().unwrap().len(), 10);
     assert!(installed(&m, "no"), "{m:#}");
     let doctor = |w: &World| -> String {
         let (d, _, _) = w.run(&["doctor", "--json"], b"");

@@ -95,7 +95,7 @@ has no pytest; in a Python repository with an E2 `verify` grant, the repeated
 `.venv/bin/python -m pytest` run would show the receipt card of ux-design §4.4 in place of the
 output.
 
-In a **control session** (1 in 10), the binary prints nothing, so the mod has nothing to draw per
+In a **control session** (when measurement is enabled), the binary prints nothing, so the mod has nothing to draw per
 event; the band shows the lamp and, when the learner is scheduled, the countdown, which is also
 what a treated session shows before anything fires. Nothing on the screen names the arm or counts
 what was withheld (§6, invariant 5).

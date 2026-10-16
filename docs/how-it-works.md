@@ -1,36 +1,47 @@
 # How Adage works
 
-This is the product behavior reference for the README, CLI, TUI and launch copy.
-Updated 2026-10-01 against the launch branch (`codex/launch-first-reflex`, with main's learner
-fixes from PR #21 merged). Adage is an unreleased developer preview, built from source.
-Implementation changes must update this page and the relevant operational guide in the same change.
-The older numbered [architecture document](Adage%20%E2%80%94%20Architecture.md) is a historical
-implementation snapshot, not the current feature checklist.
+Adage reads recorded agent work and looks for steps worth reusing. A **reflex** is an explicit
+condition and response, with evidence attached. A response may guide the agent or, with separate
+permission, perform a supported action. **Instincts** use the same format but get their facts
+from the repository's declarations instead of its session history.
 
-## The promise and its boundary
+This is the current behavior reference. For a short introduction, start with the
+[README](../README.md); for setup, use the [first-session guide](first-reflex.md). The older
+numbered [architecture document](Adage%20%E2%80%94%20Architecture.md) is a historical design
+snapshot, not a feature checklist. Implementation changes should update this page and the
+relevant operational guide together.
 
-Adage learns recurring development procedures from a repository's agent sessions, recognizes
-when they apply, and handles supported routine decisions at the agent harness boundary. Its
-normal learner and runtime operate locally on the CPU. It does not replace the model's reasoning
-about a new bug or turn arbitrary observed shell commands into trusted automation.
+## The experiment and its limits
 
-The first-use target is `adage init` in a repository, followed by learning existing sessions.
-The interactive wizard connects a detected harness and bootstraps that repository. For Claude Code
-it installs the Adage plugin itself when `claude` is on `PATH`: the plugin's files travel inside the
-`adage` binary, `init` stages them with the binaries as a local marketplace under
-`$ADAGE_HOME/plugin/` and runs `claude plugin marketplace add` and `claude plugin install
-adage@adage-local`, then takes out any settings-file registration so each hook runs once; Codex and
-OpenCode get their hook files. `adage init --yes --hooks user` does the same without questions
-([usage](usage.md#commands)). Subsequent
-hooks can learn in the background. No history is a valid starting state: repository-derived
-instincts can help where applicable, and Adage learns as sessions accumulate. A repository with
-no applicable history or declared conventions must receive an honest “nothing learned yet.”
+Skills and workflows help an agent reason about how to work. Adage asks which repeatable parts
+can be learned once, recognized locally, and reused by the harness in later sessions. Its learner
+and ordinary runtime are deterministic and use no model API. They do not train model weights.
+Hooks are the connection to the agent; learning, evidence, review and portable packs are the
+other parts of the system.
 
-See [zero-config behavior](zero-config.md), [live learning](live-learning.md) and
-[harness integration](harnesses.md) for exact commands, source locations and settings.
-The operational [first-reflex guide](first-reflex.md) walks through setup, empty-history states,
-the separate execution-policy and per-reflex decisions, and checking that an action replaced work.
-Noninteractive previews remain read-only; installing hooks is an explicit setup operation.
+The current results support trying this approach, not a claim that it always improves an agent.
+Learning a command is different from proving its effect, and running it is different from
+saving work. The [evidence page](benchmarks.md) includes studies with no benefit and quality
+regressions, alongside positive results. A candidate may correctly remain inactive when its
+context, outcome or independence is unknown.
+
+## A normal first session
+
+Run `adage init` in a repository from your terminal. It connects detected agents and offers to
+learn from existing sessions. For Claude Code, it stages the bundled plugin under
+`$ADAGE_HOME/plugin/` and installs it through Claude Code's plugin commands. Codex and OpenCode
+get hook configuration; Codex requires its own `/hooks` review before new hooks run. Proposed
+file changes are shown and backed up. `adage init --print` is a preview, and
+`adage init --yes --hooks user` applies setup without interactive questions.
+
+After setup, hooks can start background learning when sessions finish. No history is a valid
+starting state: applicable instincts can provide guidance while evidence accumulates. A
+repository with no applicable history or declared conventions should receive an honest
+“nothing learned yet.” `adage condition --repo-root .` learns from the current repository now;
+`adage review` shows the result. Reviewing evidence does not grant command execution.
+
+See [live learning](live-learning.md), [harness support](harnesses.md), and
+[usage](usage.md#installing-and-updating) for exact source locations and settings.
 
 ## Accumulated prediction and current execution limits
 
@@ -247,9 +258,12 @@ event outside both alphabets is still skipped by the fast path.
 
 `adage condition` is the existing learning command; setup and background learning use that
 pipeline. `adage sense` previews available evidence without publishing learned routes.
-`adage train <SKILL.md>` is a separate deterministic skill compiler: it makes no model calls
-and replays compiled commands in a sandbox. Its optional `--execute` evidence workflow starts
-paid agent sessions only with an explicit human invocation. Neither is background learning.
+`adage train <SKILL.md>` is a separate deterministic skill compiler: it makes no model calls,
+compiles supported command forms and attempts sandbox replay. Its report distinguishes verified,
+stale and not-replayed steps. Unsupported prose is not verified; a missing tool, unavailable
+sandbox or missing example can leave a compiled step not replayed. Its optional `--execute`
+evidence workflow starts paid agent sessions only with an explicit human invocation. Neither is
+background learning.
 
 Routine actions have a different value test from reminders. If agents already run a check
 reliably, reminding them can add context without saving work, while an approved CPU action can
@@ -296,8 +310,14 @@ result links, repository state and typed contracts therefore remain necessary al
 ## What is automatic after setup
 
 Automatic learning, matching, applicable installed instincts and advisory delivery are governed
-by the normal configuration. Supported command rewrites can avoid a procedural mistake before
-it occurs. These are the immediate-value path and must be tested without seeded benchmark rules.
+by the normal configuration. Supported Python interpreter rewrites are on by default
+(`runtime.rewrite = true`): they change a pending agent command to use the project's verified
+environment, subject to the harness's permissions. `adage delegate rewrites off` disables them
+without changing execution grants. These rewrites are separate from Adage's opt-in executor.
+
+Silent control sessions are off by default (`runtime.control = 0`). A person can set
+`adage config set runtime.control 0.1` to hold out about one session in ten for comparison.
+Without control evidence, activity counts do not establish savings.
 
 No hook reaches the network. The background learner makes one request a day at most, after it
 conditions a repository: whether a newer Adage is out (the npm registry, then GitHub's latest

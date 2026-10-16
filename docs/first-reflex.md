@@ -1,23 +1,26 @@
 # Your first useful reflex
 
-Adage is an unreleased developer preview. Start with ordinary work in one repository: available
-instincts help immediately, while repeated agent sessions supply evidence for learned reflexes. A
-learned candidate is not automatically permission to run its command.
+Adage is an experiment in learning reusable steps from agent work. Start with ordinary work in
+one repository. Built-in instincts can apply when the repository declares a convention; repeated
+sessions provide evidence for learned reflexes. Neither guarantees a useful match on the first
+run, and learning a command never grants permission to execute it.
+
+This guide starts with guidance. The later execution sections are optional; you can stop after
+reviewing what Adage learned and use it alongside your normal sessions.
 
 ## Connect and learn
 
-No release has been tagged yet, so install from source. The repository is private for now, so this
-requires access to it:
+[Install Adage](usage.md#install), then open a terminal in the repository where you want to try it:
 
 ```sh
-cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli adage-exec adage-train
 cd /path/to/your/repository
 adage init
 ```
 
 Run `init` in your own terminal. It installs the Claude Code plugin for you (and connects Codex or
 OpenCode if they are installed), showing each file it changes before it writes it, and offers to
-learn this repository's existing sessions. A run inside an agent or with `--print` is a preview,
+learn this repository's existing sessions. Codex also asks you to approve new hook entries in
+`/hooks`; writing its configuration does not complete that review. A run inside an agent or with `--print` is a preview,
 not completed setup; `init --yes` alone connects nothing (it ends by saying so, with
 `adage init --yes --hooks user`, which connects every harness found). If the plugin is already
 installed, or the hooks are registered for every repository (`--scope user`), Adage keeps that
@@ -32,9 +35,10 @@ adage review
 ```
 
 `doctor` identifies connection or model problems and gives their fixes. `condition --repo-root .`
-imports the supported existing history recorded in this repository (any of its checkouts) and
-binds applicable instincts; without `--repo-root` it conditions every repository your history
-holds. `review` explains candidates and their evidence. It is fine to have no candidates: a fresh repository can have instincts without learned
+imports the supported existing history recorded in this repository (including linked checkouts)
+and binds applicable instincts. Running `condition` without a repository flag uses the current
+repository; use `--all` only when you want to process every repository in the configured sources.
+`review` explains candidates and their evidence. It is fine to have no candidates: a fresh repository can have instincts without learned
 behavior, and inconsistent or insufficient history should not produce an automatic action.
 
 Start a normal coding session. `adage watch` shows activity alongside it; `adage ui` brings review,
@@ -113,8 +117,9 @@ one verification:
 
 - **At the start**, the agent gets a short note: which command Adage runs (approved by you,
   sandboxed), after which edits, and that Adage runs it again when the agent finishes if files
-  changed. Control sessions, about one in ten, get no note and run nothing, so the effect can be
-  measured.
+  changed. If you enable measurement with `adage config set runtime.control 0.1`, about one
+  session in ten is a quiet control: it gets no note and runs no Adage actions. Controls are off
+  by default.
 - **After the matching edits**, Adage runs the command and gives the agent a receipt: the result,
   exit code, time, a receipt id, how many tests pytest collected and, by name, the tests the agent
   added in this session. If the agent then starts a test run the fresh receipt already covers, it

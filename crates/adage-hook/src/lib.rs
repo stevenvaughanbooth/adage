@@ -43,6 +43,8 @@ mod extension;
 mod identity;
 mod pretool;
 mod record;
+#[cfg(test)]
+mod recovery_tests;
 mod respond;
 mod session_start;
 mod site;

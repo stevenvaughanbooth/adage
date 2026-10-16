@@ -88,7 +88,10 @@ fn demo_round2_learns_what_the_live_learner_learned() {
     // And one since the graph engine became the only learner (Track G G5): the sessions that ran
     // `make gen` after a schema edit and then `make test` and `make ci` did so one right after
     // another (`adage_learn::engine`'s together rule), so beside the obligation to regenerate the
-    // sequence `make gen then make test then make ci` is learned, prime. Nothing else may differ.
+    // sequence `make gen then make test then make ci` is learned, prime.
+    // Predictive execution also learns source-edit → test-edit → make test. Its full trigger
+    // has an explicit execution contract in conventions.json; it must remain silent without
+    // an execution approval, and is not evidence of advisory benefit.
     let r = eval("demo-haiku45", Some("round2"));
     let live: adage_tracks::Index =
         serde_json::from_slice(&std::fs::read(datasets().join("demo-haiku45/recorded/index-round2.json")).unwrap())
@@ -97,12 +100,23 @@ fn demo_round2_learns_what_the_live_learner_learned() {
         live.routes.iter().map(|ir| (ir.route.id.clone(), format!("{:?}", ir.route.strength).to_lowercase())).collect();
     want.push(("dead-end-21cb2c".into(), "inhibit".into()));
     want.push(("sequence-a36be6".into(), "prime".into()));
+    want.push(("run-c1ba29".into(), "prime".into()));
     let mut got: Vec<(String, String)> = r.routes.iter().map(|x| (x.id.clone(), x.strength.clone())).collect();
     want.sort();
     got.sort();
     assert_eq!(got, want);
     let second = r.routes.iter().find(|x| x.id == "dead-end-21cb2c").unwrap();
     assert_eq!((second.step.as_str(), second.support), ("avoid python -m pytest; instead make test", 4));
+    assert!(!r.by_route.contains_key("run-c1ba29"), "an unapproved execution candidate must not be delivered");
+    let prepared = adage_eval::prepare(
+        &datasets().join("demo-haiku45"),
+        &Options { split: Some("round2".into()), ..Default::default() },
+    )
+    .unwrap();
+    let execution = prepared.index.routes.iter().find(|r| r.route.id == "run-c1ba29").unwrap();
+    assert!(execution.exec_only());
+    let evidence = execution.route.evidence.execution.as_ref().unwrap();
+    assert_eq!((evidence.opportunities, evidence.successful, evidence.sessions), (6, 6, 6));
 }
 
 #[test]

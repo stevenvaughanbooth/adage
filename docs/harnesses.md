@@ -1,21 +1,43 @@
 # Harnesses: what each one supports, and what Adage does with it
 
-Research dates: **2026-09-22**, and **2026-09-23** for the on-disk formats and the source
-re-check (pinned below). Sources are the harnesses' official documentation and source
-repositories; neither OpenCode nor Codex was installed or run. Every claim is marked
-**documented** (stated in official docs or the published SDK/plugin types), **source** (read in the
-harness's own source code at the pinned tag, so true of that release but not a promised
-interface), or **inferred** (our reading, not verified by running the harness). Anything inferred
-is the first thing to check against a real installation. What the harness simulator verifies, and
-what still needs a live install, is in [Verification](#verification).
+Adage connects to agent events through hooks and imports recorded sessions for learning. Those
+are separate capabilities: reading a harness's history does not prove every live hook works on
+every version.
+
+## Current support and evidence
+
+- **Claude Code:** plugin and command-hook integration, supported interpreter rewrites, and
+  separately approved execution. It has the most [live evaluation coverage](benchmarks.md).
+- **Codex:** command-hook integration and native rollout ingestion, including supported subagent
+  and orchestration records. The [October history audit](../evals/evidence/codex-wrapper-learning-2026-10-15.json)
+  uses real recordings. That evidence does not certify every live event or establish a speedup.
+  After setup, approve new hook entries in Codex's `/hooks` review.
+- **OpenCode:** plugin and exported-history support, covered by simulator and plugin tests.
+  The source research below should not be read as full live validation.
+- **Platforms:** optional automatic execution requires macOS or Linux. Windows execution is
+  unsupported; Windows hook invocation remains unverified.
+
+Use [installation and updating](usage.md#installing-and-updating) for setup. A harness update can
+change payloads or history formats, so report the installed version when filing an issue.
+
+## Source research snapshot
+
+The detailed tables below record research from **2026-09-22–23**, with later notes about Adage's
+implementation. During the original research, OpenCode and Codex were inspected through their
+published source rather than run. Their historical verification gaps below describe that
+snapshot; they are not a claim that no Codex recordings have since been tested.
+
+**Documented** means stated in the documentation at the time; **source** means read in the pinned
+release; **inferred** means an interpretation still requiring a live check. Pinned versions are
+research inputs, not a claim about today's latest release.
 
 Pinned source trees (read 2026-09-23):
 
 - **Codex**: [openai/codex `rust-v0.156.1`](https://github.com/openai/codex/tree/rust-v0.156.1)
-  (commit `b412ff32`, 2026-09-23), the latest release; older shapes checked at
+  (commit `b412ff32`, 2026-09-23); older shapes checked at
   [`rust-v0.40.0`](https://github.com/openai/codex/tree/rust-v0.40.0).
 - **OpenCode**: [anomalyco/opencode `v1.18.32`](https://github.com/anomalyco/opencode/tree/v1.18.32)
-  (commit `545f51d2`, 2026-09-21), the latest release (`sst/opencode` redirects there).
+  (commit `545f51d2`, 2026-09-21; `sst/opencode` redirected there when inspected).
 
 Design context: Design Spec §13.1 and decisions O8 and O14; Architecture §4.2, §4.11, §6.2, §15.1 F3.
 
@@ -28,7 +50,7 @@ Design context: Design Spec §13.1 and decisions O8 and O14; Architecture §4.2,
 | Prompt directives | `additionalContext` | Context-only synthetic message (`session.prompt`, `noReply: true`) | `additionalContext` (developer context) |
 | After-tool directives | `PostToolBatch` `additionalContext` | Appended to the tool result (`tool.execute.after`) | `PostToolUse` `additionalContext` |
 | Dead ends learned from history | Announced at the first prompt | Announced at the first prompt | Announced at the first prompt |
-| After-failure reflexes (authored or imported) | `PostToolUseFailure` | Shell `metadata.exit` ≠ 0, or a tool part in state `error` | **Not possible today**: no failure signal |
+| After-failure reflexes (authored or imported) | `PostToolUseFailure` | Shell `metadata.exit` ≠ 0, or a tool part in state `error` | No failure signal in the inspected source version |
 | Finish line at stop | Stop `decision: block` | `session.idle` → a synthetic follow-up prompt | Stop `decision: block` (becomes a user prompt) |
 | Batches | Yes (`PostToolBatch`) | No (per call) | No (per call) |
 | Learning from history | `~/.claude/projects/*.jsonl` | `opencode export <id>` JSON files | `~/.codex/sessions` rollouts (`--codex-sessions`; format from source) |
@@ -258,6 +280,10 @@ asks you to review the hooks in `/hooks`.
 
 ## Verification
 
+This table records the original simulator validation. Later real Codex history ingestion is
+summarized [above](#current-support-and-evidence); untested live-event claims remain unverified.
+
+
 **The harness simulator** (`crates/adage-sim`) renders one scenario — the acme-billing sandbox:
 work items only via `scripts/wi-lookup`, `make test` where `unittest`/`pytest` fail, `make gen`
 after schema edits — as each harness records it on disk (12 seeded sessions per harness in
@@ -305,6 +331,6 @@ All three adapters translate into `adage_runtime::Event`; the decision core
 | `SessionStart` | `SessionStart` | `session.created` | `SessionStart` |
 | `Prompt` | `UserPromptSubmit` | `chat.message` | `UserPromptSubmit` |
 | `Batch` | `PostToolBatch`, `PostToolUse` | `tool.execute.after` | `PostToolUse` |
-| `Failure` | `PostToolUseFailure` | `tool.execute.after` with exit ≠ 0, `tool.error` | `PostToolUse` with an exit code (none today) |
+| `Failure` | `PostToolUseFailure` | `tool.execute.after` with exit ≠ 0, `tool.error` | `PostToolUse` with an exit code (absent in the inspected source version) |
 | `Stop` | `Stop` | `session.idle` | `Stop` |
 | `SessionEnd` | `SessionEnd` | `session.deleted` | `SessionEnd` |

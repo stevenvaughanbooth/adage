@@ -1,18 +1,42 @@
 # Contributing to Adage
 
-Read the [README](README.md) first, then the [design spec](docs/Adage%20—%20Design%20Spec.md),
-[architecture](docs/Adage%20—%20Architecture.md) and
-[implementation plan](docs/Adage%20—%20Implementation%20Plan.md). [Components and boundaries](docs/architecture.md) is the current map of
-what each crate owns and may depend on; `cargo test -p xtask` enforces it. Security reports go through
-[SECURITY.md](SECURITY.md), never a public issue.
+Adage is an experiment in learning reusable behavior from agent work. Help unlock useful
+procedures that are already present in session histories but the learner does not yet recognize.
+Improving that automatic discovery is central to the product.
+
+Our working hypothesis is that specialized repositories and workflows offer clearer patterns
+to learn: their own commands, conventions, checks and recovery paths. We want to explore where
+those patterns produce better reflexes and greater benefit, using representative traces from
+more kinds of projects.
+
+A useful contribution can start with one repeated workflow:
+
+1. Show what the agent keeps rediscovering, omitting or getting wrong, and when a reflex would help.
+2. Capture representative examples, including subagent work and cases where the pattern should
+   not apply. Reduce them to fixtures that reproduce what the learner misses.
+3. Teach the learner to detect the pattern automatically, with evidence for its applicability.
+4. Measure the reflex on new tasks, checking quality alongside repeated work, time or cost.
+   Share broadly applicable behavior as a pack when it makes sense.
+
+Reports of unnecessary suggestions and regressions help refine the same loop. An experiment
+that finds no benefit is useful too; it tells us where to look next.
+
+Read the [README](README.md), then the current [architecture](docs/architecture.md) and
+[testing guide](docs/testing.md). The [repository map](docs/repository.md) helps locate an area;
+each crate's `AGENT.md` explains its boundaries and checks. Older design documents are indexed
+separately under [design history](docs/README.md#design-history).
+
+Before sharing a trace, remove secrets and private project content. Prefer a small synthetic
+fixture that reproduces the behavior. Do not commit raw session logs or personal Adage data.
+Report security issues through [SECURITY.md](SECURITY.md), never a public issue.
 
 ## Build
 
-You need stable Rust (`rustup`) and, for the plugin and npm tests, Node.js 18 or later.
+You need stable Rust (`rustup`), a C compiler, and Node.js 22 or later for the plugin, npm and web tests.
 
 ```bash
 cargo build --workspace --locked
-cargo build --release -p adage-cli     # target/release/adage
+cargo build --release --locked -p adage-cli -p adage-exec -p adage-train
 plugin/build.sh                        # release build of adage, adage-exec, adage-train staged into the Claude Code plugin, with SHA256SUMS
 ```
 
@@ -20,13 +44,15 @@ plugin/build.sh                        # release build of adage, adage-exec, ada
 
 ## Test
 
-CI (`.github/workflows/ci.yml`) runs all of this on macOS arm64 and x64, Linux x64 and arm64, and
-Windows x64. Run it locally before sending a change:
+CI (`.github/workflows/ci.yml`) checks pull requests on Linux x64. The full platform matrix—macOS
+arm64 and x64, Linux x64 and arm64, and Windows x64—runs weekly and on manual dispatch. Run the
+relevant checks locally before sending a change:
 
 ```bash
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked        # includes the normaliser's table-driven cases and, with node, the OpenCode plugin test
+node npm/test/stage.test.mjs           # five-platform package layout, checksums and contents
 node npm/test/launcher.test.mjs        # the npm launcher, against target/debug/adage
 plugin/test/session-start.test.sh      # how the Claude Code plugin finds its three binaries (build adage-exec and adage-train too)
 node scripts/check-plugin.mjs          # plugin and marketplace versions and hook paths
@@ -121,8 +147,7 @@ Releases are built by [dist](https://github.com/axodotdev/cargo-dist) from `dist
 `cargo xtask release-check` (CI runs it with dist installed) fails while the version files
 disagree or `.github/workflows/release.yml` is not what dist generates from `dist-workspace.toml`
 plus the one documented SBOM patch; after editing `dist-workspace.toml`, regenerate as its header
-says. npm publishing needs the `NPM_TOKEN` secret plus the variable `ADAGE_NPM_PUBLISH=true`. The
-npm package is `@adage-sh/cli` (decision D3), in the `adage-sh` npm org; `npm/config.mjs` is the
-one place the name lives. The `NPM_TOKEN` must be an automation token of an account that can
-publish to that org. Homebrew is off the release until macOS signing (decision D4) exists; see the
-notes in `dist-workspace.toml`.
+says. The npm package is `@adage-sh/cli`, in the `adage-sh` organization; `npm/config.mjs` is
+the source of truth for its name. Publishing configuration and first-release prerequisites are
+in [the release guide](docs/release.md). Homebrew remains outside the release until macOS
+signing is available; see `dist-workspace.toml`.

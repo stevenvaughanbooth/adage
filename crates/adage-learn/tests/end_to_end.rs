@@ -172,6 +172,8 @@ fn steered_traces_are_exposed_only_to_what_their_directives_named() {
 const NO_PYTEST: &str = "/usr/bin/python3: No module named pytest";
 const NO_ENV: &str = "Traceback\nRuntimeError: ACME_ENV is not set — run tests with 'make test'";
 const ENV_FIXED: &str = "ACME_ENV=test python3 -m unittest discover -s tests";
+// A passing runner must report executed cases; bare "OK" could be an empty or unrelated result.
+const UNIT_PASSED: &str = "Ran 1 test in 0.001s\n\nOK\n";
 
 /// A run: command, output, failed.
 type Run<'a> = (&'a str, &'a str, bool);
@@ -241,7 +243,7 @@ fn a_dead_end_names_only_runners_that_share_its_signature() {
                 ],
             ),
             (3, &[("python -m pytest -v", NOT_FOUND, true)]),
-            (2, &[(ENV_FIXED, "OK", false)]),
+            (2, &[(ENV_FIXED, UNIT_PASSED, false)]),
         ],
     );
     let index = run(d.path(), &files, &d.path().join("home"));
@@ -323,7 +325,7 @@ fn a_runner_that_passes_once_the_environment_is_fixed_is_never_named() {
         &[
             (5, &[("python3 -m unittest discover -s tests", NO_ENV, true)]),
             (3, &[("python3 -m pytest tests", NO_ENV, true)]),
-            (2, &[(ENV_FIXED, "OK", false)]),
+            (2, &[(ENV_FIXED, UNIT_PASSED, false)]),
         ],
     );
     let index = run(d.path(), &files, &d.path().join("home"));

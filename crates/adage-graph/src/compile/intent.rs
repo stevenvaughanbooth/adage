@@ -94,9 +94,10 @@ pub fn candidates(a: &Annotated, influence: &[Influence], table: &CommandTable) 
     let exec = |i: usize| match &disc[i] {
         InStep::Exec { argv, failed, .. } if !argv.is_empty() => {
             let meta = a.meta.get(i);
+            let ok = meta.map_or(Some(!failed), |m| m.execution_status(*failed))?;
             let effect = effect_of(meta.map_or("", |m| m.effect.as_str()), argv, table);
             let key = meta.map(|m| m.key.clone()).filter(|k| !k.is_empty()).unwrap_or_else(|| events::act_key(argv));
-            Some((argv, *failed, effect, key))
+            Some((argv, !ok, effect, key))
         }
         _ => None,
     };
@@ -398,6 +399,7 @@ mod tests {
                 prompt: 0,
                 effect: "observe".into(),
                 key: String::new(),
+                verification: None,
             })
             .collect();
         Annotated {

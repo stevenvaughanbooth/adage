@@ -68,11 +68,17 @@ bytes, and decode it into the canonical `adage_trace::Session`. Day 0 (`adage in
   (`as_recorded_reads_nothing_but_the_trace`). Traces from other machines decode `AsRecorded`.
 - A cache hit must equal a fresh parse: the repository key is re-derived and outcomes applied
   after reading; the manifest is stamped with the build and `SESSION_FORMAT`. Any change to what
-  a parse records (a `Session` or `StepObs` field) bumps `SESSION_FORMAT`.
+  a parse records (a `Session` or `StepObs` field, including normalization and effect semantics)
+  bumps `SESSION_FORMAT`.
 - `scope` must never open another repository's transcript: containment is by path components,
   decided before parsing. Keep the two cheap tests in its module doc in that order.
-- Sub-agent traces are skipped by each decoder (Claude Code `subagents/`, Codex
-  `source.subagent`, OpenCode `parentID`); `Decode::subagent` is set from the path by `read_trace`.
+- Claude Code sub-agent traces are retained, including bounded workflow descendants beneath
+  `<session>/subagents/`; only `agent-*.jsonl` files are discovered there, not workflow journals.
+  `Decode::subagent` is set from the path by `read_trace`. Codex task children require a native
+  own-history ordinal boundary; copied actions/prompts are excluded, unknown assignments remain
+  unknown, and `batch::group_native_lineages` groups related work conservatively. Special Codex
+  workers, ambiguous child boundaries and OpenCode `parentID` are skipped; do not treat discovery
+  counts as canonical-session counts.
 - The Codex rollout format is read from the openai/codex source (tag noted in `codex.rs`), not a
   documented interface; compressed `.jsonl.zst` rollouts are not read. OpenCode is read from
   `opencode export` output, never its SQLite store.

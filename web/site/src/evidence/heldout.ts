@@ -241,7 +241,7 @@ function detail(r: Result, h: Heldout) {
     </table></div>
     <h4>Each arm</h4>
     <div class="ev-table" role="region" aria-label="Each arm" tabindex="0"><table>
-      <thead><tr><th scope="col">Arm</th><th scope="col">Mean requests</th><th scope="col">Requests counted</th><th scope="col">Hidden tests</th><th scope="col">Censored</th><th scope="col">Test-run requests</th><th scope="col">Cost / session</th><th scope="col">Tokens / session</th></tr></thead>
+      <thead><tr><th scope="col">Arm</th><th scope="col">Mean requests</th><th scope="col">Requests counted</th><th scope="col">Runs passing hidden tests</th><th scope="col">Censored</th><th scope="col">Test-run requests</th><th scope="col">Cost / session</th><th scope="col">Tokens / session</th></tr></thead>
       <tbody>${armRows}</tbody>
     </table></div>
     ${fails}
@@ -313,7 +313,7 @@ export function renderHeldout(h: Heldout): string {
   <dl class="ev-ho-stats">
     <div><dt>Model calls per session</dt><dd><span class="was">${fixed(adv.mean_requests_alone, 1)}</span><span class="arrow" aria-hidden="true">→</span><span class="now">${fixed(adv.mean_requests, 1)}</span><small>alone → with Adage, over ${adv.blocks ?? "?"} blocks</small></dd></div>
     <div><dt>Blocks with fewer calls</dt><dd><span class="now">${of(adv.blocks_fewer, adv.blocks)}</span><small>same task, same repetition</small></dd></div>
-    <div><dt>Hidden tests passed</dt><dd><span class="now">${of(adv.hidden_test_passes, adv.of)}</span><small>with Adage · ${of(adv.hidden_test_passes_alone, adv.of)} alone</small></dd></div>
+    <div><dt>Runs passing hidden tests</dt><dd><span class="now">${of(adv.hidden_test_passes, adv.of)}</span><small>with Adage · ${of(adv.hidden_test_passes_alone, adv.of)} alone</small></dd></div>
     <div><dt>Cost per session</dt><dd><span class="was">${usd(adv.cost_per_session_alone_usd)}</span><span class="arrow" aria-hidden="true">→</span><span class="now">${usd(adv.cost_per_session_usd)}</span><small>API list price${adv.cost_change_percent === null ? "" : ` · ${fixed(Math.abs(adv.cost_change_percent), 1)}% ${adv.cost_change_percent < 0 ? "lower" : "higher"}`}</small></dd></div>
     ${tokens}
     <div><dt>Safety controls</dt><dd><span class="now">${controlsKept}/${s.controls.length}</span><small>kept every necessary check</small></dd></div>
@@ -389,7 +389,7 @@ export function renderHeldoutGlance(h: Heldout): string {
   <dl class="ev-gl-stats">
     <div><dt>Model calls per session</dt><dd>${fixed(a.mean_requests_alone, 1)} → ${fixed(a.mean_requests, 1)}</dd></div>
     <div><dt>Cost per session</dt><dd>${cost}</dd></div>
-    <div><dt>Hidden tests passed</dt><dd>${of(a.hidden_test_passes, a.of)}<small>${of(a.hidden_test_passes_alone, a.of)} alone</small></dd></div>
+    <div><dt>Runs passing hidden tests</dt><dd>${of(a.hidden_test_passes, a.of)}<small>${of(a.hidden_test_passes_alone, a.of)} alone</small></dd></div>
   </dl>
   <p class="ev-gl-exec"><b>Execution mode, opt-in:</b> ${esc(executionStatus(e).flag.toLowerCase())}.</p>
   ${foot}`;

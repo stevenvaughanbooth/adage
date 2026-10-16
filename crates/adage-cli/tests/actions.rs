@@ -385,6 +385,9 @@ fn finish_line_sandbox_make_gen_as_an_e2_action_from_the_hook() {
 
 const COUNT: &str = "import pathlib\nn = sum(len(p.read_text().splitlines()) for p in sorted(pathlib.Path('data').glob('*.txt')))\npathlib.Path('out').mkdir(exist_ok=True)\npathlib.Path('out/count.txt').write_text(f'{n}\\n')\n";
 const PACK: &str = "acme/billing";
+// This round trip tests vendoring and approval, not cold interpreter latency. Keep an explicit
+// bounded E2 budget: the pack default (1.5 s) timed out on the hosted Linux runner.
+const VENDORED_WALL_MS: u32 = 5_000;
 
 fn keygen(dir: &Path) -> ssh_key::PublicKey {
     let mut k = ssh_key::PrivateKey::random(&mut rand_core::OsRng, ssh_key::Algorithm::Ed25519).unwrap();
@@ -433,7 +436,7 @@ requested = "E2"
     f.insert(
         "routes/count-lines.yaml".into(),
         format!(
-            "id: count-lines\nshape: obligation\ntrigger: {{ on: after_edit, paths: \"data/*.txt\" }}\nsteps:\n  - id: count\n    run: {{ argv: [python3, scripts/count.py] }}\n    effect: regenerate\n    script: {{ path: scripts/count.py, closure: ref, sha256: \"{sha}\" }}\nstrength: prime\nexec: {{ level: E2, outputs: [\"out/count.txt\"] }}\nevidence: {{ opportunities: 6, support: 5, days: 2 }}\n"
+            "id: count-lines\nshape: obligation\ntrigger: {{ on: after_edit, paths: \"data/*.txt\" }}\nsteps:\n  - id: count\n    run: {{ argv: [python3, scripts/count.py] }}\n    effect: regenerate\n    script: {{ path: scripts/count.py, closure: ref, sha256: \"{sha}\" }}\nstrength: prime\nexec: {{ level: E2, timeout_ms: {VENDORED_WALL_MS}, outputs: [\"out/count.txt\"] }}\nevidence: {{ opportunities: 6, support: 5, days: 2 }}\n"
         )
         .into_bytes(),
     );
@@ -554,6 +557,7 @@ fn vendored_scripts_and_attestations_round_trip() {
         return;
     }
     let out = ok(adage(&recipient, &recipient_repo, &allow));
+    assert!(out.contains(&format!("timeout: {VENDORED_WALL_MS} ms")), "the imported pack retains its timeout: {out}");
     for want in [
         "argv        python3 scripts/sha256-",
         &format!("script      vendored (L-vendor) sha256 {sha}"),

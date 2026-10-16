@@ -15,7 +15,7 @@
 <meta property="og:title" content="How Adage works · traces to reflexes">
 <meta property="og:description" content="Every stage from transcript to reflex, step by step in 3D, with the math.">
 <meta property="og:url" content="__SITE_URL__/how">
-<meta property="og:image" content="__SITE_URL__/og.jpg">
+<meta property="og:image" content="__SITE_URL__/og.jpg?v=13">
 <meta name="twitter:card" content="summary_large_image">
 <noscript><style>.reveal { opacity: 1 !important; transform: none !important; } .walk { display: none; }</style></noscript>
 <script type="module" src="/src/how-page.ts"></script>
@@ -33,7 +33,7 @@
       <a href="/get-started">Get started</a>
     </div>
     <button class="themebtn" id="theme" type="button">Day</button>
-    <a class="pill" href="/early-access">Get early access</a>
+    <a class="pill" href="/get-started">Try Adage</a>
   </nav>
 </header>
 
@@ -45,10 +45,10 @@
     <h1 class="display" id="plug-h">How Adage plugs into <span class="soft">Claude Code.</span></h1>
     </div>
     <div>
-    <p class="lede">Claude Code lets outside tools speak at fixed moments in every session. Adage listens at those moments, answers on your CPU in milliseconds, and hands the agent what it would otherwise go looking for: where things stand, what works here, what is still owed. The model still does the thinking. It just needs fewer calls to get there.</p>
+    <p class="lede">Claude Code exposes hooks at fixed moments in a session. Adage uses them to match local rules and deliver a useful next step: run the repository's check, regenerate files after an edit, or avoid a known failed command. It also learns those rules from past work. Whether that saves effort depends on the task; the evidence page shows what we have measured.</p>
     <ul class="plug-legend" aria-label="What runs where">
       <li><i class="remote" aria-hidden="true"></i>The model: remote, on GPUs, one call per turn</li>
-      <li><i class="local" aria-hidden="true"></i>Adage: your CPU, local, sandboxed, no network</li>
+      <li><i class="local" aria-hidden="true"></i>Adage: local learning and matching, no model request</li>
       <li><i class="approve" aria-hidden="true"></i>Runs a command only with a person's approval</li>
     </ul>
     <p class="plug-modes"><span class="plug-mode">Advisory mode</span> is the default: Adage informs, and nothing runs on the agent's behalf. <span class="plug-mode exec">Execution mode</span> is opt-in and experimental: Adage also runs checks a person approved.</p>
@@ -203,15 +203,15 @@
       <li class="plug-step" id="plug-learn" data-step="learn">
         <p class="plug-when"><code>SessionEnd</code> · after the session</p>
         <h2>It learns, and you decide what may run.</h2>
-        <p>When a session stops or ends, Adage starts a background learner for this repository. It reads the trace Claude Code left on your machine and turns steps that keep paying off into reflexes. Instincts work from day one; learned reflexes take over as evidence builds. New ones wait for your review, and nothing runs until a person approves that exact command. Change the command, its scripts or its environment, and the approval stops matching.</p>
+        <p>When a session stops or ends, Adage starts a background learner for this repository. It reads the trace Claude Code left on your machine and turns steps that keep paying off into reflexes. Instincts work from day one; learned reflexes take over as evidence builds. Evidence thresholds and review determine which guidance becomes active. Inspect what Adage learned and review candidates that need a decision. Automatic execution always needs separate permission for the exact command. Change the command, its scripts or its environment, and the approval stops matching.</p>
         <details class="plug-more"><summary>Technical detail</summary><div>
           <p>The learner (<code>adage condition --auto</code>) runs detached, at most once per <code>learn.min_interval_secs</code> (120 s) per repository, and never touches the network. Letting Adage run a check takes three decisions at a terminal, each refused inside an agent session: <code>adage delegate policy --max-level e2</code>, <code>adage review delegate …</code> for one command, and <code>adage delegate on</code>.</p>
         </div></details>
       </li>
       <li class="plug-step" id="plug-sum" data-step="sum">
         <p class="plug-when">What it adds up to</p>
-        <h2>No hook skips a model call. The agent just needs fewer of them.</h2>
-        <p>The model still does the thinking. Adage takes the predictable parts off its plate (finding where things are, what works here, what is still owed), so each call goes further.</p>
+        <h2>Does the guidance reduce repeated work?</h2>
+        <p>A guidance hook adds context; it does not itself skip a model call. It may help an agent avoid a failed command or a repeated search. We measure the whole task with and without Adage to see whether that actually helped.</p>
         <div data-heldout="plug">{{heldout:plug}}</div>
         <p class="plug-links"><a class="btn" href="/evidence">How we tested it</a><a class="textlink" href="#walk">How it learns, stage by stage ↓</a></p>
       </li>
@@ -629,7 +629,7 @@
   <div class="wrap narrow">
     <h2 class="display" id="how-cta">See it on your own traces</h2>
     <p class="lede">The same walkthrough ships inside <code>adage map</code>, where the chapters replay with your repository's reflexes.</p>
-    <p class="ctarow"><a class="btn primary" href="/early-access">Get early access</a><a class="btn" href="/">Back to the overview</a></p>
+    <p class="ctarow"><a class="btn primary" href="/get-started">Get started</a><a class="btn" href="/">Back to the overview</a></p>
   </div>
 </section>
 </main>

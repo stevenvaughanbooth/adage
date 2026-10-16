@@ -7,7 +7,7 @@ expression: text
  24 settings · 2 changed · same as adage config · /home/me/.local/share/adage/config.toml
  ! 1 setting is set by environment variables, which win over the file
 
-    Instinct packs           auto, every installed pack
+    Instinct packs           auto, defaults + added packs
     Always leave out         none
 
   In Claude Code  4

@@ -25,7 +25,7 @@ wired in ([Integration](#integration)).
 
 ## What ships at launch
 
-Adage ships **eight base packs**, one per built instinct, all on by default:
+Adage ships **eight default packs** and two optional verification packs:
 
 | Pack | Instinct | Templates |
 | --- | --- | --- |
@@ -37,12 +37,67 @@ Adage ships **eight base packs**, one per built instinct, all on by default:
 | `adage/regenerate` | U5 | a run after an edit (regenerate), the finish line |
 | `adage/generated-files` | U4 | `generated-file` advice after an edit |
 | `adage/lockfiles` | U6 | `lockfile` advice after an edit |
+| `adage/verification-discovery` (off by default) | U12 | `verification-discovery` advice after a declared test command fails with a recognized empty-test report |
+| `adage/verification-recovery` (off by default) | U13 | Advice after the same declared test invocation reports failures then passes without an observed repair |
 
 Each may bind multiple routes, one route, or none in a repository. A route is installed only when
 its declared facts support it and a template of its pack admits it; competing test entry points,
 unsafe command bodies, or an absent environment can correctly leave an instinct unbound. The
 remaining catalogue entries are detectors still to build, and ship in no pack. `adage packs` lists
 the packs, which apply to the repository, and turns any off (`instincts.disabled`).
+
+### Optional verification discovery
+
+`adage/verification-discovery` is available through the same pack format and review flow, but
+`auto` leaves it off. A person can select it with `adage packs on adage/verification-discovery`.
+It binds only a declared, plain pytest, Jest or Vitest invocation and eligible JavaScript test
+wrappers. When that command fails with its own recognized no-tests report, the advice names the
+command and asks the agent to inspect discovery configuration and intended test paths. It is
+E0 guidance: it runs nothing, creates no execution grant, and never blocks completion.
+
+Matching requires the repository root and fixed declared argv, optionally followed by plain
+repository-relative test paths. Extra flags that could change configuration or workspace, opaque wrappers, quoted
+log reads, ambiguous compound commands, successful runs, and reports of actual passed or failed
+tests abstain. A full suite that silently omits another suite is **not detected** by this pack.
+The advice does not claim test coverage or that the agent read it. Synthetic dispatch and signed
+roundtrip tests establish matching and portability; they do not establish a productivity benefit.
+
+To inspect or export it, use `adage packs show adage/verification-discovery` or
+`adage share adage/verification-discovery --out /path/to/export --key /path/to/reviewed-key`.
+Sharing uses the existing signing flow; it does not enable the pack or grant execution.
+
+### Optional verification recovery
+
+`adage/verification-recovery` (U13) is off by default, including under `auto`. To opt in, a person
+can run `adage packs on adage/verification-recovery --repo-path /path/to/repo` from their terminal.
+It binds a plain pytest, Jest or Vitest invocation declared by the repository, such as a Makefile
+recipe. It delivers E0 advice at most once per route in a session: investigate an intermittent
+cause or document an environment fix before treating a passing retry as resolution. It executes
+nothing, grants no permission and never blocks completion.
+
+The bounded observation requires reported failing test cases followed by a passing report for
+the **same concrete invocation**, recorded agent and repository-root working directory, with
+**equal positive executed-test counts**. Native reads and searches may intervene. Edits, opaque
+shell activity, a changed invocation or working directory, task boundaries and ambiguous
+multi-call batches clear the observation. Setup failures, empty runs, filtered output and reports
+marked as truncated do not qualify. Current native delivery is supported on Claude Code, whose
+tool results retain the call IDs needed to distinguish attempts. Native Codex and OpenCode
+translation currently lacks those IDs and abstains.
+
+The advice says that no repair was *observed*. It does not prove unchanged source, inputs or
+environment, diagnose flakiness, certify a repair or establish task success. Synthetic hook checks
+establish the matching and suppression boundaries, not an agent productivity benefit.
+
+Inspect the portable pack with `adage packs show adage/verification-recovery`, or export it through
+`adage share adage/verification-recovery --out /path/to/export --key /path/to/reviewed-key`.
+Sharing uses the existing signing flow and does not activate the pack or grant execution.
+
+Two additional fixed advice templates, `verification-clean-state` and
+`verification-negative-control`, are available to reviewed, evidence-backed proposals. Each takes
+one plain verification `command` (at most 200 bytes), with no free-text slots. They describe a
+disposable clean-state recheck and a reviewed negative control respectively. There is no day-zero
+detector for either: existing failure/edit triggers cannot establish artifact contamination or
+test adequacy, and these templates alone do not establish a successful repair.
 
 Run `adage init --yes --repo /path/to/repo` to bind these defaults without transcripts; it
 registers no hooks (it says whether they are registered, and `adage install <harness> --write`
@@ -114,6 +169,8 @@ on a bare non-zero exit, which includes every test that fails on its assertions.
 | U4 | P0 | Don't hand-edit generated files | `after_edit` of the generated file (advisory) | "`path` is generated: change its inputs and run `command` rather than editing it by hand" | prime | `Code generated … DO NOT EDIT`, `@generated` in a comment in the first 40 lines; files a declared generator writes (Makefile file rules, paths named in the generator script) | very-low | yes |
 | U5 | P0 | Declared regeneration | `after_edit` of the generator's inputs | the finish-line template: "changes to files matching `glob` must be followed by running: `command`" | prime | Makefile rule prerequisites (`models.py: schema/*.json`, `$(wildcard …)`), else input paths named in the generator script (`Path("schema")` + `"*.json"`) | low | yes |
 | U6 | P0 | Don't hand-edit lockfiles | `after_edit` of the lockfile (advisory) | "`path` is maintained by `manager`: change the manifest …" | prime | A lockfile at the repository root (npm, pnpm, yarn, bun, cargo, go, poetry, uv, pipenv, pdm, bundler, composer) | very-low | yes |
+| U12 | P0 | Investigate an empty test selection (optional pack) | `after_failure` with a runner-specific no-tests report | Inspect includes, excludes and intended test paths; no collected tests do not verify the change | prime | One plain declared pytest, Jest or Vitest body; runtime checks the actual invocation and report | low | yes |
+| U13 | P0 | Investigate an unexplained passing retry (optional pack) | `after_command` with bounded prior failing-test evidence | Investigate an intermittent cause or document an environment fix; source identity remains unknown | prime | One plain declared pytest, Jest or Vitest invocation; exact matching scope and positive test counts, with edits and opaque activity invalidating the watch | low | yes |
 | N1 | P0 | Package manager discipline (node) | `after_failure` of `npm install` / `npm ci` (`Unsupported URL Type` for `workspace:`/`catalog:` dependencies, an `only-allow` guard's `for installation in this project`, `EBADDEVENGINES`, `an existing package-lock.json`), of `npm test` (`EBADDEVENGINES` only), of the other of `yarn`/`pnpm` (`command not found`, corepack's `configured to use pnpm`); advisory after `npm install` succeeds | "A known next step here is: `pnpm install`" / "`pnpm test`" | prime | `packageManager` field or a pnpm/yarn/bun lockfile, and no conflicting npm lockfile | very-low | yes |
 | P1 | P0 | Python runner wrapper / `uv run` | `after_failure` of `pytest`, `python -m pytest`, `python3 -m pytest`, on the wrapper's signatures (U1's), or for tox a missing environment's | "A known next step here is: `make test`" / "`tox -e py`" | prime | pytest configured (pyproject, pytest.ini, setup.cfg, tox.ini, conftest.py) and a Makefile wrapper that sets env or flags; else `tox -e py` when tox's base test environment runs plain commands (not `tests: pytest` factors); nox is reported, never bound (its sessions are code); `uv run` is U11's | low | yes |
 | U7 | P1 | Manifest changed, sync environment | `after_edit` of a dependency section | "Run `pnpm install`" | prime | Package manager from the lockfile; pack-level approval (environment effect) | medium | no |

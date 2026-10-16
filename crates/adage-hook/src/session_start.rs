@@ -246,6 +246,8 @@ fn skew_notice(paths: &Paths, cfg: &adage_store::config::Config, format: u32, no
 fn record_start(s: &HookCtx<'_>, repo_key: &str) -> Result<(), Failure> {
     let arms = s.arms();
     let (arm, propensity) = state::update::<SessionState, _>(&s.paths.state(s.session), |st| {
+        // A resumed harness session is a new observation boundary, even with the same id.
+        st.recovery.clear();
         arms.ensure(st, s.session, repo_key);
         (st.arm, st.propensity)
     })
@@ -266,7 +268,15 @@ fn record_start(s: &HookCtx<'_>, repo_key: &str) -> Result<(), Failure> {
 /// Which binary served a session's start, by its file name: the Claude Code plugin's shim links
 /// `adage` or `adage-exec` at every start (plan A8), and exactly one of them answers its hooks.
 fn serving_bin() -> Option<String> {
-    std::env::current_exe().ok().and_then(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
+    serving_bin_at(&std::env::current_exe().ok()?)
+}
+
+fn serving_bin_at(exe: &Path) -> Option<String> {
+    // macOS can return the invoked `hook` symlink rather than its executable. Resolve the
+    // plugin's link chain for this diagnostic only; a missing/unreadable target must not lose
+    // the session record or introduce a new hook failure.
+    let resolved = exe.canonicalize().unwrap_or_else(|_| exe.to_path_buf());
+    resolved.file_stem().map(|s| s.to_string_lossy().into_owned())
 }
 
 /// One record that a session event happened in a repository with no reflexes yet: the event, the
@@ -303,6 +313,39 @@ mod tests {
     use adage_runtime::Directive;
     use serde_json::Value;
     use std::time::Instant;
+
+    #[cfg(unix)]
+    #[test]
+    fn serving_bin_resolves_the_plugins_current_link_chain() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().unwrap();
+        let bin = temp.path();
+        let cli = format!("adage-{}", "a".repeat(64));
+        let executor = format!("adage-exec-{}", "b".repeat(64));
+        std::fs::write(bin.join(&cli), b"cli fixture").unwrap();
+        std::fs::write(bin.join(&executor), b"executor fixture").unwrap();
+        symlink(&cli, bin.join("adage")).unwrap();
+        symlink(&executor, bin.join("adage-exec")).unwrap();
+        symlink("adage", bin.join("hook")).unwrap();
+        assert_eq!(serving_bin_at(&bin.join("hook")), Some(cli.clone()));
+        assert_eq!(serving_bin_at(&bin.join(&cli)), Some(cli));
+
+        std::fs::remove_file(bin.join("hook")).unwrap();
+        symlink("adage-exec", bin.join("hook")).unwrap();
+        assert_eq!(serving_bin_at(&bin.join("hook")), Some(executor));
+
+        std::fs::remove_file(bin.join("hook")).unwrap();
+        symlink("removed-executable", bin.join("hook")).unwrap();
+        assert_eq!(serving_bin_at(&bin.join("hook")), Some("hook".into()));
+    }
+
+    #[test]
+    fn serving_bin_keeps_its_previous_fallback_when_resolution_fails() {
+        let temp = tempfile::tempdir().unwrap();
+        assert_eq!(serving_bin_at(&temp.path().join("removed-adage.exe")), Some("removed-adage".into()));
+        assert_eq!(serving_bin_at(Path::new("")), None);
+    }
 
     #[test]
     fn session_contract_and_person_notice_use_separate_channels() {

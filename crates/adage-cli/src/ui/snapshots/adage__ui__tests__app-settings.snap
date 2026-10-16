@@ -22,7 +22,7 @@ expression: text
 
   Instincts & packs  3
     Built-in instincts       ● on
-    Instinct packs           auto, every installed pack
+    Instinct packs           auto, defaults + added packs
     Always leave out         none
 
   In Claude Code  4

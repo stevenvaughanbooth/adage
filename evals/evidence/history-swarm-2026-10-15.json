@@ -1,0 +1,213 @@
+{
+  "schema": "adage-history-swarm-evidence/1",
+  "date": "2026-10-15",
+  "scope": {
+    "agents": 3,
+    "tracks": [
+      "native failures and repair attempts",
+      "successful project routines",
+      "ingestion and subagent evidence loss"
+    ],
+    "frozen_raw_inputs": {
+      "adage": 335,
+      "goodform": 239
+    },
+    "latest_goodform_replacement_deduplicated_raw_inputs": 331,
+    "counting": "Newer GoodForm union replaces its older snapshot; do not add both counts. Calls, sessions and parent groups are distinguished. Parent groups are not proof of independent human tasks."
+  },
+  "implemented_fixes": [
+    {
+      "id": "native-system-completion-is-not-human-instruction",
+      "status": "implemented_and_replayed",
+      "native_envelope_requires": [
+        "origin.kind=task-notification",
+        "promptSource=system",
+        "turnOrigin=task_notification"
+      ],
+      "frozen_notifications_removed": 132,
+      "latest_union_notifications_removed": 136,
+      "first_session_tasks_corrected": 2,
+      "all_native_tool_calls_preserved": true,
+      "user_quoted_xml_preserved": true,
+      "cache_format": 12,
+      "qualification": "136 is125 Adage plus11 latest GoodForm notifications; frozen GoodForm had7. These are context records, not136 new reflexes."
+    },
+    {
+      "id": "missing-executable-identity",
+      "status": "implemented_and_replayed",
+      "diagnostic_bearing_actual_invocations": 46,
+      "parent_or_root_groups": 9,
+      "production_classifications_corrected": 45,
+      "unchanged_python_priority_cases": 1,
+      "qualification": "One output contains both a Python module failure and a shell failure; existing Python priority remains. Does not change pipeline exit attribution or establish successful repair."
+    }
+  ],
+  "ranked_next_opportunities": [
+    {
+      "rank": 1,
+      "id": "declared-project-validators",
+      "evidence": {
+        "validator_calls": 12,
+        "sessions": 7,
+        "parent_groups": 4,
+        "plain_single_command_successes": 1,
+        "compound_or_filtered_observations": 11
+      },
+      "gap": "Repository-declared custom validation scripts are treated as generic environment actions. Known-runner learning does not surface their verification contract.",
+      "next_product_slice": "Automatically propose a validator from exact observed interpreter/script plus a pinned declarative project or CI entry and relevant edited surface. Keep execution effects and unknown result semantics explicit.",
+      "proof_needed": "On a new relevant change, find a required check missing from the planned validation and demonstrate a concrete defect it catches.",
+      "status": "evidence_backed_opportunity_not_activated"
+    },
+    {
+      "rank": 2,
+      "id": "background-command-lifecycle",
+      "evidence": {
+        "native_terminal_joins": 148,
+        "sessions": 24,
+        "parent_lineages": 12,
+        "terminal_nonzero_with_canonical_failed_false": 26,
+        "nonzero_cancellation_codes": 22,
+        "nonzero_exit_one": 4
+      },
+      "gap": "Canonical results retain the pending launch response despite a later native terminal notification.",
+      "next_product_slice": "Represent pending and terminal execution facts with unique native identity and completion position, separate from stdout and test outcomes.",
+      "proof_needed": "Recover an attributable check with complete owned output while preserving chronology; completion status alone is insufficient.",
+      "status": "evidence_backed_opportunity_not_implemented"
+    },
+    {
+      "rank": 3,
+      "id": "runtime-and-launcher-contract",
+      "evidence": {
+        "native_runtime_mismatch_failures": 25,
+        "child_sessions": 25,
+        "parent_groups": 1
+      },
+      "gap": "The learner lacks runtime-mismatch evidence and can normalize distinct launchers into the same environment identity.",
+      "next_product_slice": "Preserve launcher identity and join runtime diagnostics to declared project runtime selection; propose the existing compatible launcher without disabling checks.",
+      "proof_needed": "Independent tasks with unchanged targets, flags and working directory, reaching an attributable test run.",
+      "status": "one_parent_cluster_not_independent_support"
+    },
+    {
+      "rank": 4,
+      "id": "complementary-test-profiles",
+      "evidence": {
+        "audited_calls": 8,
+        "child_sessions": 8,
+        "workflow_instances": 3,
+        "parent_groups": 1
+      },
+      "gap": "Default and dedicated integration profiles cover different obligations but do not become a combined verification proposal.",
+      "next_product_slice": "Propose exact runner, config, scope and prerequisites from observed declarations while preserving skipped obligations.",
+      "proof_needed": "A relevant edit with a default-only check plan, then a concrete defect found by the missing profile, including unnecessary-run rate.",
+      "status": "one_parent_cluster_review_only"
+    },
+    {
+      "rank": 5,
+      "id": "deadline-preserving-capability",
+      "evidence": {
+        "missing_timeout_calls": 39,
+        "sessions": 38,
+        "parent_or_root_groups": 7
+      },
+      "gap": "Unavailable timeout wrappers recur; deleting the wrapper loses the intended deadline.",
+      "next_product_slice": "Recognize the missing capability and establish an equivalent supported deadline mechanism before proposing a repair.",
+      "qualification": "These39 calls overlap the46 missing-command diagnostics; do not add them. No qualified safe timeout-removal reflex was found.",
+      "status": "evidence_backed_opportunity_not_activated"
+    }
+  ],
+  "conditioning_replay": {
+    "adage": {
+      "sessions_read": 335,
+      "sessions_used": 142,
+      "evidence_groups": 19,
+      "active_index_byte_identical": true,
+      "index_sha256": "260084daf23a8b83918a5d4468f8abd9b991de7ad965236052e43ff48f8d596d",
+      "new_active_reflexes": 0,
+      "thresholds_and_model_unchanged": true,
+      "procedure_proposals_unchanged": true,
+      "new_review_or_candidate_changes": [
+        {
+          "route": "intent-a897d5",
+          "status": "nascent"
+        },
+        {
+          "route": "run-920864",
+          "status": "candidate"
+        }
+      ],
+      "condition_sha256": "3effe2d0c91496f3cf560d4849e31ddb821b19bd4d4e5c4596f931c713e0281a",
+      "canonical_sha256": "d92d05dff0745efbfd2418c3f0002140df8152c56ecb13bd0298e1d1cce6110e"
+    },
+    "goodform": {
+      "sessions_read": 239,
+      "sessions_used": 226,
+      "evidence_groups": 3,
+      "active_index_byte_identical": true,
+      "index_sha256": "ef04b424a51f036f68e4463faa7fa89791477df0315e02c29d77760e98f50b00",
+      "new_active_reflexes": 0,
+      "thresholds_and_model_unchanged": true,
+      "procedure_proposals_unchanged": true,
+      "new_review_or_candidate_changes": [],
+      "condition_sha256": "30418609995136378477c629f33c518ad78797e820d6adcc5a7ddfd75317896d",
+      "canonical_sha256": "b46a80770ca13ddf494b5163739f6c102eeda3dfc90f2e61ab3c8f6a709a94fd"
+    },
+    "fresh-goodform": {
+      "sessions_read": 331,
+      "sessions_used": 315,
+      "evidence_groups": 3,
+      "active_index_byte_identical": true,
+      "index_sha256": "8168d910d0507ff3f0041d66d59fd566b45168ac708636ce05fe580230707495",
+      "new_active_reflexes": 0,
+      "thresholds_and_model_unchanged": true,
+      "procedure_proposals_unchanged": true,
+      "new_review_or_candidate_changes": [],
+      "condition_sha256": "4fed9858ac782baa03425c32341eb669b61073f336a446fcaddf7a71bb4a04aa",
+      "canonical_sha256": "8a3b687c62456dbb96fce5b207d72edc923fd574d50d66e0a3988b61b30ad116"
+    }
+  },
+  "verification": {
+    "ingest_tests_passed": 62,
+    "learner_tests_passed": 190,
+    "regressions_failed_before_and_passed_after": 2,
+    "workspace_all_targets_clippy": "passed",
+    "locked_offline_build": "passed",
+    "source_files_hash_verified": 3445,
+    "raw_input_hashes_verified": true,
+    "source_changes": [
+      {
+        "path": "crates/adage-learn/src/outcome.rs",
+        "before_sha256": "e86876ea1edfd3b0e7acdbd0108b02bf529a7337ce5384ed65d88179ef20f558",
+        "after_sha256": "5a8042e8ca0b64d1db07c71d2aeae3d70c314a159bdd3e6d8b398a885ee40e48"
+      },
+      {
+        "path": "CHANGELOG.md",
+        "before_sha256": "6e29180afa874571724eb56b4da8bb82567178c1a86be3dfe4a365ba02c036c6",
+        "after_sha256": "2b4d55326cde97c154290045573887b3d7e0e5c3e03ef70a71ebd928571b75eb"
+      },
+      {
+        "path": "crates/adage-ingest/src/claude.rs",
+        "before_sha256": "00d16ddd2deb43873c265b3e787fa1a58800479512b646040e0a9af6f296cf49",
+        "after_sha256": "21a68cca7603fc23318707867dda863749ffdf4bf12b50028b4f7e8b1f113fdc"
+      },
+      {
+        "path": "crates/adage-ingest/src/cache.rs",
+        "before_sha256": "e1e323a617918fc4be8e804e7946098497527971eb0d6aafd8399efeff2859b5",
+        "after_sha256": "41f9c67aa9609a50e406d4d9e5b1183491deb820c8274bce75fb95338bb20e4f"
+      }
+    ],
+    "binary_sha256": "5b4734a3388a35e26eecaa8c6c1cfb1a253f94a3672a1d9f750ecadb26f16817",
+    "private_audit_sha256": "812a4cf465b4fa69db5adad9ec87c36c926951f547e58261519f1e51abde348e",
+    "agent_report_sha256s": [
+      "e072ec407c0f1121d252d59799cdf3fd973cb5e701d89021f7c4fdcd9753f2c2",
+      "ed5943f94d599ebe6e71d914fe552ec692c1a30d954a42deff5410b6fbb5c2ce",
+      "0e6ef358a3cf7183c7d3d5197e835d86f87d9f20162c75ad06cc50df709f51f4"
+    ]
+  },
+  "limitations": [
+    "No new active reflex or live performance improvement established by this pass.",
+    "Existing git-status intent reappears as a nascent review item with low estimated incremental value; it was not activated.",
+    "Reported observation counts are not independent task counts or saved failures.",
+    "No runtime changes, hook approvals, marketplace activation or external publication performed.",
+    "Four previously known full-workspace evaluation assertions remain outside this pass; not a launch-ready certification."
+  ]
+}

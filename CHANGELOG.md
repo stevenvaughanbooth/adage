@@ -9,15 +9,100 @@ Nothing has been released yet, so this file describes the first version as it st
 there is in the git history and in `docs/` (the Implementation Plan, and the track documents
 under `docs/tracks/`).
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-10-15
 
 **Agent traces become reflexes.** Adage reads the traces coding agents leave behind, finds the
 paths that get work done, and compiles them into reflexes: small, typed, deterministic responses
 with their evidence attached. At each decision point the matching reflex tells the agent what to
 do next. Adage never runs the commands it directs; execution is a separate, opt-in binary.
 
+### Trying and sharing Adage
+
+- Rewritten README, guides and website invite contributors to uncover useful patterns in
+  agent history and improve automatic learning. They explain advice, approved execution and
+  the separate Claude Code mod prototype, and present specialized workflows as a hypothesis
+  to explore alongside the published study results.
+- Both teaser cuts use the website's evidence: 22% fewer model requests in the advisory
+  comparison and about 48% fewer in the Claude Code mod development study. Each comparison
+  names its scope and passing-run counts; a renderer reads the same evidence files as the website.
+- The planned `@adage-sh/cli` npm package installs platform binaries without Rust or a Git
+  checkout. Release staging verifies archive checksums and package contents; scoped-package
+  smoke tests and Node 24 publishing support token bootstrap and npm trusted publishing.
+  Public installation instructions remain marked pending until a release is verified.
+- A documentation index separates setup, reference and research. The historical launch
+  handoff now summarizes the study and its limitations without personal working notes.
+- YAML files use the YAML organization's maintained parser fork, replacing the deprecated
+  `serde_yaml` and unmaintained `unsafe-libyaml` dependencies while preserving the file format.
+- Offline route evaluation can recognize a reviewed contextual execution contract only when the full
+  ordered context, fixed command and qualifying execution evidence agree. These contracts
+  do not count toward planted-convention discovery or prove live savings. Existing quality
+  and safety thresholds remain unchanged.
+
+### Verification learning
+
+- Conditioning discovers declared custom-check leads by joining fixed script requests with
+  complete recorded package tasks or CI checks, including declarations an agent authored
+  afterward. Each lead keeps native call references, document hashes, declaration timing,
+  interpreter spelling, the qualifying label or conventional script filename, and parent evidence
+  groups. CLI and interactive summaries show these
+  separately from active reflexes; script effects, applicability and results remain unverified.
+  Partial, transformed and compound file reads are excluded, and no script is executed to learn it.
+- Claude history distinguishes native system task-completion notifications from human
+  instructions. Notifications no longer replace the task or split its prompt context, while
+  user-pasted notification text remains a prompt. Parse caches rebuild for this correction.
+- Missing-command learning recognizes zsh's reversed diagnostic (`command not found: cargo`),
+  including native `(eval)` line prefixes. Failures are grouped by the missing executable
+  instead of the shell name or line number, with the original diagnostic retained for matching.
+  This corrects failure classification without treating a repair as successful task completion.
+- Codex history now recovers commands hidden inside a literal single-call orchestration
+  wrapper, including subagent calls, their real exit status, working directory and native
+  identity. Original wrapper evidence stays attached. Dynamic or multiple calls, incomplete
+  or truncated output, elevated permissions and nondefault execution contexts remain opaque;
+  shared shell output is not promoted to independent successful checks. Parse caches rebuild.
+- Session-start failure-avoidance scoring counts the first attributable runner choice. A failed
+  attempt followed by a repair is no longer treated as knowing how to avoid the failure. Test
+  assertion failures still count as choosing a working runner when cases actually executed;
+  ambiguous histories remain unscored, and older fitted avoidance estimates are invalidated.
+- Repeated environment repairs can survive diagnostic detours during learning. The validator
+  follows a bounded native-call history to an attributable successful test run, preserving
+  arguments and test scope, instead of discarding a repair beyond five normalized steps.
+  The normal support threshold still applies; edits, environment changes and ambiguous work
+  interrupt the evidence. Literal-prefix pathname listings such as `ls .venv*` are recognized
+  as diagnostic observations without granting command execution.
+- Failed compound observations retain their original call identity when normalization assigns
+  failure only to the last internal step. They count as one native call; conflicting payloads
+  and reused identifiers still invalidate attribution.
+- Python commands with a numeric version, such as `python3.11 -m pytest`, are classified as
+  verification consistently with the project interpreter. Inline code and scripts stay
+  conservative, and cached traces are rebuilt for the normalization change.
+- Environment-recovery scoring distinguishes an immediate choice from a fix discovered after
+  diagnostic work. It counts attributable native calls rather than flattened shell actions,
+  keeps legacy step counts separate, and does not activate a recovery from a prior-only value
+  estimate. Task, actor, working-directory and intervening-work boundaries limit attribution;
+  old fitted cost priors must be refitted for the revised units and choice semantics.
+- Normal conditioning now finds verification procedure proposals in agent and subagent traces:
+  checks from claimed clean state, negative controls, empty test runs, mismatched recheck scopes
+  and attributable failure-to-pass retries without observed intervening invalidating work. A passing
+  retry is an investigation lead, not evidence of a repair or unchanged source. Each retains its
+  evidence and missing requirements; proposals are private and do not
+  automatically become active reflexes. Persistence round-trip and incremental-equivalence
+  method leads retain their runner evidence and attribution limits separately from task success. Sibling subagents count as one evidence family.
+- Learning distinguishes runner results from shell status. Empty suites, setup failures and
+  ambiguous shared output no longer count as successful verification. Learned test selection
+  requires evidence that the chosen runner actually executed each target.
+- The optional `adage/verification-discovery` instinct guides investigation after a declared
+  pytest, Jest or Vitest command reports no tests. It uses existing packs and hook delivery,
+  executes nothing, and is off by default.
+- The optional `adage/verification-recovery` instinct gives Claude Code advice after the same
+  declared test invocation reports failing cases, then passes with equal positive test counts
+  and no observed intervening repair. It is off by default, uses existing pack activation and
+  signed export, and executes nothing. The observation does not prove unchanged inputs, flakiness
+  or a repaired task; the initial six-session pilot had no qualifying recoveries or deliveries.
+
 ### The runtime and hooks
 
+- Session-start telemetry resolves plugin executable symlinks, so the recorded binary identifies
+  the component that actually served the hook on macOS as well as Linux.
 - **An edit made through Bash is an edit.** A Bash call in a tool batch is read with the files it
   writes: a redirection's target (`cat > f <<'EOF'`, `printf … >> f`), `tee`'s operands, and the
   files an inline Python program opens for writing (`python3 - <<'E'`, `python3 -c`, a path held in
@@ -136,6 +221,19 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   an earlier build has no path and is not used until the skill is trained again.
 
 ### Conditioning (learning from traces)
+
+- **Learn from delegated work.** Claude Code histories include agent transcripts nested under
+  workflow directories, while journals and symlinked directories are excluded. Verified case
+  aliases of the same checkout no longer hide its history. Codex task children with an explicit
+  native history boundary retain their own completed calls; inherited actions are excluded and
+  related workers share a conservative evidence group. Encrypted assignments remain unknown,
+  opaque tool input is preserved, and approval-review workers are not task demonstrations.
+- **Structured handbacks are completion evidence, not success grades.** A matching accepted
+  Claude handback no longer looks like an interrupted tool call. It does not create a passing
+  outcome, including when earlier checks passed; later unfinished work still counts as cut off.
+- **Multi-file reads retain every known path.** Literal `cat` operands all reach the learner.
+  Their combined output is not mistaken for the source of any individual script when learning
+  command effects.
 
 - **A repository script is classified from its command and its text, not from what it printed.**
   A lookup prints a work item, and a work item says things like "generated models include it":

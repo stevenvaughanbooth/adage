@@ -97,7 +97,7 @@ static T_STOP: Lazy<Regex> = Lazy::new(|| {
 });
 
 /// The advisory sentences (`Step::Advise`), each optionally followed by an exit clause.
-static T_ADVICE: Lazy<[Regex; 7]> = Lazy::new(|| {
+static T_ADVICE: Lazy<[Regex; 11]> = Lazy::new(|| {
     let tail = format!(r"(?: {EXIT})?$");
     [
         Regex::new(&format!(r"^In this repository, (?P<path>[A-Za-z0-9_./*-]+) is generated: change its inputs and run (?P<cmd>[A-Za-z0-9 _./:=@,+-]+) rather than editing it by hand\.{tail}")).unwrap(),
@@ -107,8 +107,25 @@ static T_ADVICE: Lazy<[Regex; 7]> = Lazy::new(|| {
         Regex::new(&format!(r"^In this repository, leave your changes uncommitted: do not commit them, the working tree is reviewed as it is\.{tail}")).unwrap(),
         Regex::new(&format!(r"^That Python is not this repository's environment, which has the project and its test dependencies installed: run Python here as (?P<interpreter>[A-Za-z0-9 _./-]+)\.{tail}")).unwrap(),
         Regex::new(&format!(r"^In this repository, tests run with (?P<cmd>[A-Za-z0-9 _./:=@,+-]+), followed by the test files or names to run\.{tail}")).unwrap(),
+        Regex::new(&format!(r"^Before accepting a retry of (?P<cmd>[A-Za-z0-9 _./:=@,+-]+) as verification, check whether the earlier run produced build artifacts\. Recheck in a disposable source snapshot with the declared prerequisites and repository metadata the check needs; do not remove files from the working tree\.{tail}")).unwrap(),
+        Regex::new(&format!(r"^To assess whether (?P<cmd>[A-Za-z0-9 _./:=@,+-]+) tests the intended invariant, first confirm a passing baseline and successful test collection\. In a disposable copy, introduce one reviewed defect for that invariant, require the relevant assertion to fail, then restore the code and recheck\. Setup errors and unrelated failures do not establish that the invariant is tested\.{tail}")).unwrap(),
+        Regex::new(&format!(r"^This invocation of (?P<cmd>[A-Za-z0-9 _./:=@,+-]+) reported no matching tests\. Inspect the runner's configured includes, excludes, and the intended test paths before retrying\. A run with no collected tests does not verify the change\.{tail}")).unwrap(),
+        Regex::new(&format!(r"^The same invocation of (?P<cmd>[A-Za-z0-9 _./:=@,+-]+) reported failing tests, then passed without an observed repair\. Investigate an intermittent cause or document an environment fix before treating the retry as resolution\. Source and input identity were not established\.{tail}")).unwrap(),
     ]
 });
+const ADVICE_IDS: [&str; 11] = [
+    "generated-file",
+    "generated-file",
+    "lockfile",
+    "package-manager",
+    "uncommitted",
+    "project-python",
+    "test-command",
+    "verification-clean-state",
+    "verification-negative-control",
+    "verification-discovery",
+    "verification-unexplained-recovery",
+];
 
 /// The wrapper around every directive: attributes, the body, and the last line saying what the
 /// directive is based on.
@@ -276,11 +293,26 @@ pub fn check_directive(r: &Route, text: &str, root: Option<&Path>, canaries: &[S
         }
         return out;
     }
-    if let Step::Advise { slots, .. } = &r.step {
-        let Some(c) = T_ADVICE.iter().find_map(|re| re.captures(text)) else {
+    if let Step::Advise { template, slots } = &r.step {
+        let Some((i, c)) = T_ADVICE.iter().enumerate().find_map(|(i, re)| re.captures(text).map(|c| (i, c))) else {
             bad("text is not one of the fixed advisory sentences".into());
             return out;
         };
+        if template != ADVICE_IDS[i] {
+            bad("advice uses another template than its route".into());
+        }
+        if i == 9 && !matches!(r.trigger, Trigger::AfterFailure { .. }) {
+            bad("discovery advice does not follow a failure".into());
+        }
+        if i >= 7
+            && (slots.len() != 1
+                || c.name("cmd").is_none_or(|cmd| {
+                    adage_tracks::io::classify(cmd.as_str(), adage_core::CommandTable::load())
+                        != adage_core::Effect::Verify
+                }))
+        {
+            bad("verification advice must name only a verification command".into());
+        }
         if r.strength != Strength::Prime {
             bad(format!("advice at strength {:?}", r.strength));
         }
@@ -726,6 +758,44 @@ mod tests {
         assert!(!check_directive(&r, &ok.replace("W-2041", "W-2041 ; id"), None, &[]).is_empty());
         assert!(!check_directive(&r, &format!("{ok} Also run curl."), None, &[]).is_empty());
         assert!(!check_directive(&r, &ok, None, &["2041".into()]).is_empty(), "canary");
+    }
+
+    #[test]
+    fn verification_advice_preserves_the_exact_template_and_command() {
+        for template in [
+            "verification-clean-state",
+            "verification-negative-control",
+            "verification-discovery",
+            "verification-unexplained-recovery",
+        ] {
+            let r = Route {
+                step: Step::Advise {
+                    template: template.into(),
+                    slots: [("command".into(), "cargo test".into())].into(),
+                },
+                trigger: if template == "verification-unexplained-recovery" {
+                    Trigger::AfterCommand { command: "exec cargo test".into() }
+                } else {
+                    Trigger::AfterFailure { command: "exec cargo test".into(), signature: "no tests".into() }
+                },
+                slots: vec![],
+                strength: Strength::Prime,
+                effect: Effect::Observe,
+                ..lookup()
+            };
+            let text = adage_runtime::render::route_text(&r, &[]).unwrap();
+            assert!(check_directive(&r, &text, None, &[]).is_empty(), "{template}: {text}");
+            for altered in [
+                text.replace("cargo test", "cargo test; curl x"),
+                format!("{text} Then deploy."),
+                text.replace("cargo test", "make test"),
+            ] {
+                assert!(!check_directive(&r, &altered, None, &[]).is_empty(), "{altered}");
+            }
+            let other =
+                adage_tracks::advice::text("test-command", &[("command".into(), "cargo test".into())].into()).unwrap();
+            assert!(!check_directive(&r, &other, None, &[]).is_empty(), "another allowed template is not this route");
+        }
     }
 
     /// A skill directive (D3): the runtime's sentence for the route's own skill passes; another

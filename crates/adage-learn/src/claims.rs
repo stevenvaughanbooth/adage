@@ -304,6 +304,7 @@ mod tests {
             steps.push(step(9, CanonicalAction::Exec { argv, cwd: "/r".into() }, Effect::Regenerate));
         }
         Session {
+            delegation: None,
             id: id.into(),
             root: "/r".into(),
             repo: "acme".into(),

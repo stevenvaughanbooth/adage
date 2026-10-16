@@ -864,6 +864,7 @@ mod tests {
         let n = MINED_PER_REPO * 2 + 5;
         for i in 0..n {
             a.add(Session {
+                delegation: None,
                 id: format!("s{i:05}"),
                 root: PathBuf::from("/r"),
                 repo: "r".into(),

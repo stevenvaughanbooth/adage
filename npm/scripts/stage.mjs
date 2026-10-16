@@ -18,6 +18,7 @@
 // Publishes nothing.
 
 import { execFileSync } from "node:child_process"
+import { createHash } from "node:crypto"
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
@@ -80,6 +81,11 @@ function fromArchive(artifacts, app, p, exe, scratch) {
   const base = `${app}-${p.target}`
   const archive = [".tar.xz", ".tar.gz", ".zip"].map((ext) => path.join(artifacts, base + ext)).find(existsSync)
   if (!archive) return null
+  // Use the same release-archive verification as the Claude Code plugin publisher.
+  if (!existsSync(`${archive}.sha256`)) fail(`${archive} has no .sha256; refusing an unverified release archive`)
+  const expected = readFileSync(`${archive}.sha256`, "utf8").trim().split(/\s+/)[0]
+  const actual = createHash("sha256").update(readFileSync(archive)).digest("hex")
+  if (expected !== actual) fail(`${archive} does not match ${path.basename(archive)}.sha256`)
   const into = path.join(scratch, app, p.target)
   mkdirSync(into, { recursive: true })
   if (archive.endsWith(".zip")) {
@@ -134,7 +140,7 @@ try {
     writeFileSync(path.join(dir, "package.json"), JSON.stringify(manifest, null, 2) + "\n")
     writeFileSync(
       path.join(dir, "README.md"),
-      `# ${manifest.name}\n\nThe \`adage\` binary for ${p.os}-${p.cpu} (\`${p.target}\`). Install [\`${name}\`](https://www.npmjs.com/package/${name}) instead; it depends on this package on ${p.os}-${p.cpu} only.\n`,
+      `# ${manifest.name}\n\nAdage binaries for ${p.os}-${p.cpu} (\`${p.target}\`). Install [\`${name}\`](https://www.npmjs.com/package/${name}) to select the right platform automatically.\n`,
     )
     // The binary embeds third-party data (the MIT embedding model): its notices travel with it.
     for (const f of LEGAL) copyFileSync(path.join(repoDir, f), path.join(dir, f))

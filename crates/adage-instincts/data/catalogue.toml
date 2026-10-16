@@ -28,6 +28,32 @@ name = "core"
 version = "0.1.0"
 
 [[instinct]]
+id = "U13"
+priority = "P0"
+enabled = true
+title = "Investigate an unexplained passing retry"
+trigger = "after_command"
+directive = "After the same invocation reports failing tests then passes without an observed repair, investigate an intermittent cause or document an environment fix"
+cap = "prime"
+detection = "One plain declared pytest, Jest or Vitest invocation; bounded runtime evidence requires matching direct test reports with no observed intervening repair or opaque activity"
+fp_risk = "low"
+kind = "advisory"
+needs = []
+
+[[instinct]]
+id = "U12"
+priority = "P0"
+enabled = true
+title = "Investigate an empty test selection"
+trigger = "after_failure"
+directive = "After a declared test runner reports no matching tests, inspect discovery configuration and intended test paths before retrying"
+cap = "prime"
+detection = "One plain declared pytest, Jest or Vitest invocation; runtime requires an attributable runner-specific no-tests report, never merely a matching output substring"
+fp_risk = "low"
+kind = "advisory"
+needs = []
+
+[[instinct]]
 id = "U1"
 priority = "P0"
 enabled = true

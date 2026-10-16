@@ -134,7 +134,8 @@ pub fn import(reader: impl BufRead, repo: &str, mode: Mode, limits: Limits, stor
     Ok(report)
 }
 
-/// Read exactly the snapshot named by its manifest, verifying content hashes and ownership.
+/// Read the snapshot named by its manifest, verifying content hashes and ownership, then resolve
+/// native lineage over the complete snapshot. Stored source records remain byte-for-byte intact.
 /// Learning's current memory bound is one repository, not the entire organization's corpus.
 pub fn load(repo: &str, store: &dyn Store) -> Result<adage_ingest::batch::Batch> {
     let manifest = store.corpus_manifest(repo)?.context("no canonical corpus for this repository")?;
@@ -155,6 +156,9 @@ fn load_manifest(manifest: Manifest, store: &dyn Store) -> Result<adage_ingest::
         batch.steered += usize::from(session.steered);
         batch.sessions.push(session);
     }
+    // Separate exports can each lack the other's ancestor records. Their combined snapshot is
+    // one evidence family where native links establish it, not independent support per upload.
+    adage_ingest::batch::group_native_lineages(&mut batch.sessions);
     Ok(batch)
 }
 
@@ -225,10 +229,17 @@ pub fn export(
         repo_override: repo,
         subagent: false,
     };
-    let mut count = 0;
+    let mut sessions = Vec::with_capacity(paths.len());
     for path in paths {
-        let mut session = adage_ingest::read_trace(path, &cx)
+        let session = adage_ingest::read_trace(path, &cx)
             .with_context(|| format!("no usable canonical session in {}", path.display()))?;
+        sessions.push(session);
+    }
+    // Native child histories must share the same conservative evidence grouping as a direct
+    // learn. Resolve the whole batch before applying explicit corpus identities, which win.
+    adage_ingest::batch::group_native_lineages(&mut sessions);
+    let count = sessions.len();
+    for mut session in sessions {
         if let Some(identity) = identities.get(&session.id) {
             session.identity = identity.clone();
         }
@@ -236,7 +247,6 @@ pub fn export(
             session.outcome = Some(*outcome);
         }
         corpus::write(&mut writer, &session)?;
-        count += 1;
     }
     Ok(count)
 }

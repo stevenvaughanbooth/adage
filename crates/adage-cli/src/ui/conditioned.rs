@@ -64,10 +64,21 @@ pub struct Repo {
     pub compiled: usize,
     pub kept: usize,
     pub contexts: usize,
+    /// Review-only declarations, separate from verified checks and active reflexes.
+    pub declared_checks: usize,
+    /// A bounded preview; the full evidence remains in the conditioning report.
+    pub declared_check_leads: Vec<DeclaredCheckLead>,
     pub kept_by: Vec<(String, usize)>,
     pub sets: Vec<ReflexSet>,
     pub changes: Vec<Change>,
     pub instincts: Option<Instincts>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeclaredCheckLead {
+    pub name: String,
+    pub traces: usize,
+    pub groups: usize,
 }
 
 /// A reflex set (a track) as the run left it.
@@ -160,6 +171,18 @@ impl Card {
                     compiled: num(e, "compiled"),
                     kept: num(e, "routes"),
                     contexts: num(e, "contexts"),
+                    declared_checks: e["procedures"]["declared_validators"].as_array().map_or(0, Vec::len),
+                    declared_check_leads: e["procedures"]["declared_validators"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .take(6)
+                        .map(|lead| DeclaredCheckLead {
+                            name: crate::condition_out::declared_check_label(&text(lead, "name")),
+                            traces: num(lead, "sessions"),
+                            groups: num(lead, "evidence_groups"),
+                        })
+                        .collect(),
                     kept_by: e["kept_by"]
                         .as_object()
                         .into_iter()
@@ -208,6 +231,10 @@ impl Card {
         self.repos.iter().flat_map(|r| r.changes.iter())
     }
 
+    fn declared_checks(&self) -> usize {
+        self.repos.iter().map(|r| r.declared_checks).sum()
+    }
+
     fn sets(&self) -> impl Iterator<Item = (&Repo, &ReflexSet)> {
         self.repos.iter().flat_map(|r| r.sets.iter().map(move |s| (r, s)))
     }
@@ -237,7 +264,15 @@ impl Card {
             }
         }
         if !self.repos.is_empty() {
-            parts.push(changed_words(self.changes().map(|c| (c.kind.as_str(), c.from, c.to))));
+            let changed = changed_words(self.changes().map(|c| (c.kind.as_str(), c.from, c.to)));
+            parts.push(if self.declared_checks() > 0 && changed == "nothing changed" {
+                "no active reflex changed".into()
+            } else {
+                changed
+            });
+        }
+        if self.declared_checks() > 0 {
+            parts.push(count(self.declared_checks(), "declared check lead"));
         }
         parts
     }
@@ -275,6 +310,9 @@ impl Card {
         out.extend(
             self.changes().filter(|c| significant(&c.kind)).map(|c| format!("  {}: {}", badge_words(c), c.name())),
         );
+        if self.declared_checks() > 0 {
+            out.push("  Declared check results and applicability are unverified; not active reflexes.".into());
+        }
         out.extend(self.note_groups().into_iter().map(|g| format!("  {}", g.text)));
         out
     }
@@ -1024,6 +1062,8 @@ fn change_lines(card: &Card, t: &Theme) -> Vec<Line<'static>> {
         v.push(Line::from(sp(
             if evidence > 0 {
                 format!("No reflex changed strength; {} saw new traces.", count(evidence, "reflex"))
+            } else if card.declared_checks() > 0 {
+                "No active reflex changed.".to_string()
             } else {
                 "Nothing changed: every reflex kept its strength.".to_string()
             },
@@ -1054,6 +1094,13 @@ fn change_lines(card: &Card, t: &Theme) -> Vec<Line<'static>> {
             format!("  {} forming: seen, but not yet in enough traces", count(candidates, "candidate")),
             t.dim(),
         )));
+    }
+    if card.declared_checks() > 0 {
+        v.push(Line::from(sp(
+            format!("  {} · not active reflexes", count(card.declared_checks(), "declared check lead")),
+            t.ink2(),
+        )));
+        v.push(Line::from(sp("  Results and applicability unverified · v shows the leads", t.dim())));
     }
     v
 }
@@ -1247,6 +1294,41 @@ fn details_lines(card: &Card, w: usize, t: &Theme) -> Vec<Line<'static>> {
         }
         let label = if card.repos.len() > 1 { super::scope::short(&r.key) } else { "learning".into() };
         v.extend(detail(&label, &learning, w, t));
+        if r.declared_checks > 0 {
+            v.extend(detail(
+                "declared checks",
+                &format!(
+                    "{}; results and applicability unverified, not active reflexes",
+                    count(r.declared_checks, "declared check lead")
+                ),
+                w,
+                t,
+            ));
+            for lead in &r.declared_check_leads {
+                v.extend(detail(
+                    "",
+                    &format!(
+                        "{} · {}, {}",
+                        lead.name,
+                        count(lead.traces, "trace"),
+                        count(lead.groups, "evidence group")
+                    ),
+                    w,
+                    t,
+                ));
+            }
+            if r.declared_checks > r.declared_check_leads.len() {
+                v.extend(detail(
+                    "",
+                    &format!(
+                        "{} in the JSON report",
+                        count(r.declared_checks - r.declared_check_leads.len(), "additional lead")
+                    ),
+                    w,
+                    t,
+                ));
+            }
+        }
     }
     for (i, (_, s)) in card.sets().enumerate() {
         let value = format!("{}@{} · {}", s.name, s.version, crate::words::prose(&s.change));
@@ -1388,6 +1470,46 @@ mod tests {
 
     fn plain() -> Theme {
         Theme::with_color(false)
+    }
+
+    #[test]
+    fn declaration_only_learning_is_visible_without_active_reflex_or_approval_counts() {
+        let leads: Vec<Value> = (0..7)
+            .map(|i| {
+                json!({
+                    "name": format!("check-{i}\u{1b}[2J"), "sessions": 8, "evidence_groups": 1
+                })
+            })
+            .collect();
+        let mut report = json!({
+            "sessions_read": 8, "sessions_used": 8,
+            "repos": { "acme": { "sessions": 8, "tracks": [], "engine": {
+                "routes": 0, "procedures": { "declared_validators": leads }
+            }}},
+            "changes": { "acme": [] }, "waiting": { "needs_you": 0, "to_look_over": 0 }
+        });
+        let card = Card::parse(&report.to_string(), vec![]).unwrap();
+        assert_eq!(card.declared_checks(), 7);
+        assert_eq!(card.repos[0].declared_check_leads.len(), 6);
+        assert_eq!((card.reflexes(), card.waiting), (0, (0, 0)));
+        assert_eq!(card.next().1, "Open Reflexes");
+        let text = card.text_lines().join("\n");
+        assert!(text.contains("7 declared check leads") && text.contains("no active reflex changed"), "{text}");
+        assert!(text.contains("results and applicability are unverified; not active reflexes"), "{text}");
+        assert!(!text.contains("nothing changed") && !text.contains("approve"), "{text}");
+        let lines = |lines: Vec<Line<'static>>| lines.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
+        let main = lines(change_lines(&card, &plain()));
+        assert!(
+            main.contains("7 declared check leads") && main.contains("Results and applicability unverified"),
+            "{main}"
+        );
+        let details = lines(details_lines(&card, 160, &plain()));
+        assert!(details.contains("check-5") && !details.contains("check-6"), "{details}");
+        assert!(details.contains("8 traces, 1 evidence group") && !details.contains('\u{1b}'), "{details}");
+        report["repos"]["acme"]["engine"]["procedures"].as_object_mut().unwrap().remove("declared_validators");
+        let old = Card::parse(&report.to_string(), vec![]).unwrap();
+        assert_eq!(old.declared_checks(), 0, "older reports remain readable");
+        assert!(old.sentence().contains("nothing changed"));
     }
 
     #[test]
