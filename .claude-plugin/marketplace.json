@@ -12,7 +12,7 @@
       "name": "adage",
       "source": {
         "source": "git-subdir",
-        "url": "stevenvaughanbooth/adage",
+        "url": "https://github.com/stevenvaughanbooth/adage.git",
         "path": "plugin/claude-code",
         "ref": "marketplace"
       },

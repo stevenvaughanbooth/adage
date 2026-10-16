@@ -7,7 +7,7 @@
 // The marketplace lists that one plugin and nothing else (the retired `adage-exec` alias is gone:
 // nothing was ever published, so there was nothing to quiet).
 //
-// The marketplace installs the plugin from the `marketplace` branch (a `git-subdir` source), which
+// The marketplace installs the plugin over HTTPS from the `marketplace` branch (a `git-subdir` source), which
 // the release workflow writes with verified binaries for every target bundled
 // (scripts/stage-plugin.mjs). `--staged <dir>` checks such a staged tree: every target present
 // with its three binaries (no adage-exec on Windows), every binary matching dist/SHA256SUMS.
@@ -66,8 +66,8 @@ expect(!existsSync(path.join(repo, "plugin/claude-code-exec")), "plugin/claude-c
   if (entry) {
     const s = entry.source || {}
     expect(
-      s.source === "git-subdir" && s.url === "stevenvaughanbooth/adage" && s.path === pluginDir && s.ref === "marketplace",
-      `marketplace source for ${plugin.name} must be {source: git-subdir, url: stevenvaughanbooth/adage, path: ${pluginDir}, ref: marketplace} (the branch with bundled binaries)`,
+      s.source === "git-subdir" && s.url === "https://github.com/stevenvaughanbooth/adage.git" && s.path === pluginDir && s.ref === "marketplace",
+      `marketplace source for ${plugin.name} must be {source: git-subdir, url: https://github.com/stevenvaughanbooth/adage.git, path: ${pluginDir}, ref: marketplace} (HTTPS installs the bundled binaries without SSH setup; repository shorthand can select SSH)`,
     )
     expect(!/on PATH/i.test(entry.description || ""), `marketplace description for ${plugin.name} still says it needs a binary on PATH`)
     // Homebrew is off the release (dist-workspace.toml): the description names no channel that is not live.

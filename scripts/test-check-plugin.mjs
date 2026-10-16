@@ -1,7 +1,8 @@
 // scripts/check-plugin.mjs on a copy of the files it reads, changed one way at a time: it passes
 // with the one plugin as committed, and fails when the marketplace lists a second plugin, when the
 // description says the plugin needs a binary on PATH or names Homebrew, when the retired alias's
-// directory comes back, and when the shim stops placing adage-train (T-O1-04, T-O12-04).
+// directory comes back, when the source URL requires SSH setup, and when the shim stops placing
+// adage-train (T-O1-04, T-O12-04).
 //
 //   node scripts/test-check-plugin.mjs
 import assert from "node:assert/strict"
@@ -41,6 +42,14 @@ try {
   assert.match(r.stdout, /^plugin adage \S+: ok$/m)
 
   const m = JSON.parse(readFileSync(market, "utf8"))
+  // Claude Code resolves owner/repository git-subdir sources through SSH, which fails on a
+  // fresh machine without host trust. Preserve the explicit public HTTPS install route.
+  for (const url of ["stevenvaughanbooth/adage", "git@github.com:stevenvaughanbooth/adage.git", "ssh://git@github.com/stevenvaughanbooth/adage.git"]) {
+    refuses(market, () => {
+      const plugin = { ...m.plugins[0], source: { ...m.plugins[0].source, url } }
+      writeFileSync(market, JSON.stringify({ ...m, plugins: [plugin] }, null, 2))
+    }, /url: https:\/\/github\.com\/stevenvaughanbooth\/adage\.git.*without SSH setup/, `an SSH-dependent source URL (${url})`)
+  }
   refuses(market, () => {
     const second = { ...m.plugins[0], name: "adage-exec", source: { ...m.plugins[0].source, path: "plugin/claude-code-exec" } }
     writeFileSync(market, JSON.stringify({ ...m, plugins: [...m.plugins, second] }, null, 2))
@@ -63,7 +72,7 @@ try {
 
   r = check()
   assert.equal(r.status, 0, r.stdout + r.stderr)
-  console.log("check-plugin: one plugin passes; a second plugin, an on-PATH or Homebrew description, the alias directory and a shim without adage-train each fail (T-O1-04)")
+  console.log("check-plugin: one HTTPS plugin passes; SSH-dependent sources, a second plugin, an on-PATH or Homebrew description, the alias directory and a shim without adage-train each fail (T-O1-04)")
 } finally {
   rmSync(root, { recursive: true, force: true })
 }
