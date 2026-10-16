@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="Adage: learn reusable steps from coding-agent sessions" src="web/site/public/og.jpg" width="100%">
+  <img alt="Adage: learn reusable steps from coding-agent sessions" src="docs/assets/readme-header.jpg" width="100%">
 </p>
 
 <p align="center">

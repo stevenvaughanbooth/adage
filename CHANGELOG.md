@@ -5,16 +5,15 @@ All notable changes to Adage are recorded here. The format follows
 [Semantic Versioning](https://semver.org/). The release workflow uses the section for a tag's
 version as the GitHub Release notes.
 
-Nothing has been released yet, so this file describes the first version as it stands; the path
-there is in the git history and in `docs/` (the Implementation Plan, and the track documents
-under `docs/tracks/`).
+The first version brings together local learning, agent integrations and shareable reflex packs.
+The development history is recorded in Git and the design documents under `docs/`.
 
 ## 0.1.0 - 2026-10-15
 
 **Agent traces become reflexes.** Adage reads the traces coding agents leave behind, finds the
 paths that get work done, and compiles them into reflexes: small, typed, deterministic responses
 with their evidence attached. At each decision point the matching reflex tells the agent what to
-do next. Adage never runs the commands it directs; execution is a separate, opt-in binary.
+do next. Advice is the default; automatic execution uses a separate, opt-in binary.
 
 ### Trying and sharing Adage
 
@@ -22,13 +21,14 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   agent history and improve automatic learning. They explain advice, approved execution and
   the separate Claude Code mod prototype, and present specialized workflows as a hypothesis
   to explore alongside the published study results.
+- The README restores Adage's original visual branding and puts `npm install -g @adage-sh/cli`
+  in the header so the download path is visible at a glance.
 - Both teaser cuts use the website's evidence: 22% fewer model requests in the advisory
   comparison and about 48% fewer in the Claude Code mod development study. Each comparison
   names its scope and passing-run counts; a renderer reads the same evidence files as the website.
-- The planned `@adage-sh/cli` npm package installs platform binaries without Rust or a Git
+- The `@adage-sh/cli` npm package installs platform binaries without Rust or a Git
   checkout. Release staging verifies archive checksums and package contents; scoped-package
   smoke tests and Node 24 publishing support token bootstrap and npm trusted publishing.
-  Public installation instructions remain marked pending until a release is verified.
 - A documentation index separates setup, reference and research. The historical launch
   handoff now summarizes the study and its limitations without personal working notes.
 - YAML files use the YAML organization's maintained parser fork, replacing the deprecated
@@ -909,13 +909,6 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 - **The tokens for the Claude Code mod.** `cargo xtask tokens` also writes
   `plugin/claude-code/hooks/tokens.ts`: every glyph with its ASCII twin, and Adage's roles as the
   engine's theme keys, so the mod draws with the person's Claude Code theme and no colour literal.
-- **One Claude Code plugin ships both binaries.** `/plugin install adage@adage` is the only
-  install step: the plugin bundles `adage` and `adage-exec` (each checksummed, else the one on
-  `PATH`; it never downloads), and its hooks run `adage-exec` while `adage delegate on`'s marker
-  exists, else `adage`, so they are registered once and never fire twice; the edit and Stop hooks
-  have 30 s. This reverses Track C's second plugin (its D2): the retired `adage-exec` plugin stays
-  one release as an alias that quiets what it left behind and asks to be uninstalled. Not
-  published yet.
 
 ### Settings
 
@@ -1024,12 +1017,12 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Installing and updating
 
-- **One plugin carries all three binaries.** The Claude Code plugin bundles `adage`, `adage-exec`
-  and `adage-train` for every release target, each verified against `dist/SHA256SUMS`, and its
-  session-start shim links all three beside `bin/hook`, so `adage train` works for a person who
+- **One plugin carries the companion binaries.** The Claude Code plugin bundles `adage` and
+  `adage-train` for every release target, plus `adage-exec` on macOS and Linux. Each is verified
+  against `dist/SHA256SUMS`. The session-start shim links the available binaries beside
+  `bin/hook`, so `adage train` works for a person who
   installed nothing but the plugin; a missing or mismatched `adage-train` only removes its own
-  link, and `adage` keeps serving. The retired `adage-exec` alias plugin is gone (nothing had been
-  published, so there was nothing to quiet): the marketplace lists `adage` alone, and its
+  link, and `adage` keeps serving. The marketplace lists `adage` alone, and its
   description says what is bundled and that Windows is untested. When no binary can serve, the
   shim names channels that exist: `/plugin install adage@adage`, or `npm i -g @adage-sh/cli`.
 - **One command sets a release's version.** `cargo xtask bump <version>` writes it into
@@ -1129,15 +1122,14 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 - The launch site now walks one concrete trace through conditioning and hook delivery, introduces
   the watch/TUI/map demos, and leads with completed shipped-product validation and its uncertainty.
   The approved 45-second dark/day teaser replaces the older duration and posters. The interactive
-  walkthrough gives visitors a way to explore while early-access signup is unavailable; source
-  installation clearly requires repository access before the public release.
+  walkthrough gives visitors a way to explore while early-access signup is unavailable; npm
+  installation provides a download path without a source checkout.
 - The plugin installs its checksummed binaries side by side, preserving background learning when
   the plugin is the only installation. Release staging rejects archives with missing checksums.
   Plugin startup latency is verified on the release binary with real background learning;
   debug-only spawn-recorder tests remain separate.
-- **The marketplace plugin carries its binaries** (not published yet: the workflow has not run on a
-  tag, and the `marketplace` branch does not exist). The release workflow stages the Claude Code
-  plugin with its three checksummed binaries for all five targets (`scripts/stage-plugin.mjs`,
+- **The marketplace plugin carries its binaries.** The release workflow stages the Claude Code
+  plugin with its supported checksummed binaries for all five targets (`scripts/stage-plugin.mjs`,
   archives checked against dist's `.sha256`, binaries against `dist/SHA256SUMS`) and publishes it to
   the `marketplace` branch (`.github/workflows/publish-marketplace.yml`); `marketplace.json`
   installs from it (`git-subdir`, `ref: marketplace`). No `adage` on `PATH` is needed and nothing is
@@ -1151,8 +1143,8 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   Linux and Windows runs remain unverified for this preview.
 - A release workflow (dist) set up for every target: `adage`, `adage-exec` and `adage-train`, each
   with shell and PowerShell installers, Sigstore build-provenance attestations and a CycloneDX
-  SBOM. The npm package's launcher runs the binaries from a per-platform package chosen by
-  `os`/`cpu` (all three binaries in it); nothing is downloaded at install time. None of this is
-  published yet: the workflow has not run on a tag, and the npm package does not exist.
+  SBOM. The npm package's launcher runs the binaries from a platform package selected by
+  `os`/`cpu`: `adage` and `adage-train` on every target, plus `adage-exec` on macOS and Linux.
+  npm downloads that package as a dependency; no install script fetches or builds binaries.
 - The website (`web/site`).
 - Apache-2.0, with a generated NOTICE of third-party licenses; `SECURITY.md`, `CONTRIBUTING.md`.
