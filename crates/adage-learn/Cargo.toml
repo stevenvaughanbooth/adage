@@ -1,0 +1,31 @@
+[package]
+name = "adage-learn"
+description = "Learn tracks from agent sessions: import transcripts, mine routes, assemble and version tracks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+adage-core = { path = "../adage-core" }
+adage-trace = { path = "../adage-trace" }
+adage-ingest = { path = "../adage-ingest" }
+adage-tracks = { path = "../adage-tracks" }
+adage-intent = { path = "../adage-intent" }
+adage-instincts = { path = "../adage-instincts" }
+adage-pack = { path = "../adage-pack" }
+adage-store = { path = "../adage-store" }
+adage-graph = { path = "../adage-graph" }
+serde.workspace = true
+serde_json = { workspace = true, features = ["float_roundtrip"] }
+regex.workspace = true
+once_cell.workspace = true
+anyhow.workspace = true
+glob.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+# Tests drive the live runtime over what was learned; the library never links it.
+adage-runtime = { path = "../adage-runtime" }
+tempfile = "3"
+adage-sim = { path = "../adage-sim" }

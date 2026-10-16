@@ -1,0 +1,39 @@
+### SessionStart
+(nothing)
+
+### UserPromptSubmit
+{"hookSpecificOutput":{"additionalContext":"<adage-reflex track=\"acme/work@0.3.0\" route=\"lookup\" strength=\"fire\" kind=\"run\">\nIn this repository, work item details are looked up with:\n  ./scripts/wi-lookup W-2042 --json\nIgnore this if the user is asking for something else.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>\n\n<adage-reflex track=\"acme/work@0.3.0\" route=\"dead-unittest\" strength=\"inhibit\" kind=\"avoid\">\nIn this repository, running python3 -m unittest fails (\"ACME_ENV is not set\"). Use this instead:\n  make test\nIgnore this if the user is asking for something else.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>","hookEventName":"UserPromptSubmit"}}
+
+### PostToolBatch
+{"hookSpecificOutput":{"additionalContext":"<adage-reflex track=\"acme/work@0.3.0\" route=\"read-linked\" strength=\"prime\" kind=\"read-batch\">\nThat result lists these files: acme/billing.py.\nIf you need them, read them together in one turn rather than one at a time. Ignore this if the user is asking for something else.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>","hookEventName":"PostToolBatch"}}
+
+### PreToolUse
+(nothing)
+
+### PostToolUseFailure
+{"hookSpecificOutput":{"additionalContext":"<adage-reflex track=\"acme/work@0.3.0\" route=\"dead-pytest\" strength=\"inhibit\" kind=\"avoid\">\nIn this repository, running python3 -m pytest fails (\"ACME_ENV is not set\"). Use this instead:\n  make test\nIgnore this if the user is asking for something else.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>","hookEventName":"PostToolUseFailure"}}
+
+### PostToolBatch
+{"hookSpecificOutput":{"additionalContext":"<adage-reflex track=\"acme/work@0.3.0\" route=\"gen\" strength=\"fire\" kind=\"obligation\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nAgents in this repository run it after such changes. Ignore this if the user is asking for something else.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>","hookEventName":"PostToolBatch"}}
+
+### TurnStep
+(nothing)
+
+### Stop
+{"decision":"block","reason":"Adage finish-line check: this session changed files matching schema/*.json, and this repository requires running `make gen` after such changes; it has not been run yet. Run it (and re-run the tests) before finishing. This reminder is from Adage, not from the user."}
+
+### Stop
+(nothing)
+
+### UserPromptSubmit
+{"hookSpecificOutput":{"additionalContext":"<adage-reflex track=\"acme/work@0.3.0\" route=\"commit-review\" strength=\"prime\" kind=\"skill\">\nIn this repository the `commit-review` skill is used at this point. Ignore this if the user is asking for something else.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>","hookEventName":"UserPromptSubmit"}}
+
+### PreToolUse
+{"plan":{"substitute":{"command":"make test","context":"adage ran make test for you; python3 -m pytest tests was replaced because that command fails in this repository (\"ACME_ENV is not set\"). The output above is from make test.","route":"dead-pytest","track":"acme/work"}}}
+
+### Standing
+{"compact":"Keep the repository procedures this session followed: how tests run here, and what was run after which edits.","environment":"","standing":"<adage-reflex track=\"acme/work@0.3.0\" route=\"dead-unittest\" strength=\"inhibit\" kind=\"avoid\">\nIn this repository, running python3 -m unittest fails (\"ACME_ENV is not set\"). Use this instead:\n  make test\nIgnore this if the user is asking for something else.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>","subagent":"<adage-reflex track=\"acme/work@0.3.0\" route=\"lookup\" strength=\"fire\" kind=\"run\">\nIn this repository, work item details are looked up with:\n  ./scripts/wi-lookup W-2042 --json\nIgnore this if the user is asking for something else.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>\n\n<adage-reflex track=\"acme/work@0.3.0\" route=\"dead-unittest\" strength=\"inhibit\" kind=\"avoid\">\nIn this repository, running python3 -m unittest fails (\"ACME_ENV is not set\"). Use this instead:\n  make test\nIgnore this if the user is asking for something else.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>"}
+
+### SessionEnd
+(nothing)
+

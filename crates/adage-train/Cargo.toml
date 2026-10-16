@@ -1,0 +1,40 @@
+[package]
+name = "adage-train"
+description = "adage-train: compile a skill (or runbook, Makefile, CI workflow) into staged reflexes by driving your own agent harness, sandboxed, when a person asks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[[bin]]
+name = "adage-train"
+path = "src/main.rs"
+
+# Released by dist beside adage (its own archive and installers): `adage train` runs it. The npm
+# platform packages and the Claude Code plugin carry it beside adage (npm/config.mjs). No Homebrew
+# formula until Homebrew returns to the release (dist-workspace.toml).
+[package.metadata.dist]
+dist = true
+
+[dependencies]
+adage-core = { path = "../adage-core" }
+adage-tracks = { path = "../adage-tracks" }
+adage-learn = { path = "../adage-learn" }
+adage-instincts = { path = "../adage-instincts" }
+adage-store = { path = "../adage-store" }
+adage-pack = { path = "../adage-pack" }
+# Replays a compiled skill's commands in adage-exec's sandbox (the only crate that runs anything).
+adage-exec = { path = "../adage-exec" }
+adage-sign = { path = "../adage-sign" }
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+regex.workspace = true
+once_cell.workspace = true
+sha2.workspace = true
+glob.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

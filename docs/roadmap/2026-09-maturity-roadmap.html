@@ -1,0 +1,605 @@
+<title>Adage Maturity Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#f5f6f4; --surface:#ffffff; --sunk:#eceeea; --ink:#1b2126; --ink-2:#48525b; --ink-3:#6f7a83;
+  --rule:#d6dad5; --accent:#1f5f8b; --accent-soft:#e2edf5;
+  --fire:#1d7a46; --fire-bg:#e3f2e8; --amber:#a86400; --amber-bg:#fbf0dc; --inhibit:#b3261e; --inhibit-bg:#f9e3e1;
+  --code-bg:#eef0ec;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#111518; --surface:#181d21; --sunk:#1f252a; --ink:#e4e8ea; --ink-2:#b3bcc3; --ink-3:#8a949c;
+    --rule:#2d353b; --accent:#7db4dc; --accent-soft:#1b2c39;
+    --fire:#5cc48a; --fire-bg:#16291e; --amber:#e3a646; --amber-bg:#2c2413; --inhibit:#f07a70; --inhibit-bg:#301a18;
+    --code-bg:#22292e;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#111518; --surface:#181d21; --sunk:#1f252a; --ink:#e4e8ea; --ink-2:#b3bcc3; --ink-3:#8a949c;
+  --rule:#2d353b; --accent:#7db4dc; --accent-soft:#1b2c39;
+  --fire:#5cc48a; --fire-bg:#16291e; --amber:#e3a646; --amber-bg:#2c2413; --inhibit:#f07a70; --inhibit-bg:#301a18;
+  --code-bg:#22292e;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55;margin:0;padding-inline:16px}
+.wrap{max-width:1040px;margin:0 auto;padding-block:40px 80px}
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:.01em;text-wrap:balance;line-height:1.1;margin:0}
+h1{font-size:clamp(40px,6vw,60px);font-weight:700}
+h2{font-size:34px;margin-bottom:6px}
+h3{font-size:23px;margin:34px 0 10px}
+p{margin:0 0 12px;max-width:72ch}
+ul,ol{margin:0 0 12px;padding-left:22px;max-width:72ch}
+li{margin-bottom:5px}
+code{font-family:var(--mono);font-size:.84em;background:var(--code-bg);padding:1px 5px;border-radius:3px;word-break:break-word}
+pre{font-family:var(--mono);font-size:13px;background:var(--code-bg);padding:14px 16px;border-radius:4px;overflow-x:auto;line-height:1.5;margin:0 0 14px}
+a{color:var(--accent)}
+.eyebrow{font-family:var(--display);text-transform:uppercase;letter-spacing:.14em;font-size:14px;color:var(--ink-3);font-weight:600}
+.meta{color:var(--ink-3);font-size:14px;margin-top:10px}
+.lede{font-size:19px;color:var(--ink-2);max-width:66ch;margin-top:18px}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px 18px;margin:26px 0 8px;padding:12px 0;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);font-family:var(--display);font-size:17px;letter-spacing:.03em}
+nav.toc a{text-decoration:none;color:var(--ink-2)}
+nav.toc a:hover,nav.toc a:focus-visible{color:var(--accent)}
+section{margin-top:56px}
+.sec-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;border-bottom:2px solid var(--ink);padding-bottom:6px;margin-bottom:18px}
+.sec-head .tag{font-family:var(--mono);font-size:13px;color:var(--ink-3)}
+.lamp{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.lamp.g{background:var(--fire)} .lamp.y{background:var(--amber)} .lamp.r{background:var(--inhibit)}
+.alerts{display:grid;gap:12px;margin-top:8px}
+.alert{background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--inhibit);padding:14px 18px;border-radius:3px}
+.alert.y{border-left-color:var(--amber)}
+.alert h4{font-family:var(--body);font-size:16px;margin:0 0 4px;font-weight:700}
+.alert p{margin:0;color:var(--ink-2);font-size:15px}
+.alert .fix{margin-top:6px;font-size:14px;color:var(--ink)}
+.tw{overflow-x:auto;margin:0 0 16px;border:1px solid var(--rule);border-radius:3px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th,td{text-align:left;vertical-align:top;padding:8px 12px;border-bottom:1px solid var(--rule)}
+th{font-family:var(--display);font-weight:600;font-size:15px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);background:var(--sunk);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.pill{display:inline-block;font-family:var(--mono);font-size:11.5px;padding:1px 7px;border-radius:10px;font-weight:600;white-space:nowrap}
+.pill.p0{background:var(--inhibit-bg);color:var(--inhibit)} .pill.p1{background:var(--amber-bg);color:var(--amber)} .pill.p2{background:var(--sunk);color:var(--ink-2)}
+.pill.g{background:var(--fire-bg);color:var(--fire)} .pill.y{background:var(--amber-bg);color:var(--amber)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+.box{background:var(--surface);border:1px solid var(--rule);border-radius:3px;padding:16px 18px}
+.box h4{font-family:var(--display);font-size:19px;font-weight:600;margin:0 0 8px;letter-spacing:.02em}
+.box p,.box li{font-size:15px}
+.keep{border-left:4px solid var(--fire)}
+.callout{background:var(--accent-soft);border-radius:3px;padding:14px 18px;margin:0 0 16px}
+.callout p{margin:0}
+/* timeline */
+.phases{display:grid;gap:0;margin-top:10px;border:1px solid var(--rule);border-radius:3px;background:var(--surface)}
+.phase{display:grid;grid-template-columns:150px 1fr;border-bottom:1px solid var(--rule)}
+.phase:last-child{border-bottom:0}
+.phase .when{padding:16px;background:var(--sunk);font-family:var(--display)}
+.phase .when b{display:block;font-size:22px;font-weight:700}
+.phase .when span{font-size:15px;color:var(--ink-3);letter-spacing:.03em}
+.phase .what{padding:14px 18px}
+.phase .what h4{margin:0 0 6px;font-size:17px}
+.phase .lanes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px}
+.lane{font-size:14px}
+.lane .ln{font-family:var(--display);text-transform:uppercase;letter-spacing:.1em;font-size:13px;color:var(--ink-3);font-weight:600;margin-bottom:3px}
+.lane ul{padding-left:18px;margin:0}
+.exit{margin-top:10px;font-size:14px;color:var(--ink-2)}
+.exit b{color:var(--ink)}
+@media (max-width:760px){.phase{grid-template-columns:1fr}.phase .lanes{grid-template-columns:1fr}}
+.decisions{counter-reset:d;display:grid;gap:12px}
+.dec{background:var(--surface);border:1px solid var(--rule);border-radius:3px;padding:14px 18px}
+.dec h4{margin:0 0 4px;font-size:16px}
+.dec .rec{font-size:14.5px;color:var(--ink-2);margin:0}
+.dec .rec b{color:var(--fire)}
+.small{font-size:14px;color:var(--ink-3)}
+.ladder{display:grid;gap:8px;margin-bottom:16px}
+.rung{display:grid;grid-template-columns:64px 1fr 150px;gap:14px;align-items:start;background:var(--surface);border:1px solid var(--rule);border-radius:3px;padding:12px 16px}
+.rung .lv{font-family:var(--display);font-size:28px;font-weight:700;color:var(--accent);line-height:1}
+.rung .cost{font-family:var(--mono);font-size:12.5px;color:var(--ink-2);text-align:right}
+.rung h4{margin:0 0 3px;font-size:16px}
+.rung p{margin:0;font-size:14.5px;color:var(--ink-2)}
+@media (max-width:640px){.rung{grid-template-columns:48px 1fr}.rung .cost{grid-column:2;text-align:left}}
+footer{margin-top:64px;padding-top:14px;border-top:1px solid var(--rule);color:var(--ink-3);font-size:13.5px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Adage · maturity roadmap</div>
+  <h1>Agent traces become reflexes</h1>
+  <p class="meta">2026-09-27 · branch <code>claude/repo-maturity-roadmap-l95ohs</code> · base <code>ce5e311</code> · compiled from four research passes over the code, the eval data and the current external benchmark landscape</p>
+  <p class="lede">Adage's delivery half (fixed templates, slot contracts, effect ceilings, content-addressed index, pure <code>decide()</code>, fail-open hooks) is already built to a high-assurance standard. The learning half is five imitation-rate miners with no decay and no causal estimate, and the eval stack cannot yet support tuning decisions. The plan: <b>fix measurement first, then make evidence trustworthy, then widen what the engine learns</b>, including instincts and skill-trained reflexes. Every change is scored against one benchmark ladder.</p>
+  <nav class="toc" aria-label="Sections">
+    <a href="#reset">Findings that reset priorities</a>
+    <a href="#engine">1 · Engine</a>
+    <a href="#training">2 · Training &amp; instincts</a>
+    <a href="#bench">3 · Benchmarks</a>
+    <a href="#trackg">Track G · Graph engine v2</a>
+    <a href="#trackc">Track C · Compiled skills</a>
+    <a href="#shipped">Shipped this session</a>
+    <a href="#roadmap">Sequenced roadmap</a>
+    <a href="#decisions">Decisions for you</a>
+  </nav>
+</header>
+
+<!-- ============ RESET ============ -->
+<section id="reset">
+  <div class="sec-head"><h2>Findings that reset priorities</h2><span class="tag">checked against code and data</span></div>
+  <p>Four of these findings change the order of work. I re-checked the first three directly against the repository, not only through the agents' reports.</p>
+  <div class="alerts">
+    <div class="alert">
+      <h4><span class="lamp r"></span>Round-2 headline is not held out</h4>
+      <p>The <code>round2</code> split in <code>evals/datasets/demo-haiku45</code> trains on 36 round-1 eval sessions of W-2041…W-2046, then tests on round-2 sessions of the <i>same six tasks</i>. The live runner does the same (<code>evals/live/runner.py:556</code>). Routes are repository conventions, so this is milder than it sounds. Still, the "20 → 2 turns" figure and most of the gate floors rest on it, and it breaks Design Spec's own "held-out tasks for every published number."</p>
+      <p class="fix"><b>Fix:</b> task-grouped and temporal splits in <code>dataset.rs</code>, a fresh held-out task pool per round, and a caveat on the README numbers until they are re-run.</p>
+    </div>
+    <div class="alert">
+      <h4><span class="lamp r"></span>A harm signal went unreported</h4>
+      <p>Haiku round 1: the Adage arm hit <b>26 failed verify runs</b> and the control arm hit <b>0</b>. Skipping exploration also skipped the agent's incidental discovery of <code>make test</code>. Round 2 learned a dead-end route that fixed it, but no metric treats "a directive caused a side-effect regression" as a guardrail.</p>
+      <p class="fix"><b>Fix:</b> harm metrics (<code>failed_after_follow</code>, <code>verify_fail_after_directive</code>) become hard guardrails in the scorecard.</p>
+    </div>
+    <div class="alert">
+      <h4><span class="lamp r"></span>Useful routes can starve themselves of evidence</h4>
+      <p>Each miner drops sessions steered by its own kind (<code>adage-learn/src/lib.rs:238</code>). Once a route is delivered, only the ~10% control sessions keep counting. When pre-install transcripts expire (Claude Code keeps 30 days), routes that weak agents never find unaided fall below <code>min_support</code>. <code>reconcile</code> then drops them. The most valuable routes retire themselves, get relearned, and the cycle repeats. No test covers this, because evals learn once.</p>
+      <p class="fix"><b>Fix:</b> a <code>Dormant</code> state that holds a route instead of dropping it when support loss comes from exposure rather than contrary evidence, plus a retention-ageing replay gate.</p>
+    </div>
+    <div class="alert y">
+      <h4><span class="lamp y"></span>The control arm isn't isolated or randomized</h4>
+      <p>Arm order is fixed (control before adage, <code>runner.py:130</code>). Both arms share the operator's Claude Code auto-memory: control agents read <code>MEMORY.md</code> in 23/36 runs, adage agents in none. Sandboxes also sit next to <code>adage-home/</code>. Effective n is about 6 tasks, not 18 runs. p-values shuffle runs, not tasks, and infra failures count as task failures.</p>
+      <p class="fix"><b>Fix:</b> per-run <code>HOME</code>/<code>CLAUDE_CONFIG_DIR</code>, a seeded arm order, task-cluster statistics, and <code>status</code> ∈ {ok, infra_error, censored, scorer_error}.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ENGINE ============ -->
+<section id="engine">
+  <div class="sec-head"><h2>1 · Graph and predictive engine</h2><span class="tag">first principles</span></div>
+
+  <h3>What the engine is today</h3>
+  <p>Mathematically, it is <b>a set of independent, first-order association rules</b>:</p>
+  <ul>
+    <li>Each rule maps (a predicate over one event plus features of the first prompt) to one step.</li>
+    <li>Each rule carries a Bernoulli estimate, "P(agent does X | trigger)", counted over distinct sessions.</li>
+    <li>A threshold policy (Wilson LB ≥ 0.8 → fire; rate ≥ 0.5 → prime; effect ceiling) turns that estimate into a strength.</li>
+  </ul>
+  <p>The only chaining is lookup → linked files. <code>SessionState.history</code> (32 keys) is written but never read. The variable-order (PPM/TAGE) model in Design §8.5 was not built.</p>
+  <p>The estimate is <b>imitation propensity</b>: how often agents already do X. It is not the effect of <i>telling</i> them to. For discovery routes, the value of a directive is roughly (1 − p<sub>unaided</sub>) × benefit, so the evidence gate and the value point in opposite directions.</p>
+
+  <div class="two">
+    <div class="box keep">
+      <h4>Excellent; keep as is</h4>
+      <ul>
+        <li>Fixed-template rendering, typed slot contracts, effect ceilings with effects re-derived from commands, and an independent safety oracle. Structure comes from data; prose comes from code.</li>
+        <li>Content-addressed index, atomic swap, and a pure <code>decide()</code>: 36/36 live decisions reproduce byte for byte.</li>
+        <li>A fast path proven equivalent on every eval event.</li>
+        <li>Two-slot CRC state, CRC-framed spools, and rebuilds that fail toward silence.</li>
+        <li>Purity split/merge ("embeddings propose, behaviour decides") and signature-keyed dead ends.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h4>Where it is brittle</h4>
+      <ul>
+        <li><b>Three matching semantics</b> for "the same command": exact key, command head, and token prefix. <code>make gen -j4</code> never meets a <code>make gen</code> obligation. <code>npm run build</code> counts as following <code>npm run check</code>, which inflates both live follow rates and offline precision.</li>
+        <li><b>One lookup route per repository</b>, and finish-line globs only one level deep.</li>
+        <li><b>Failure attribution is per call.</b> In <code>make gen &amp;&amp; pytest</code>, a pytest failure marks <code>make gen</code> as failed.</li>
+        <li><b>Winner's curse.</b> The intent threshold is picked in-sample to maximise Wilson LB, and that same LB is reported as evidence.</li>
+        <li><b>No interlocking.</b> An imported "start with <code>npm test</code>" and a learned "npm test fails" can both fire at prompt 1.</li>
+        <li>The <code>"CI fails if this is skipped"</code> text is unmeasured, because <code>deviations_failed</code> is almost always 0.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>What transfers from high-assurance deterministic systems</h3>
+  <p>The guiding principle comes from railway signalling: <b>separate the proposer from the interlocking.</b> Learners may be clever and probabilistic. What reaches the agent passes a small, deterministic, verifiable gate. Adage already has the output stage. It lacks the <i>evidence layer</i> (causal, calibrated, decaying) and the <i>interlocking layer</i> (conflicts between routes).</p>
+  <div class="tw"><table>
+    <thead><tr><th>Source discipline</th><th>What Adage borrows</th><th>Lands in</th></tr></thead>
+    <tbody>
+      <tr><td>Railway interlocking</td><td>A compile-time conflict matrix (opposite polarity on the same command class; two fires at one point). Inhibit beats fire. <i>Approach locking</i>: once a route is emitted in a session, no conflicting route follows.</td><td><code>adage-tracks/src/interlock.rs</code> (new), runtime post-filter</td></tr>
+      <tr><td>IEC 61508 fail-safe</td><td>Keep fail-open. Add diagnostic coverage of hook invariants, and a watchdog on evidence starvation: hold a route at its last known state and flag it, rather than retiring it.</td><td><code>mine.rs</code>, <code>review.rs</code></td></tr>
+      <tr><td>TCAS (TA / RA)</td><td>Already mirrored by prime and fire. Add coordination (never issue contradictory advisories) and context-dependent sensitivity.</td><td>runtime selection</td></tr>
+      <tr><td>Branch predictors (TAGE)</td><td>Per-(route, context) saturating confidence counters with hysteresis, fed by follow/ignore. TAGE's "usefulness bit" becomes "changed behaviour vs control."</td><td><code>Evidence.runtime</code></td></tr>
+      <tr><td>PPM / variable-order Markov</td><td>One context model over canonical keys (orders 1, 2, 4, 8 with escape). It <i>proposes</i> candidate routes and scores conformance. It never emits directives directly.</td><td><code>adage-learn/src/context.rs</code></td></tr>
+      <tr><td>Process mining</td><td>A directly-follows graph per repository (the real "rail network" for the map). Token-replay conformance replaces the 3-batch ignore window.</td><td><code>graph.rs</code>, <code>adage-eval</code></td></tr>
+      <tr><td>Beta-Binomial with discounting</td><td>α ← γ<sup>Δt</sup>α + s, β ← γ<sup>Δt</sup>β + f, half-life ≈ 30 days. Fire = 5% posterior quantile ≥ bar, with support on ≥ k distinct days. Capped priors for imports and instincts.</td><td><code>model.rs</code>, <code>mine.rs:71</code></td></tr>
+      <tr><td>Contextual bandits / off-policy evaluation</td><td>Per-route knockouts with logged propensity. IPW or doubly-robust lift per route. Later, choose directive strength with a safe bandit that never exceeds the ceiling.</td><td><code>runtime/lib.rs:36</code>, spool record</td></tr>
+      <tr><td>Salsa incremental compilation</td><td>Miners become queries over per-session fact tables. A new session costs O(new), and route ids stay stable.</td><td><code>adage-learn/src/lib.rs</code> <code>plan</code></td></tr>
+      <tr><td>Datalog / Rete</td><td>Route kinds become rule plugins over session facts (<code>ran</code>, <code>failed</code>, <code>edited</code>, <code>prompt_span</code>). Triggers compile to a discrimination net; the fast path is already its alpha layer.</td><td><code>adage-learn/src/rules/</code>, <code>triggers.rs</code></td></tr>
+      <tr><td>Finite-state transducers</td><td>Multi-step routes and switches (lookup → read → narrow test), with reachability and no-emit-loop checks at validation.</td><td><code>model.rs</code> <code>Step</code> → stages</td></tr>
+      <tr><td>Anti-unification</td><td>One <code>CommandPattern</code> subsumption order (exact &lt; head+subcommand &lt; head) and a glob lattice. This unifies the three matching semantics and later enables templates shared across repositories.</td><td><code>adage-core/src/pattern.rs</code> (new)</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Ranked engine proposals</h3>
+  <p class="small">Each proposal names the metric it is judged on, so it plugs into the eval loop in section 3.</p>
+  <div class="tw"><table>
+    <thead><tr><th>#</th><th>Proposal</th><th>Impact</th><th>Effort</th><th>Judged by</th></tr></thead>
+    <tbody>
+      <tr><td class="num">E1</td><td><b>Evidence integrity.</b> <code>Dormant</code> state instead of dropping; steering tracked per directive kind, not by id prefix; imported routes excluded from every miner; propensity logged per spool record.</td><td>Very high</td><td>S</td><td>Route survival under simulated transcript ageing (retired without an ignore signal = 0)</td></tr>
+      <tr><td class="num">E2</td><td><b>One command-pattern algebra</b> used by triggers, obligations, follow judgement, graph and eval, with subcommand tables for <code>npm run</code>, <code>make</code>, <code>cargo</code>.</td><td>High</td><td>S–M</td><td>Follow-judgement agreement on a hand-labelled set; finish-line false alarms. Precision may drop, and the lower number is the true one.</td></tr>
+      <tr><td class="num">E3</td><td><b>Interlocking</b> at compile time and runtime; ordering by expected value (1 − p<sub>unaided</sub>) × turns saved.</td><td>High</td><td>S</td><td>Property test: no emitted pair violates the conflict matrix</td></tr>
+      <tr><td class="num">E4</td><td><b>Causal measurement.</b> Per-route knockouts (hash(session, route) &lt; share), IPW lift, CUSUM weakening; follow/ignore judgements for linked files and dead ends.</td><td>High</td><td>M</td><td>Per-route Δfollow, Δturns-to-first-edit, Δoutcome with CIs</td></tr>
+      <tr><td class="num">E5</td><td><b>Calibrated, decaying evidence.</b> Discounted Beta, days gate, cross-fitted intent threshold, intent ids from a hash of the centroid.</td><td>Med–high</td><td>M</td><td>Calibration error per strength bucket; strength flaps per month</td></tr>
+      <tr><td class="num">E6</td><td><b>Outcome proxies</b> from transcripts (last verify status, re-prompts, stop requests) feeding <code>successes</code> and <code>deviations_failed</code>. The "CI fails" wording appears only when backed by evidence.</td><td>Medium</td><td>S–M</td><td>Correlation of the proxies with hidden checks</td></tr>
+      <tr><td class="num">E7</td><td><b>PPM context model</b> as proposer and conformance scorer, plus a directly-follows graph in the map.</td><td>Medium</td><td>M–L</td><td>Key-step recall (0.57–0.84 today); review acceptance rate</td></tr>
+      <tr><td class="num">E8</td><td><b>Route FSTs</b> (multi-step, switches) and rule plugins.</td><td>Medium, later</td><td>L</td><td>Turns to first edit on multi-step tasks</td></tr>
+      <tr><td class="num">E9</td><td><b>Cross-repository templates</b> via anti-unification.</td><td>Speculative</td><td>L</td><td>Cold-start precision on held-out repositories</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ TRAINING ============ -->
+<section id="training">
+  <div class="sec-head"><h2>2 · Training mechanisms and instincts</h2><span class="tag">team corpus · consumer modes · shipped instincts</span></div>
+
+  <div class="callout"><p><b>Instinct</b> = a prebuilt route that ships in the binary as a template plus a detector. At learn time it binds per repository from repository files, never from history, so it works on day 0. It is capped at prime and loses to any reflex that contradicts it. <b>Reflex</b> = a learned route compiled from sessions: organic history, or sessions Adage drove from a skill. Every route Adage has today is a reflex.</p></div>
+
+  <h3>Evidence origin: one field, which makes the rest possible</h3>
+  <p>Each count records where it came from. The existing <code>support</code>/<code>opportunities</code> fields stay <i>organic only</i>, so gates and review bases keep their meaning. A new <code>Evidence.by_origin</code> holds the other counts. They are kept separate rather than merged into a weighted count, because a weighted Wilson bound is meaningless.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Origin</th><th>Creates a route?</th><th>Strongest strength on its own evidence</th><th>To reach fire</th></tr></thead>
+    <tbody>
+      <tr><td>organic</td><td>yes</td><td><span class="pill g">fire</span></td><td>as today</td></tr>
+      <tr><td>synthetic (skill-trained)</td><td>yes, forming</td><td><span class="pill y">prime</span></td><td>observe/verify step, validation passed, and the command is declared or familiar. Otherwise organic support ≥ min.</td></tr>
+      <tr><td>declared (repository files)</td><td>as nascent or instinct binding</td><td><span class="pill y">prime</span></td><td>organic support</td></tr>
+      <tr><td>instinct</td><td>bound per repository</td><td><span class="pill y">prime</span></td><td>never on its own</td></tr>
+      <tr><td>imported / demonstrated</td><td>forming / nascent</td><td><span class="pill y">prime</span></td><td>organic support</td></tr>
+      <tr><td>corrected</td><td>proposal only</td><td>—</td><td>human review</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>A · Internal training data for the team</h3>
+  <div class="two">
+    <div class="box">
+      <h4>Sandbox generator driven by a convention grammar</h4>
+      <p>Replace the two hand-built sandboxes with <code>evals/gen/</code>, which composes three parts:</p>
+      <ul>
+        <li><b>Stack template:</b> python-make, uv, npm, pnpm monorepo, cargo workspace, go, polyglot.</li>
+        <li><b>Domain skin:</b> the surface vocabulary and modules.</li>
+        <li><b>Typed convention instances</b> (lookup, dead_end, finish_line, scope, env_sync), serialised to <code>conventions.json</code> as ground truth.</li>
+      </ul>
+      <p>Two instance kinds matter most:</p>
+      <ul>
+        <li><b>Decoys</b>, which look like conventions but aren't. They measure the false-route rate.</li>
+        <li><b>Instinct violations</b>, where the universal default is wrong. They measure whether reflexes override instincts.</li>
+      </ul>
+      <p>A generalised selfcheck proves each convention holds before any tokens are spent.</p>
+    </div>
+    <div class="box">
+      <h4>Run matrix and the simulator</h4>
+      <ul>
+        <li><b>Harnesses:</b> Claude Code, Codex and OpenCode headless. This also closes R9: OpenCode and Codex have not been verified live.</li>
+        <li><b>Models:</b> a cheap volume tier, a strong ceiling tier, and one non-Anthropic model per harness.</li>
+        <li><b>New arms:</b> <code>instincts-only</code>, <code>skill-in-context</code>, <code>poisoned-track</code>.</li>
+        <li><b><code>adage-sim</code></b> becomes grammar-driven, with behaviour profiles <i>fitted to real runs</i>. For example, Haiku tried pytest 1.44× per session, while Sonnet never tried <code>npm test</code>. The simulator is for sample-efficiency curves and threshold sweeps, and is never a release gate on its own.</li>
+        <li><b>Public trajectories</b> (SWE-Gym, SWE-smith, OpenHands, nebius) through a new <code>swe.rs</code> importer: many tasks per repository, real conventions (django's <code>runtests.py</code>), no inference cost. Check each licence; raw dumps stay out of git.</li>
+      </ul>
+    </div>
+  </div>
+  <p class="small">Budget tiers: pull requests $0 (simulator + replay) · nightly ≤ $5 · weekly regression ≤ $150 · quarterly corpus of about 200 sandboxes, $1.5–3k.</p>
+
+  <h3>B · Consumer training beyond history</h3>
+  <p><b>Skill → reflex</b> ships as a <b>separate binary, <code>adage-train</code></b>. The <code>adage</code> binary that hooks call keeps its promise that it never executes anything. <code>adage-train</code> drives <i>the user's own harness</i>, headless, under that harness's permissions and sandbox. It refuses to run inside an agent session, and no hook, config key or track can start it.</p>
+<pre>adage train plan --from .claude/skills/db-migrations/SKILL.md     # free: extracted claims + generated tasks + cost estimate
+adage train  --from SKILL.md|CONTRIBUTING.md|Makefile|ci.yml|runbook.md \
+    --harness claude-code --model claude-haiku-4-5 --sessions 12 --validate 12 \
+    --budget 5.00 --max-turns 25 [--oracle trajectory|tests] [--container docker] --execute
+adage train report &lt;run&gt;      # per claim: compiled → route · never exercised · contradicted · unsafe</pre>
+  <div class="two">
+    <div class="box">
+      <h4>How a run works</h4>
+      <ol>
+        <li><b>Claim extraction.</b> Deterministic, no LLM: commands, paths and globs from code blocks, plus "after / before / instead of" sentences. Each claim is typed as verify, regenerate-after, lookup, avoid or environment. Commands above <code>regenerate</code> are reported as unsafe and never exercised.</li>
+        <li><b>Seeded task generation</b> for each claim: mutation edits on matching globs and break-fix mutations. About 70% of prompts are implicit (they never name the skill), and ≥ 25% are control tasks.</li>
+        <li><b>Isolation.</b> A <code>git clone --local</code> with no <code>origin</code>, an isolated harness config, a scrubbed environment, and the harness sandbox with network off. Web and Agent tools are denied.</li>
+        <li><b>Exploration</b> sessions (skill loaded, no hooks) are mined as <code>synthetic</code>. <b>Validation</b> runs on held-out seeds in three arms: baseline, skill-in-context, reflex.</li>
+        <li><b>Acceptance:</b> followed ≥ 70%, reflex arm non-inferior to skill arm within 10 points, turns and cost no worse.</li>
+      </ol>
+    </div>
+    <div class="box">
+      <h4>Other training modes</h4>
+      <ul>
+        <li><b>From repository files (free):</b> Makefile rules, <code>package.json</code> scripts, lockfiles, pyproject, Cargo workspace, CI steps, AGENTS.md/CLAUDE.md code blocks. These produce <i>declared</i> facts that bind instinct slots and nascent candidate routes.</li>
+        <li><b><code>adage teach</code></b> (explicit authoring) and <b><code>adage record --session</code></b> (a demonstration).</li>
+        <li><b>Corrections:</b> a directive, then the user's next prompt names a command, then that command succeeds. This yields a <i>proposal</i> only, because prompt text is untrusted. Add <code>adage review replace</code>.</li>
+        <li><b>CI logs</b> from the user's own <code>gh run view --log</code> export: missed-obligation evidence and dead-end candidates.</li>
+        <li><b>Instinct packs</b>, distributed like shared tracks: signed, installed forming.</li>
+        <li>A by-product worth selling: <b>skill linting with evidence.</b> "Your skill says <code>npm test</code>; it failed in 11/12 runs; <code>npm run check</code> worked."</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>C · Instincts to ship</h3>
+  <p><b>Mechanics:</b></p>
+  <ul>
+    <li>Instincts live as data in a new <code>crates/adage-instincts</code>. The learner binds them per repository, so the runtime stays a pure function of the index and determinism holds.</li>
+    <li>A bound id equals the id the miner would derive for the same behaviour, so the index's existing "learned wins" dedup lets a local reflex override the instinct automatically.</li>
+    <li>For new repositories, the first bind is triggered at <code>SessionStart</code>.</li>
+    <li>The wrapper text changes by provenance. <code>render.rs:55</code> says "Learned by Adage from this repository's earlier agent sessions," which would be false for an instinct.</li>
+  </ul>
+  <p><b>Rules for every instinct:</b> prime only, no Stop blocks, and reactive where possible. An instinct retires automatically after 3 <code>Misfired</code> judgements.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Id</th><th>P</th><th>Instinct</th><th>Fires when</th><th>Detected from (no history)</th><th>FP risk</th></tr></thead>
+    <tbody>
+      <tr><td>U1</td><td><span class="pill p0">P0</span></td><td>Declared wrapper explains a failure</td><td>Verify runner R fails, and the failure names what wrapper S sets</td><td>A script or target whose body invokes R plus env vars, flags or <code>--import</code>. Recovers the acme and harbor dead ends on day 0.</td><td>Low</td></tr>
+      <tr><td>U2</td><td><span class="pill p0">P0</span></td><td>No blind retry</td><td>Same key, same signature, twice, no edit in between</td><td>Runtime history only. Exempt timeouts and connection errors.</td><td>Medium</td></tr>
+      <tr><td>U3</td><td><span class="pill p0">P0</span></td><td>The repository's declared test command</td><td>First failed or undeclared verify attempt (reactive)</td><td>Exactly one test entry point, whose body classifies ≤ verify</td><td>Low–med</td></tr>
+      <tr><td>U4</td><td><span class="pill p0">P0</span></td><td>Don't hand-edit generated files</td><td>Edit of a file carrying a generated marker</td><td><code>Code generated … DO NOT EDIT</code>, <code>@generated</code>, <code>go:generate</code></td><td>Very low</td></tr>
+      <tr><td>U5</td><td><span class="pill p0">P0</span></td><td>Declared regeneration</td><td>Edit matching a Makefile rule's prerequisites</td><td>Makefile dependency graph</td><td>Low</td></tr>
+      <tr><td>U6</td><td><span class="pill p0">P0</span></td><td>Don't hand-edit lockfiles</td><td>Edit of a lockfile</td><td>Lockfile present</td><td>Very low</td></tr>
+      <tr><td>N1</td><td><span class="pill p0">P0</span></td><td>Package manager discipline (node)</td><td><code>npm install</code> in a pnpm or yarn repository</td><td>Lockfile</td><td>Very low</td></tr>
+      <tr><td>P1</td><td><span class="pill p0">P0</span></td><td>Python runner wrapper / <code>uv run</code></td><td>pytest fails or is missing while a wrapper exists</td><td>pyproject, tox, nox, Makefile</td><td>Low</td></tr>
+      <tr><td>U7</td><td><span class="pill p1">P1</span></td><td>Manifest changed → sync environment</td><td>Edit to a dependency section</td><td>Package manager from the lockfile. Pack-level approval, because this is an environment effect.</td><td>Medium</td></tr>
+      <tr><td>U8</td><td><span class="pill p1">P1</span></td><td>CI runs checks the agent skipped</td><td>First edit batch in files CI lints</td><td>CI steps that classify as verify</td><td>Low</td></tr>
+      <tr><td>U9</td><td><span class="pill p1">P1</span></td><td>Watch mode never exits</td><td>A watch or dev command timed out</td><td>Table: <code>jest --watch</code>, <code>vitest</code>, <code>tsc -w</code>…</td><td>Low</td></tr>
+      <tr><td>U10</td><td><span class="pill p1">P1</span></td><td>Missing dependency is declared</td><td><code>ModuleNotFoundError</code> / <code>Cannot find module</code></td><td>Only if X is in the manifest, which rules out typosquatting</td><td>Low</td></tr>
+      <tr><td>U11</td><td><span class="pill p1">P1</span></td><td>Use the project's environment</td><td><code>command not found</code> for a tool in a venv or <code>node_modules/.bin</code></td><td><code>.venv</code>, <code>uv.lock</code>, <code>node_modules/.bin</code></td><td>Low</td></tr>
+      <tr><td>N2 · N3</td><td><span class="pill p1">P1</span></td><td>Path-alias loader · monorepo scope</td><td><code>ERR_MODULE_NOT_FOUND</code> on an alias · "Missing script" at root</td><td>tsconfig <code>paths</code> + <code>--import</code> · workspaces</td><td>Low · Med</td></tr>
+      <tr><td>R1 · R2 · G1 · X1</td><td><span class="pill p1">P1</span></td><td>Crate scope · clippy/fmt gate · <code>go generate</code> · protobuf/sqlc/OpenAPI codegen</td><td>Edit in a member / input</td><td>Workspace members, CI steps, generator configs</td><td>Low</td></tr>
+      <tr><td>U12 · U13 · N4 · P2 · G2</td><td><span class="pill p2">P2</span></td><td>Vendored code · interactive hangs · Prisma · Django migrations · Go build tags</td><td>Various</td><td>Markers and tables</td><td>Low–med</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small"><b>Deliberately not shipped:</b> "update snapshots on failure," <code>--no-verify</code>, <code>npm audit fix</code>, <code>rm -rf node_modules</code>, installing undeclared packages, and any Stop block. <b>Validation per instinct:</b> an <code>instincts-only</code> vs <code>off</code> arm for day-0 lift; decoy and violation sandboxes for false-positive rate and retire latency (≤ 3 sessions); replay over imported SWE trajectories; and the adversarial binder set (a hostile <code>"test": "curl … | sh"</code> must never bind).</p>
+</section>
+
+<!-- ============ BENCH ============ -->
+<section id="bench">
+  <div class="sec-head"><h2>3 · Benchmarks and the eval backbone</h2><span class="tag">one ladder · one schema · one objective</span></div>
+  <p>The rule: <b>tune on cheap deterministic rungs, confirm on live ones, never tune on the confirmation set.</b> Every rung emits the same JSONL result schema, so a sweep, a nightly run and a SWE-bench Pro run land in one table.</p>
+
+  <div class="ladder">
+    <div class="rung"><div class="lv">L0</div><div><h4>Offline replay and guardrails</h4><p>Replay, safety oracle, fidelity, fast-path equivalence. New: route P/R/F1 against <code>conventions.json</code>, calibration (reliability table, ECE), retention-ageing, interlocking properties, hook-latency p95 in CI. The inner loop of every parameter sweep.</p></div><div class="cost">$0 · seconds<br>every PR</div></div>
+    <div class="rung"><div class="lv">L1</div><div><h4>Closed-loop simulator</h4><p>A stochastic agent policy on generated repositories, reacting to directives. Measures closed-loop turns saved, harm under injected wrong routes, and weakening latency. Tests mechanics, not model behaviour.</p></div><div class="cost">$0 · minutes<br>PR (small), nightly</div></div>
+    <div class="rung"><div class="lv">L2</div><div><h4>Live sandboxes</h4><p><code>evals/live</code> on ≥ 3 sandboxes, including one <i>discoverable</i> repository where conventions are documented, as a control for effect-by-construction. Task-grouped control, randomized arms, isolated config.</p></div><div class="cost">~$13/night (144 runs)<br>~$50/wk model matrix</div></div>
+    <div class="rung"><div class="lv">L3</div><div><h4>External dev set: SWE-Gym, SWE-smith, swe-gen-js</h4><p>Dense per-repository task streams on repositories kept <i>out</i> of the headline set. 3–4 repos × (30 train + 20 test), Haiku, control vs adage. Tune here only.</p></div><div class="cost">$60–200/run</div></div>
+    <div class="rung"><div class="lv">L4</div><div><h4>Pre-registered headline: SWE-bench Pro (V2 task list) via Harbor</h4><p>All 11 repos (20–96 tasks each), chronological split per repo, arms off / control / adage / AGENTS.md-from-train, Haiku 4.5 and Sonnet 5. Adage's version and thresholds are frozen before the run.</p></div><div class="cost">$2–5k total</div></div>
+    <div class="rung"><div class="lv">L4b</div><div><h4>Breadth and no-harm</h4><p>Terminal-Bench 2.0 (5 trials, off vs adage: must not regress), CL-Bench <code>codebase_adaptation</code> and SWE-Bench-CL for external "learning lift" numbers.</p></div><div class="cost">$1–3k</div></div>
+  </div>
+
+  <h3>Why these benchmarks</h3>
+  <div class="tw"><table>
+    <thead><tr><th>Benchmark</th><th>Role</th><th>Why it fits Adage</th></tr></thead>
+    <tbody>
+      <tr><td><b>SWE-bench Pro</b></td><td>Headline</td><td>11 repos, 20–96 tasks each, so per-repo train/test splits work. Heavy test conventions (<code>ansible-test</code>, Go tags, NodeBB + Redis, Jest flags). Python, JS/TS, Go. OpenAI recommends it over Verified, which it dropped for contamination. Harbor has a parity-checked adapter.</td></tr>
+      <tr><td><b>Harbor</b> (Terminal-Bench 2 harness)</td><td>Runner</td><td>Runs <code>claude-code</code>, <code>codex</code> and <code>opencode</code> as installed agents. A native <code>--settings</code> upload carries the hooks. Transcripts and per-trial cost and token counts come back with every trial.</td></tr>
+      <tr><td><b>CL-Bench, SWE-Bench-CL, SWE-ContextBench</b></td><td>External learning lift</td><td>They measure exactly Adage's claim: later tasks in the same repository get cheaper and more often solved. CL-Bench scores on step efficiency. <i>Open question:</i> whether its Claude system lets Claude Code's own hooks see task commands.</td></tr>
+      <tr><td><b>SWE-bench Verified</b> (django: 231 tasks)</td><td>Comparison only</td><td>This is where the closest prior work lives. <i>Evaluating AGENTS.md</i> (Gloaguen et al., 2026) found that generated context files cut success by ~3% and raised cost by more than 20%. JIT directives vs an up-front file is the claim to win.</td></tr>
+      <tr><td><b>Terminal-Bench 2.0</b></td><td>Do-no-harm</td><td>Every task is a fresh environment, so there is nothing repo-specific to learn. It proves an installed Adage costs nothing, and it gives leaderboard visibility.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">Rejected for Adage's claim, because there is no repeated work in one repository: tau-bench, OSWorld, LiveCodeBench, Aider polyglot, RepoBench, Commit0, EnvBench, SWE-bench-Live (431 repos). Multi-SWE-bench and SWE-PolyBench are good later scale-out for Codex and OpenCode.</p>
+
+  <h3>Protocol (pre-registered)</h3>
+  <div class="two">
+    <div class="box">
+      <h4>Design</h4>
+      <ul>
+        <li><b>Split:</b> per repo, by <code>base_commit</code> date. The first ~50% are train and the last ~50% test, with a 2–3 instance buffer between them. A leave-repo-out control separates repository learning from generic effects.</li>
+        <li><b>No leakage:</b> Adage never sees gold patches, FAIL_TO_PASS lists or hints. An automatic scan checks directives against test-set gold paths. Web tools are off in every arm.</li>
+        <li><b>Arms:</b> identical model, CLI version, turns and timeouts, interleaved and seeded. Other memory is off in every arm.</li>
+        <li><b>Strong baselines:</b> AGENTS.md generated from the same train transcripts, and in-context notes (CL-Bench's strongest baseline). Without these, reviewers will call the result "just memory."</li>
+        <li><b>Clean patches:</b> hook files never enter the worktree (<code>.codex/</code> and <code>.adage/</code> would pollute <code>git diff</code>).</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h4>Statistics and power</h4>
+      <ul>
+        <li>The pairing unit is the <i>task</i>. CIs come from a cluster bootstrap over repos, then tasks. Holm correction across the primary metrics: resolve rate, cost, turns.</li>
+        <li>Detecting −10% cost or turns needs ~170 pairs; −15% needs ~75. <b>Efficiency is where Adage can win credibly.</b></li>
+        <li>A +5pp resolve change needs ~630 pairs; +10pp needs ~160. SWE-bench Pro's ~320 test tasks can detect about 6–7pp.</li>
+        <li>Guardrails accumulate as <i>anytime-valid confidence sequences</i> across nightly runs, as Design Spec already calls for.</li>
+        <li>A pilot of 20 tasks measures the discordance rate and SD, then n is fixed before the main run.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Objective and guardrails the optimizer runs against</h3>
+  <div class="two">
+    <div class="box">
+      <h4>Hard guardrails (infeasible if violated)</h4>
+      <ul>
+        <li>0 unsafe directives; 0 fast-path mismatches; 100% fidelity</li>
+        <li>Hook p95 within the Architecture budget with 20% headroom</li>
+        <li>L1 harm (a followed wrong directive that led to failure) ≤ cap</li>
+        <li>L2 lower CI of Δpass ≥ −5 points, accumulated across nights</li>
+        <li>L4b no Terminal-Bench regression</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h4>Objective</h4>
+      <p><code>J₀ = turns saved@window − λ<sub>fp</sub>·false directives − λ<sub>cal</sub>·ECE + λ<sub>gt</sub>·route F1</code></p>
+      <p><code>J₂ = −log(TFE ratio) − 0.5·log(cost ratio)</code>, task-cluster bootstrap, with a restricted mean for censored runs.</p>
+      <p class="small">Refit λ against L2 each quarter. If J₀ ranks configurations differently from L2 (Spearman &lt; 0.5), fix the proxy before sweeping.</p>
+    </div>
+  </div>
+<pre>adage bench run     --tier l0 --suite core [--params p.toml] --out results/&lt;id&gt;.jsonl
+adage bench sweep   --tier l0 --space evals/bench/spaces/learner.toml --strategy sobol:500 --cv task-group:k=5
+adage bench report  sweeps/&lt;id&gt;.jsonl --pareto precision,recall,turns_saved --vs-baseline
+adage bench confirm sweeps/&lt;id&gt;.jsonl --top 3 --tier l2 --budget-usd 40
+adage bench bless   results/&lt;id&gt;.jsonl --reason "..."</pre>
+  <p class="small">Prerequisite: <code>EngineParams</code> (new <code>adage-learn/src/params.rs</code>) moves today's hard-coded constants into one swept, hashed object: <code>DEAD_END_CONSISTENCY</code>, <code>FOLLOW_WINDOW</code>, <code>MAX_DIRECTIVES_*</code>, <code>UBIQUITOUS</code>, <code>CONTRAST</code>, <code>MATERIAL_LOWER_BOUND</code>, plus the learn thresholds. Result records are <code>run · trial · directive · aggregate · scorecard</code>, and each carries <code>git_sha</code>, <code>params_hash</code>, a dataset digest, split, harness and model versions, cost and token breakdown, and a harm block. Committed baselines under <code>evals/baselines/</code> replace the hand-edited floors in <code>gates.rs</code>.</p>
+</section>
+
+
+<!-- ============ TRACK G ============ -->
+<section id="trackg">
+  <div class="sec-head"><h2>Track G · Graph and prediction engine v2</h2><span class="tag">docs/tracks/track-g-graph-engine.md</span></div>
+  <div class="callout"><p><b>The learner stops knowing route kinds.</b> Each session becomes a small event graph. Its nodes are prompts, commands, files, outputs, failures and outcomes, and each carries an embedding. Its edges are <i>follows</i>, <i>value flows into</i>, <i>reads/writes</i>, <i>fails with</i> and <i>recovers with</i>. Learning crawls these graphs for <b>common subgraphs</b>, and each useful one becomes a <b>reflex</b>. Its earliest nodes are the trigger, its later nodes the continuation, and its value-flow edges the typed inputs.</p></div>
+  <div class="two">
+    <div class="box">
+      <h4>How the mining works</h4>
+      <ul>
+        <li><b>Prototypes.</b> Nodes are embedded and clustered per type, deterministically (exact kNN + Louvain), so mining runs over labels rather than doing fuzzy matching during the search. A label hierarchy (exact ⊂ prototype ⊂ coarse ⊂ head) provides the "softness".</li>
+        <li><b>Algorithm.</b> PrefixSpan-style episode growth over time-ordered session graphs, rooted at things that could be delivered, keeping closed patterns only. General graph mining (gSpan, GraMi) is rejected: sessions are nearly sequences, so the order is already known.</li>
+        <li><b>Frequent ≠ useful.</b> Patterns are scored by confidence (a Beta posterior that falls back to shorter contexts), lift over background (which removes <code>ls</code>/<code>cat</code>), value per turn, and causal lift from knockouts. An MDL cover picks among overlapping patterns.</li>
+        <li><b>Embeddings widen triggers, never actions.</b> A continuation must compile to one dominant concrete command (≥ 80% of support).</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h4>Kinds survive only at the output boundary</h4>
+      <p>A deterministic compiler maps each reflex to one of six <b>delivery shapes</b>: <code>run</code>, <code>avoid</code>, <code>read-batch</code>, <code>obligation</code>, <code>sequence</code>, <code>advise</code>. Each has a fixed template, typed input contracts, effect ceilings and interlocking.</p>
+      <p><b>Parity test.</b> Today's five kinds must fall out as special cases: prompt→lookup is a value-flow edge, dead end is fail→recover, finish line is last(edit)→regenerate. The new engine must also learn <code>scope</code>, <code>env_sync</code> and multi-step <code>sequence</code> conventions from generated sandboxes with <i>no learner code change</i>.</p>
+      <p><b>Learned input types (G1)</b> replace the hard-coded <code>[A-Z][A-Z0-9]{0,9}-\d{1,7}</code> detector. Tokens that flow from prompts or earlier output into later commands are generalised by anti-unification and MDL into anchored, bounded contracts, covering <code>#482</code>, UUIDs, <code>ops/412</code> and branch names.</p>
+    </div>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Milestone</th><th>Delivers</th><th>Effort</th><th>Gate</th></tr></thead>
+    <tbody>
+      <tr><td class="num">G0</td><td>Event-graph substrate, per-prompt import, shared tokeniser, node embeddings, cached facts</td><td>2–3 wk</td><td>No behaviour change; byte-identical across thread counts</td></tr>
+      <tr><td class="num">G1</td><td>Value flow → learned input types <span class="pill y">in progress</span></td><td>2–3 wk</td><td>Lookup recall on new ID shapes 0 → ≥ 0.95; reject rate 1.00; 0 unsafe</td></tr>
+      <tr><td class="num">G2</td><td>Prototypes, closed-episode mining, scoring, MDL selection</td><td>3–4 wk</td><td>Next-action top-1 ≥ baseline + 5 pts; calibration error ≤ 0.05</td></tr>
+      <tr><td class="num">G3</td><td>Compiler to delivery shapes; shadow mode next to the miners</td><td>3–4 wk</td><td>Parity on conventions; learns new kinds with no learner code change</td></tr>
+      <tr><td class="num">G4</td><td>Runtime context state and discrimination net</td><td>2 wk</td><td>Hook p95 within +0.3 ms; fast-path mismatches 0</td></tr>
+      <tr><td class="num">G5</td><td>Retire the miners one by one; delete route kinds from the learner</td><td>3 wk</td><td>Parity on each kind in two consecutive blessed baselines</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ TRACK C ============ -->
+<section id="trackc">
+  <div class="sec-head"><h2>Track C · Compiled skills and the packaged artifact</h2><span class="tag">docs/tracks/track-c-compiled-skills.md</span></div>
+  <div class="callout"><p>Instincts and reflexes are <b>compiled skills</b>: inference turned into signed, content-addressed, reusable artifacts that take typed inputs and may execute. An <b>instinct</b> is a portable compiled skill; its applicability is a detector over repository files. A <b>reflex</b> is repo-bound; its applicability is the repository's identity or a structural fingerprint.</p></div>
+  <div class="two">
+    <div class="box">
+      <h4>Closure of the pack</h4>
+      <ul>
+        <li><b>Contents.</b> The route graph with typed inputs and outputs, the applicability rule, tool and OS requirements, evidence by origin, optional bench attestations, a <code>CLOSURE</code> listing, and an sshsig signature in a new <code>adage-pack</code> namespace.</li>
+        <li><b>Scripts, three levels.</b> <b>L-none</b>: only known commands. <b>L-ref</b>: a repository path plus a SHA-256, re-checked at run time. <b>L-vendor</b>: the bytes are embedded; this needs a signed pack and explicit approval, and is never automatic.</li>
+        <li><b>Closure rules.</b> A command that names a repository script without pinning it is refused. Bytes nothing references are refused. No dependencies between packs in v1.</li>
+        <li><b>Never in a pack:</b> approvals, spools, prompts, bound values, outputs.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h4>Execution levels and approval</h4>
+      <ul>
+        <li><b>E0</b> directive, as today. <b>E1</b> prefetch: run an approved read-only route and inject typed, fenced output. <b>E2</b> actions from hooks: when an approved reflex's stimulus fires, Adage runs it staged, checks it against its declared outputs, then applies it (revised 2026-09-28: no MCP; Adage acts only from the hooks it owns).</li>
+        <li><b>A separate <code>adage-exec</code> binary.</b> The hook binary keeps "spawns nothing", checkable by grep in CI.</li>
+        <li><b>The sandbox is the boundary, not classification:</b> Landlock + seccomp or bubblewrap on Linux; <code>sandbox-exec</code> on macOS; Windows stays at E0.</li>
+        <li><b>Approvals are local.</b> Each is keyed by hashes of the argv, inputs, scripts, effect, level and sandbox profile, and lapses on any change. Auto-approval only for inert, read-only, known commands, after gate G3.</li>
+      </ul>
+    </div>
+  </div>
+  <p class="small">Milestones: C0 format · C1 distribute and bind · C2 execution core and sandbox · C3 E1 prefetch · C4 (removed: no MCP) · C5 E2 actions from hooks, vendoring, attestations. About 13–15 weeks. <b>Gates before any default changes:</b> 0 sandbox escapes; E1 saves ≥ 0.5 turns per triggered session with the lower CI bound above 0; injection harm no worse than the agent reading the same output itself.</p>
+</section>
+
+<!-- ============ SHIPPED ============ -->
+<section id="shipped">
+  <div class="sec-head"><h2>Shipped this session</h2><span class="tag">branch claude/repo-maturity-roadmap-l95ohs</span></div>
+  <div class="tw"><table>
+    <thead><tr><th>Area</th><th>What landed</th><th>Measured</th></tr></thead>
+    <tbody>
+      <tr><td>Eval rigour</td><td>Live runner: per-run isolation, seeded arm order, run statuses, task-cluster permutation and bootstrap, Holm correction. Offline: task-grouped and temporal splits with leakage flags, Wilson CIs, <code>conventions.json</code> ground truth and <code>adage eval routes</code>. README caveat and known-limitations section.</td><td>Leak-free demo precision 0.68–0.82, inside round 2's interval: no sign the leak inflated it. The 3 round-1 infra failures were all in the control arm.</td></tr>
+      <tr><td>Bench (L0)</td><td><code>EngineParams</code>, one result schema, <code>adage eval bench run / sweep / report / bless</code>, committed baseline</td><td>The sweep surfaced a real fast-path bug. After the fix all 65 settings are feasible, and the best raise J from 0.68 to 0.92</td></tr>
+      <tr><td>Engine E1</td><td>Steering by directive kind; Dormant state instead of self-retirement; propensity logged; evidence-backed finish-line wording</td><td>Gate numbers unchanged; retention-ageing test added</td></tr>
+      <tr><td>Engine E2 + E3</td><td>One command-pattern algebra; <code>**</code> glob lattice; per-sub-action failure attribution; interlocking at compile time and runtime</td><td>Round-2 recall 0.78 → 0.91; linked-files recall 0.54 → 1.0</td></tr>
+      <tr><td>Generator</td><td><code>evals/gen</code> convention grammar: 2 stacks, 3 skins, decoys, instinct violations, selfcheck, rehearsal</td><td>28/28 conventions recovered, 0/13 decoys learned</td></tr>
+      <tr><td>Instincts</td><td><code>adage-instincts</code>: declared-fact extraction and the P0 binder <span class="pill y">integration in progress</span></td><td>Recovers the demo's dead end and finish line on day 0; 0 binds on hostile or decoy fixtures</td></tr>
+      <tr><td>External</td><td><code>evals/external</code>: Harbor agent adapter, pre-registered SWE-bench Pro protocol, leakage and patch checks, paired statistics</td><td>Checked against Harbor's source and a real binary; not yet run in containers</td></tr>
+      <tr><td>Training</td><td><code>adage-train</code> skill → reflex <span class="pill y">in progress</span></td><td>—</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ ROADMAP ============ -->
+<section id="roadmap">
+  <div class="sec-head"><h2>Sequenced roadmap</h2><span class="tag">≈ 14–16 weeks · three lanes in parallel</span></div>
+  <p>Order matters. Evals come first because every later change is judged by them. Evidence integrity comes before instincts and training, because both add evidence sources that the current evidence model can't keep separate.</p>
+  <div class="phases">
+    <div class="phase">
+      <div class="when"><b>Phase 0</b><span>Week 1 · $0</span></div>
+      <div class="what">
+        <h4>Stop fooling ourselves</h4>
+        <div class="lanes">
+          <div class="lane"><div class="ln">Evals</div><ul><li>Task-grouped and temporal splits in <code>dataset.rs</code></li><li>Runner isolation, seeded arm order, <code>status</code> field, task-cluster stats, Holm correction</li><li>CIs in <code>score.rs</code>; tighten gate floors</li><li>Scrub the operator path from the committed <code>state.json</code></li></ul></div>
+          <div class="lane"><div class="ln">Engine</div><ul><li>Record <code>propensity</code> in each spool record</li><li>Wording "CI fails if skipped" only when <code>deviations_failed &gt; 0</code></li></ul></div>
+          <div class="lane"><div class="ln">Docs</div><ul><li>Correct "randomised" in <code>docs/evals.md</code></li><li>Flag the round-2 leakage and the round-1 harm finding</li><li>Caveat the README headline until it is re-run</li></ul></div>
+        </div>
+        <p class="exit"><b>Exit:</b> the published numbers are either re-derived on a clean split or explicitly caveated.</p>
+      </div>
+    </div>
+    <div class="phase">
+      <div class="when"><b>Phase 1</b><span>Weeks 2–4 · $0</span></div>
+      <div class="what">
+        <h4>Measurement backbone and evidence integrity</h4>
+        <div class="lanes">
+          <div class="lane"><div class="ln">Evals</div><ul><li><code>EngineParams</code> threaded through learn and runtime</li><li><code>adage bench run/sweep/report/bless</code> (L0), result schema</li><li><code>conventions.json</code> for acme and harbor; <code>adage eval routes</code></li><li>Calibration table; hook-latency job in CI</li></ul></div>
+          <div class="lane"><div class="ln">Engine</div><ul><li><b>E1</b>: <code>Dormant</code> state, per-directive steering, import exclusion, retention-ageing gate</li><li><b>E2</b>: <code>CommandPattern</code> algebra everywhere</li></ul></div>
+          <div class="lane"><div class="ln">Training</div><ul><li><code>Session.origin</code>; <code>Evidence.by_origin</code> with <code>serde(default)</code></li><li>Provenance-aware wrapper text in <code>render.rs</code></li></ul></div>
+        </div>
+        <p class="exit"><b>Exit:</b> a first baseline of route recall and sessions-to-learn; a sweep of 500 configs runs in under 20 CPU-minutes.</p>
+      </div>
+    </div>
+    <div class="phase">
+      <div class="when"><b>Phase 2</b><span>Weeks 5–8 · ~$150</span></div>
+      <div class="what">
+        <h4>Generator, interlocking, core instincts</h4>
+        <div class="lanes">
+          <div class="lane"><div class="ln">Evals</div><ul><li><code>evals/gen</code> convention grammar: 4 stacks, 6 kinds, decoys, violations</li><li>L1 closed-loop simulator with fitted behaviour profiles</li><li>L2 nightly on 3 sandboxes</li></ul></div>
+          <div class="lane"><div class="ln">Engine</div><ul><li><b>E3</b>: interlocking at compile time and runtime; EV ordering</li><li>Per-action failure attribution; <code>**</code> glob lattice</li></ul></div>
+          <div class="lane"><div class="ln">Training</div><ul><li><code>crates/adage-instincts</code>: P0 set (U1–U6, N1, P1)</li><li><code>Advise</code> step, <code>RepeatFailure</code> trigger, <code>Misfired</code> judgement, auto-retire</li><li>Declared extraction from repository files</li></ul></div>
+        </div>
+        <p class="exit"><b>Exit:</b> day-0 lift from instincts-only vs off on generated sandboxes; decoy false-route rate ≤ 5%; hook p95 unchanged.</p>
+      </div>
+    </div>
+    <div class="phase">
+      <div class="when"><b>Phase 3</b><span>Weeks 9–11 · ~$500</span></div>
+      <div class="what">
+        <h4>Causal measurement and the external dev set</h4>
+        <div class="lanes">
+          <div class="lane"><div class="ln">Evals</div><ul><li>Harbor adapter <code>AdageClaudeCode</code> (~150 lines), then Codex and OpenCode</li><li>L3 on SWE-Gym, SWE-smith, swe-gen-js; headroom mining</li><li>First <code>bench confirm</code> of top sweep configs</li></ul></div>
+          <div class="lane"><div class="ln">Engine</div><ul><li><b>E4</b>: per-route knockouts, IPW lift, CUSUM weakening</li><li><b>E6</b>: outcome proxies from transcripts</li></ul></div>
+          <div class="lane"><div class="ln">Training</div><ul><li>Multi-harness corpus runs; SWE trajectory importer (after licence review)</li><li>P1 instincts</li></ul></div>
+        </div>
+        <p class="exit"><b>Exit:</b> per-route lift with CIs in <code>adage graph</code>; L3 paired cost/turn CI excludes 0 on the dev repos.</p>
+      </div>
+    </div>
+    <div class="phase">
+      <div class="when"><b>Phase 4</b><span>Weeks 12–16 · $2–5k</span></div>
+      <div class="what">
+        <h4>Calibrated evidence, <code>adage-train</code>, headline run</h4>
+        <div class="lanes">
+          <div class="lane"><div class="ln">Evals</div><ul><li>Pilot of 20 tasks → fix n → <b>pre-registered SWE-bench Pro run</b> (L4)</li><li>L4b: Terminal-Bench no-harm, CL-Bench learning lift</li><li>Publish all trajectories, indexes and configs</li></ul></div>
+          <div class="lane"><div class="ln">Engine</div><ul><li><b>E5</b>: discounted Beta, days gate, cross-fitted intent, stable intent ids</li><li>Incremental per-(repo, kind) fact tables</li></ul></div>
+          <div class="lane"><div class="ln">Training</div><ul><li><code>crates/adage-train</code>: claims, tasks, isolation, budgets, validation arms, report</li><li>Familiar-command computation (Design F14)</li><li><code>adage teach</code>, <code>record</code>, corrections, <code>--ci-logs</code></li></ul></div>
+        </div>
+        <p class="exit"><b>Exit:</b> the external headline number; ≥ 80% of synthetic reflexes later confirmed by organic evidence.</p>
+      </div>
+    </div>
+    <div class="phase">
+      <div class="when"><b>Beyond</b><span>next session</span></div>
+      <div class="what">
+        <h4>Superseded by Tracks G and C</h4>
+        <p style="font-size:15px;margin:0">E7 (context model), E8 (multi-step routes) and E9 (cross-repository templates) are folded into <a href="#trackg">Track G</a>: subgraph mining over embedded event graphs, with learned input types first. Execution and packaging move to <a href="#trackc">Track C</a>. Both are gated on the same bench ladder.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DECISIONS ============ -->
+<section id="decisions">
+  <div class="sec-head"><h2>Decisions for you</h2><span class="tag">each with a recommendation</span></div>
+  <div class="decisions">
+    <div class="dec"><h4>1. Amend "Adage never executes anything"?</h4><p class="rec">Skill → reflex needs something to drive agent sessions. <b>Recommend:</b> a separate, optional <code>adage-train</code> binary that drives the user's own harness, sandboxed, at a terminal only. The <code>adage</code> binary and plugin keep the promise word for word. Design principle 1, non-goals, Q4 and F10 get updated to match.</p></div>
+    <div class="dec"><h4>2. How to handle the current README headline</h4><p class="rec"><b>Recommend:</b> keep the numbers, add a one-line caveat now (same-task rounds, fixed arm order, shared auto-memory), and replace them after the Phase 0 re-run on a clean split. Credibility with the benchmark audience depends on getting this right first.</p></div>
+    <div class="dec"><h4>3. Instincts on by default?</h4><p class="rec"><b>Recommend:</b> the core P0 pack on by default at prime, reactive where possible, subject to control, and auto-retiring. Environment-effect instincts (U7, U10) need a one-time pack-level approval in <code>adage init</code>.</p></div>
+    <div class="dec"><h4>4. External benchmark budget</h4><p class="rec">About $2–5k for the SWE-bench Pro headline across two models, plus $1–3k for breadth, plus ~$13 a night for L2. <b>Recommend:</b> approve the L3 dev-set spend (~$500) now, and decide on L4 after the 20-task pilot measures real per-trial cost.</p></div>
+    <div class="dec"><h4>5. Public trajectory data</h4><p class="rec"><b>Recommend:</b> use it for internal tuning only. Keep raw dumps in a team bucket, and commit only redacted derived datasets whose licences allow it, with licence and source recorded in each manifest.</p></div>
+  </div>
+</section>
+
+<footer>
+  <p><b>Not yet verified:</b></p>
+  <ul>
+    <li>Whether Harbor has the SWE-bench Pro V2 task list (only 1.0 with 731 tasks is registered).</li>
+    <li>Whether the Hugging Face records carry <code>created_at</code>. The fallback is <code>git show</code> on <code>base_commit</code>.</li>
+    <li>Whether CL-Bench's Claude system lets Claude Code's own hooks see task commands.</li>
+    <li>Whether Gloaguen et al.'s 138-task set is public.</li>
+    <li>Where swe-gen-js comes from.</li>
+    <li>All external per-trial cost figures. They are estimates, pending the pilot.</li>
+    <li>Several statements about benchmark sites and leaderboard rules come from search summaries, because the proxy blocked arxiv, Hugging Face, tbench.ai and Scale.</li>
+  </ul>
+  <p>File:line citations are against <code>ce5e311</code>.</p>
+</footer>
+</div>

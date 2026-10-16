@@ -1,0 +1,44 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes   3 Map   4 Health   5 Settings   6 Home                                                         harbor-dispatch · LIVE
+──────────────────────────────────────────────────━━━━━━━━━━━━────────────────────────────────────────────────────────────────────────────────────────
+ 24 settings · 1 changed · same as adage config · /home/me/.local/share/adage/config.toml
+
+  Learning  7                                                 ─ Fix Python test runs · runtime.rewrite ───────────────────────────────────────────────
+    Learn automatically      ● on                              Point Python test runs under the system Python at the project's verified environment
+    Pause between runs       2 min                             before they run.
+    Evidence needed          standard
+    Repositories             all repositories                  accepts  on, or off to leave every command as the agent wrote it
+    Reuse parsed sessions    ● on                              default  ● on
+    Procedure cards          ● on                              now      set by the exec/rewrite-off marker, which wins over config.toml
+    Card match strictness    0.811
+                                                               ↪ rewrites off · same as adage delegate rewrites on to switch
+  History sources  3                                           space    turns it on
+    Claude Code history      default (~/.claude/projects)      same as  adage config set runtime.rewrite true
+    Codex history            auto, once Codex hooks are on
+    OpenCode exports         none
+
+  Instincts & packs  3
+    Built-in instincts       ● on
+    Instinct packs           auto, defaults + added packs
+    Always leave out         none
+
+  In Claude Code  4
+    Session-start notice     daily
+    Spinner note             ○ off
+    Turn summary             ○ off
+    Habit hints              ○ off
+
+  In adage ui  1
+    Start screen             ● on
+
+  Advanced  6 · 1 changed
+▌   Fix Python test runs     ○ off  off by marker
+    Measure savings          off
+    Model for routine steps  the session's own model
+    Steps Adage may take     6 per session
+    Invoke skills            ○ off
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   enter  edit   space  toggle                                                                                          q  quit

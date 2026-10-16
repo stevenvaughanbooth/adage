@@ -1,0 +1,45 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 230
+expression: text
+---
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home                ◆ all repositories ▾ · LIVE
+─────────━━━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────
+ LIVE   all repositories · 4 sessions · since 12:04 · last call 12:04:08
+ ╭─ ▁▃▅ Activity ──────── peak 9/min ─╮ ╭─ ▪ Tool calls ──╮ ╭─ ◠ Fired ───────╮ ╭─ ✓ Followed ────╮ ╭─ ■ Finish ──────╮
+ │                                  █ │ │ 16              │ │ 1               │ │ 0 of 1          │ │ 0               │
+ │ ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁█ │ │ in 9 steps      │ │ INHIBIT 1       │ │ ──────────── 0% │ │ met             │
+ ╰────────────────────────────────────╯ ╰─────────────────╯ ╰─────────────────╯ ╰─────────────────╯ ╰─────────────────╯
+
+─ now · all repositories ─────────────────────────────────────────────────────── │ Reflexes in play  1 ────────────────
+  Claude Code  adage · session, since 12:04 ──────────────────────────────────── │  INHIBIT  npm run check
+  ┬ earlier in this turn                                                         │   fired 1  ━━━━  followed 0  ────
+  ├ Run  ls                                                                12:04 │
+                                                                                 │ Learning ───────────────────────────
+  Claude Code  harbor-dispatch · session, since 12:04 ────────────────────────── │ ╭─ Conditioning ────────────────────╮
+  ┬ earlier in this turn                                                         │ │ Nothing conditioned yet.          │
+  ├ Run  ls                                                                12:04 │ │ Runs show here as they finish.    │
+  ├ Tool                                                                   12:04 │ │ adage condition                   │
+  │  ◆ adage · INHIBIT · a reflex learned here                                   │ ╰───────────────────────────────────╯
+  │    ──▶ npm run check                                                         │ ○ 1 to look over · adage review
+  ├ Run ×2  ls                                                             12:04 │
+                                                                                 │ Health ─────────────────────────────
+  Claude Code  acme-billing · session, since 12:04 ───────────────────────────── │ + hooks claude    + 4 reflexes
+  ┬ earlier in this turn                                                         │ + auto-condition
+  ├ Run  ls                                                                12:04 │ ! no model · adage models fetch
+                                                                                 │
+  Claude Code  harbor-dispatch · session, since 12:04 ────────────────────────── │
+  ┬ earlier in this turn                                                         │
+  ┊ 3 steps, nothing to say   Run ×9                                       12:04 │
+  ├ Run  ls                                                                12:04 │
+                                                                                 │
+                                                                                 │
+                                                                                 │
+                                                                                 │
+                                                                                 │
+                                                                                 │
+                                                                                 │
+                                                                                 │
+                                                                                 │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   p  pause   f  repository   /  filter   enter  inspect                                  q  quit

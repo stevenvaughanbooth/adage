@@ -1,0 +1,54 @@
+{
+ "protocol": "adage-external/1",
+ "train_frac": 0.5,
+ "buffer": 2,
+ "min_test": 5,
+ "repos": {
+  "marshmallow": {
+   "train": [
+    "marshmallow-5c2f7f99",
+    "marshmallow-91147b2b",
+    "marshmallow-8f493e66",
+    "marshmallow-de5e842a",
+    "marshmallow-2b84b56e",
+    "marshmallow-39e7c833",
+    "marshmallow-19ca8dce"
+   ],
+   "buffer": [
+    "marshmallow-fea54285",
+    "marshmallow-070dde08"
+   ],
+   "test": [
+    "marshmallow-65374df0",
+    "marshmallow-252090c7",
+    "marshmallow-024b5d09",
+    "marshmallow-72ac4a04",
+    "marshmallow-f07eadc8",
+    "marshmallow-902f99c4"
+   ],
+   "cutoff": "2026-02-04T15:45:08+00:00",
+   "first_test": "2026-03-25T22:18:11+00:00",
+   "dates": {
+    "marshmallow-5c2f7f99": "2023-07-02T16:33:03+00:00",
+    "marshmallow-91147b2b": "2023-07-20T20:54:28+00:00",
+    "marshmallow-8f493e66": "2024-03-04T20:18:38+00:00",
+    "marshmallow-de5e842a": "2025-01-13T21:17:25+00:00",
+    "marshmallow-2b84b56e": "2025-10-31T17:00:27+00:00",
+    "marshmallow-39e7c833": "2026-01-23T12:57:26+00:00",
+    "marshmallow-19ca8dce": "2026-02-04T15:45:08+00:00",
+    "marshmallow-fea54285": "2026-03-25T21:58:45+00:00",
+    "marshmallow-070dde08": "2026-03-25T22:09:46+00:00",
+    "marshmallow-65374df0": "2026-03-25T22:18:11+00:00",
+    "marshmallow-252090c7": "2026-03-25T22:27:12+00:00",
+    "marshmallow-024b5d09": "2026-03-25T22:30:15+00:00",
+    "marshmallow-72ac4a04": "2026-03-25T22:33:35+00:00",
+    "marshmallow-f07eadc8": "2026-04-02T12:53:27+00:00",
+    "marshmallow-902f99c4": "2026-08-08T14:24:08+00:00"
+   }
+  }
+ },
+ "excluded": {},
+ "unassigned": [],
+ "digest": "9145453707f6dcbac1514076e6acb52ee4da1d50ab2dc109e3ff83d51df8c5fb",
+ "repo_key": "github.com/marshmallow-code/marshmallow"
+}

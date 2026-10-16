@@ -1,0 +1,28 @@
+format = "adage-pack/1"
+
+[pack]
+name = "harbor-dispatch/work-items"
+version = "0.1.0"
+origin = "reflex"
+description = "Context gathering for prompts that name a work item"
+
+[applicability]
+kind = "repo"
+repo_keys = ["harbor-dispatch"]
+
+[requires]
+harness = ["claude-code"]
+templates = ["read@1"]
+
+[exec]
+requested = "E0"
+
+[provenance]
+tool = "adage 0.1.0"
+
+[provenance.origins]
+organic = 7
+synthetic = 0
+declared = 0
+instinct = 0
+imported = 0

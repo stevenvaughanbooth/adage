@@ -1,0 +1,273 @@
+//! What one decision says: the directives the agent receives, the judgements of what it did,
+//! and the steps Adage takes or would take in its place. Recorded in every spool record in both
+//! arms, and read back by [`crate::rebuild`], the eval and the app, so a field is only ever added
+//! (`#[serde(default)]`) and a `kind` is never renamed.
+
+use crate::{CtxState, Noticed, Obligation, SessionState};
+use adage_tracks::{IndexedRoute, Strength};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Directive {
+    pub route: String,
+    pub track: String,
+    pub version: String,
+    pub strength: Strength,
+    pub text: String,
+    /// The route's delivery shape ([`adage_tracks::shape`]), rendered into the directive's
+    /// wrapper (`kind="…"`). Empty in records written before it existed.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub kind: String,
+    /// Where the route came from, when it is not learned (an instinct): its wrapper says so
+    /// instead of claiming session evidence ([`crate::render::footer`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<adage_tracks::Origin>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Judgement {
+    Followed {
+        route: String,
+    },
+    Ignored {
+        route: String,
+    },
+    /// The requested command was observed, regardless of its result. Verified completion is
+    /// established separately by execution receipts, never by this advisory judgement.
+    ObligationMet {
+        route: String,
+    },
+    /// The agent ran the directed command within the follow window, and it failed. Three of
+    /// these (or an ignore rate whose Wilson lower bound reaches 0.5) extinguish an instinct route at
+    /// the next learn (`adage_learn::instincts`).
+    Misfired {
+        route: String,
+    },
+    /// The directed step was taken by Adage in the agent's place (a predicted call, `By::Adage`),
+    /// not by the agent: never a follow, never evidence of what the agent does.
+    Predicted {
+        route: String,
+    },
+    /// The call was a learned dead end, and Adage ran the route's `instead` in its place before it
+    /// ran ([`Substitution`]): never a follow, and the dead end was avoided, not hit.
+    Substituted {
+        route: String,
+    },
+    /// The step Adage made in the agent's place (`By::Adage`) was refused by the harness before
+    /// it ran ([`adage_trace::Call::refused`]: the person's permission rules, as for the model's
+    /// own calls): nothing ran, so it is never `Predicted`, never a follow, and meets no
+    /// obligation.
+    Refused {
+        route: String,
+    },
+}
+
+/// What a predicted step is ([`Prediction::kind`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PredictionKind {
+    /// An armed, unmet finish-line obligation, at the step that ends the turn.
+    Obligation,
+    /// A pending run directive's command.
+    Run,
+    /// A pending sequence directive's first command.
+    Sequence,
+    /// A pending skill step: the Skill tool with the skill's name.
+    Skill,
+    /// A read-batch directive's files, bound from the preceding call's result: one Read each.
+    Chain,
+}
+
+/// One tool call Adage makes in the agent's place: the harness tool and its input.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PredictedCall {
+    pub tool: String,
+    pub input: Value,
+}
+
+/// The step Adage makes in the agent's place at a `TurnStep`: only what it already directed
+/// (architecture §3.2 of the Claude Code mod).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Prediction {
+    pub kind: PredictionKind,
+    pub route: String,
+    pub track: String,
+    pub calls: Vec<PredictedCall>,
+}
+
+/// A step routed to the person's routine model (the Claude Code mod's `routine_model`, its
+/// architecture §3.5): the model is about to be asked to do what a delivered `fire` directive
+/// already says, and no `predict` grant lets Adage make the call itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Routing {
+    pub route: String,
+    pub track: String,
+}
+
+/// A learned dead end replaced before it runs (architecture §3.4 of the Claude Code mod): the
+/// call meets an `avoid` route in service at full strength whose `instead` is a fixed command,
+/// and the mod runs `command` in the call's place ([`substitution`](crate::substitution)).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Substitution {
+    pub route: String,
+    pub track: String,
+    /// What runs instead: the route's `instead`.
+    pub command: String,
+    /// The one line the model reads after the result, and the person under the dialog.
+    pub context: String,
+}
+
+/// Which phase of the Claude Code mod's two-phase step a `TurnStep` is ([`crate::Policy::step`];
+/// the mod's architecture §3.2), mirroring the two phases of its Bash calls: a dry run that says
+/// what would be yielded and commits nothing, then a verdict carrying the person's permissions on
+/// the calls. A command hook's step (and a mod without the phases) is [`StepPhase::Commit`]: it
+/// decides and commits at once, as every step did before the phases existed.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum StepPhase {
+    /// Decide and commit at once.
+    #[default]
+    Commit,
+    /// Say what would be yielded, and commit nothing of it: no bound counts it, the route stays
+    /// offered, and the decision is not recorded. A step that would yield nothing (nothing to
+    /// predict, the cap reached, the control arm, observe mode) needs no verdict, so it is decided
+    /// and committed as [`StepPhase::Commit`] decides it.
+    DryRun,
+    /// The person's permissions on the dry run's calls: `allow` commits as [`StepPhase::Commit`]
+    /// does; anything else records the step as withheld ([`Decision::withheld`]) and holds its
+    /// route for the rest of the session ([`SessionState::withheld_routes`]). A verdict naming
+    /// another route than the one found now decides no prediction (the plan moved since the dry
+    /// run).
+    Verdict {
+        /// The route the dry run answered, when the mod names it.
+        route: Option<String>,
+        permission: PermissionVerdict,
+    },
+}
+
+/// Claude Code's permission decision on a predicted call (`$.tool.check`), as the mod reads it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Permission {
+    Allow,
+    Ask,
+    Deny,
+    /// No usable answer (the check failed, or answered something unknown): never an allow.
+    #[default]
+    None,
+}
+
+/// The verdict that held a step back, as recorded ([`Decision::permission`]): the decision, and
+/// the first call not allowed unasked with the engine's sentence, when the mod gives them.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PermissionVerdict {
+    pub decision: Permission,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// Why a step Adage would have made in the model's place was not made ([`Decision::withheld`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Withheld {
+    /// The person's permissions would not let a call of it run unasked.
+    Permission,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Decision {
+    /// What the agent receives (empty in the control arm).
+    pub directives: Vec<Directive>,
+    /// A stop-hook request to continue, with its reason.
+    pub continue_reason: Option<String>,
+    /// What would have been emitted — recorded in both arms for exposure logging.
+    pub would_have: Vec<Directive>,
+    /// A stop-hook request that would have been made (recorded in both arms).
+    #[serde(default)]
+    pub would_continue: Option<String>,
+    pub judgements: Vec<Judgement>,
+    /// Canonical template keys of the calls observed in this event.
+    pub observed: Vec<String>,
+    /// The session's context state after this event, when the event changed it: what a state
+    /// rebuilt from the spool takes it from ([`crate::rebuild`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ctx: Option<CtxState>,
+    /// Present when advisory obligations changed or an edit was observed. The latter distinguishes
+    /// a known unrelated edit from an older spool's incomplete edit record ([`crate::rebuild`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub obligation_state: Option<ObligationState>,
+    /// The step Adage makes in the agent's place (`TurnStep`; empty in the control arm).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub predicted: Option<Prediction>,
+    /// The step it would make, recorded in both arms, also when the session's cap holds it back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub would_predict: Option<Prediction>,
+    /// `(turn id, index)` of the step whose prediction counted against the bounds (both arms):
+    /// what a state rebuilt from the spool takes `last_step_predicted` and `predictions` from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub predicted_at: Option<(String, u32)>,
+    /// The dead end Adage replaced before it ran (`PreToolUse` with the mod's verdict; empty in
+    /// the control arm and in observe mode).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub substituted: Option<Substitution>,
+    /// The replacement it would make, recorded in both arms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub would_substitute: Option<Substitution>,
+    /// The step goes to the routine model (`TurnStep`, only when the mod says one is set; empty
+    /// in the control arm and in observe mode).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routine: Option<Routing>,
+    /// The routing it would make, recorded in both arms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub would_route: Option<Routing>,
+    /// The step [`Decision::would_predict`] names was held back (`TurnStep` with the mod's
+    /// verdict, [`StepPhase::Verdict`]): nothing was yielded, it counted against no bound, and its
+    /// route is not offered again this session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub withheld: Option<Withheld>,
+    /// The verdict that held it back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission: Option<PermissionVerdict>,
+    /// Candidates this event's context completed, each once per session ([`Noticed`]), in both
+    /// arms; never delivered.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub noticed: Vec<Noticed>,
+    /// The session's candidate context state after this event, when the event changed it: what a
+    /// state rebuilt from the spool takes it from, as [`Decision::ctx`] is for routes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cand_ctx: Option<CtxState>,
+}
+
+/// The bounded advisory obligation state after a decision or extension update. Keeping this
+/// exact state in the spool preserves later edits, bound commands and withdrawn Stop requests
+/// when the session's state files are lost. It carries no verification-success claim.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ObligationState {
+    pub obligations: Vec<Obligation>,
+    pub stop_requests: u32,
+}
+
+impl ObligationState {
+    pub fn capture(st: &SessionState) -> Self {
+        Self { obligations: st.obligations.clone(), stop_requests: st.stop_requests }
+    }
+}
+
+/// The directive an index entry's text becomes.
+pub(crate) fn directive(ir: &IndexedRoute, text: String) -> Directive {
+    Directive {
+        route: ir.route.id.clone(),
+        track: ir.track.clone(),
+        version: ir.version.clone(),
+        // A route forming or dormant is never delivered fire, whatever its track says.
+        strength: adage_tracks::delivered_strength(&ir.route),
+        text,
+        kind: adage_tracks::shape(&ir.route).to_string(),
+        // An instinct's and a compiled skill's wrapper say what they are based on (not sessions).
+        origin: (ir.route.is_instinct() || ir.route.evidence.origin == Some(adage_tracks::Origin::Authored))
+            .then(|| ir.route.origin()),
+    }
+}

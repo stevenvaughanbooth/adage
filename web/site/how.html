@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#050507" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ececef" media="(prefers-color-scheme: light)">
+<title>How it works · Adage</title>
+<meta name="description" content="How Adage plugs into Claude Code, and how it turns agent traces into reflexes: reading transcripts, mining repeated steps, choosing by compression, judging evidence and uplift, grouping intents and recurring tasks, sealing the index, deciding at the hook and measuring against a control arm. With the math.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="__SITE_URL__/how">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Adage">
+<meta property="og:title" content="How Adage works · traces to reflexes">
+<meta property="og:description" content="Every stage from transcript to reflex, step by step in 3D, with the math.">
+<meta property="og:url" content="__SITE_URL__/how">
+<meta property="og:image" content="__SITE_URL__/og.jpg?v=13">
+<meta name="twitter:card" content="summary_large_image">
+<noscript><style>.reveal { opacity: 1 !important; transform: none !important; } .walk { display: none; }</style></noscript>
+<script type="module" src="/src/how-page.ts"></script>
+</head>
+<body class="howpage">
+<a class="skiplink" href="#main">Skip to content</a>
+
+<header class="top static">
+  <a class="mark" href="/" aria-label="Adage, home">Adage</a>
+  <nav class="nav" aria-label="Site">
+    <div class="navlinks">
+      <a href="/how" aria-current="page">How it works</a>
+      <a href="/packs">Packs</a>
+      <a href="/evidence">Evidence</a>
+      <a href="/get-started">Get started</a>
+    </div>
+    <button class="themebtn" id="theme" type="button">Day</button>
+    <a class="pill" href="/get-started">Try Adage</a>
+  </nav>
+</header>
+
+<main id="main">
+<section class="plug" id="plug" aria-labelledby="plug-h">
+  <div class="wrap plug-head">
+    <div>
+    <p class="kicker">How it works</p>
+    <h1 class="display" id="plug-h">How Adage plugs into <span class="soft">Claude Code.</span></h1>
+    </div>
+    <div>
+    <p class="lede">Claude Code exposes hooks at fixed moments in a session. Adage uses them to match local rules and deliver a useful next step: run the repository's check, regenerate files after an edit, or avoid a known failed command. It also learns those rules from past work. Whether that saves effort depends on the task; the evidence page shows what we have measured.</p>
+    <ul class="plug-legend" aria-label="What runs where">
+      <li><i class="remote" aria-hidden="true"></i>The model: remote, on GPUs, one call per turn</li>
+      <li><i class="local" aria-hidden="true"></i>Adage: local learning and matching, no model request</li>
+      <li><i class="approve" aria-hidden="true"></i>Runs a command only with a person's approval</li>
+    </ul>
+    <p class="plug-modes"><span class="plug-mode">Advisory mode</span> is the default: Adage informs, and nothing runs on the agent's behalf. <span class="plug-mode exec">Execution mode</span> is opt-in and experimental: Adage also runs checks a person approved.</p>
+    <p class="howtips">Scroll through one session, start to finish. Hover, tap or tab to a <span class="termdemo">dotted word</span> to see what it means; “Technical detail” opens the precise account.</p>
+    </div>
+  </div>
+  <div class="wrap plug-grid">
+    <figure class="plug-fig" id="plug-fig" data-step="loop">
+      <svg viewBox="0 0 560 600" role="img" aria-labelledby="plug-fig-t">
+        <title id="plug-fig-t">The agent loop: you send a request to Claude Code, which calls the remote model for each next step and runs tools on your machine. Adage attaches at the hooks along that loop (SessionStart, the prompt, PreToolUse, PostToolBatch, Stop, SessionEnd) and runs on your CPU; any command it runs needs a person's approval. After the session, it learns from the trace.</title>
+        <defs>
+          <marker id="plug-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+        </defs>
+        <g class="hk zone remote" data-hook="loop sum">
+          <rect x="16" y="16" width="528" height="118" rx="18"/>
+          <text class="zl" x="34" y="40">MODEL · REMOTE GPUs</text>
+        </g>
+        <g class="hk zone local" data-hook="loop sum">
+          <rect x="16" y="150" width="528" height="434" rx="18"/>
+          <text class="zl" x="34" y="174">YOUR MACHINE · CPU</text>
+        </g>
+        <text class="hk plug-count" data-hook="loop sum" x="526" y="40" text-anchor="end">each turn of the loop: one model call</text>
+
+        <g class="node model hk" data-hook="loop sum">
+          <rect x="200" y="56" width="160" height="56" rx="12"/>
+          <text x="280" y="80" text-anchor="middle" class="nt">Model</text>
+          <text x="280" y="99" text-anchor="middle" class="ns">decides the next step</text>
+        </g>
+        <g class="node hk" data-hook="loop prompt sum">
+          <rect x="36" y="200" width="96" height="48" rx="12"/>
+          <text x="84" y="229" text-anchor="middle" class="nt">You</text>
+        </g>
+        <g class="node agent hk" data-hook="loop start prompt pre post stop learn sum">
+          <rect x="200" y="196" width="160" height="56" rx="12"/>
+          <text x="280" y="220" text-anchor="middle" class="nt">Claude Code</text>
+          <text x="280" y="239" text-anchor="middle" class="ns">the agent loop</text>
+        </g>
+        <g class="node hk" data-hook="loop pre post sum">
+          <rect x="416" y="200" width="122" height="48" rx="12"/>
+          <text x="477" y="221" text-anchor="middle" class="nt">Tools</text>
+          <text x="477" y="238" text-anchor="middle" class="ns">read · edit · run</text>
+        </g>
+
+        <g class="flow">
+          <path class="hk call" data-hook="loop sum" d="M262 196V116" marker-end="url(#plug-arrow)"/>
+          <text class="hk fl" data-hook="loop sum" x="254" y="160" text-anchor="end">model call</text>
+          <path class="hk" data-hook="loop sum" d="M298 116V192" marker-end="url(#plug-arrow)"/>
+          <text class="hk fl" data-hook="loop sum" x="306" y="160">next step</text>
+          <path class="hk" data-hook="loop prompt sum" d="M132 224H196" marker-end="url(#plug-arrow)"/>
+          <path class="hk" data-hook="loop pre sum" d="M360 213H412" marker-end="url(#plug-arrow)"/>
+          <path class="hk" data-hook="loop post sum" d="M416 236H364" marker-end="url(#plug-arrow)"/>
+        </g>
+
+        <g class="rail">
+          <path class="hk tie" data-hook="start" d="M60 296L208 252"/>
+          <path class="hk tie" data-hook="prompt" d="M148 296L164 226"/>
+          <path class="hk tie" data-hook="pre" d="M236 296L386 215"/>
+          <path class="hk tie" data-hook="post" d="M324 296L390 238"/>
+          <path class="hk tie" data-hook="stop" d="M412 296L352 252"/>
+          <path class="hk tie" data-hook="learn" d="M500 296L300 252"/>
+          <g class="hk pin" data-hook="start sum"><circle cx="60" cy="304" r="8"/><text x="60" y="330" text-anchor="middle">SessionStart</text><text class="ps" x="60" y="344" text-anchor="middle">the start</text></g>
+          <g class="hk pin" data-hook="prompt sum"><circle cx="148" cy="304" r="8"/><text x="148" y="330" text-anchor="middle">Prompt</text><text class="ps" x="148" y="344" text-anchor="middle">your request</text></g>
+          <g class="hk pin" data-hook="pre sum"><circle cx="236" cy="304" r="8"/><text x="236" y="330" text-anchor="middle">PreToolUse</text><text class="ps" x="236" y="344" text-anchor="middle">before a run</text></g>
+          <g class="hk pin" data-hook="post sum"><circle cx="324" cy="304" r="8"/><text x="324" y="330" text-anchor="middle">PostToolBatch</text><text class="ps" x="324" y="344" text-anchor="middle">after edits</text></g>
+          <g class="hk pin" data-hook="stop sum"><circle cx="412" cy="304" r="8"/><text x="412" y="330" text-anchor="middle">Stop</text><text class="ps" x="412" y="344" text-anchor="middle">“done”</text></g>
+          <g class="hk pin" data-hook="learn sum"><circle cx="500" cy="304" r="8"/><text x="500" y="330" text-anchor="middle">SessionEnd</text><text class="ps" x="500" y="344" text-anchor="middle">afterwards</text></g>
+          <path class="hk drop" data-hook="start" d="M60 352V420"/>
+          <path class="hk drop" data-hook="prompt" d="M148 352V420"/>
+          <path class="hk drop" data-hook="pre" d="M236 352V420"/>
+          <path class="hk drop" data-hook="post" d="M324 352V420"/>
+          <path class="hk drop" data-hook="stop" d="M412 352V420"/>
+          <path class="hk drop" data-hook="learn" d="M500 352V528"/>
+        </g>
+
+        <g class="adage hk" data-hook="start prompt pre post stop learn sum">
+          <rect x="36" y="420" width="488" height="88" rx="14"/>
+          <text x="56" y="448" class="nt">Adage</text>
+          <text x="114" y="448" class="ns">your CPU · local · no network · fails open</text>
+          <text class="cap" data-cap="loop" x="56" y="480">listens at the hooks; one session in ten it stays silent, as a control</text>
+          <text class="cap" data-cap="start" x="56" y="480">opt-in: names the approved check it will run, and when</text>
+          <text class="cap" data-cap="prompt" x="56" y="480">matches the task · procedure card · where the files stand now</text>
+          <text class="cap" data-cap="pre" x="56" y="480">points the command at the project's own environment</text>
+          <text class="cap" data-cap="post" x="56" y="480">advice for the next step · opt-in: runs the approved tests</text>
+          <text class="cap" data-cap="stop" x="56" y="480">anything still owed goes back once · opt-in: reruns the check</text>
+          <text class="cap" data-cap="learn" x="56" y="480">starts the learner for this repository, in the background</text>
+          <text class="cap" data-cap="sum" x="56" y="480">advisory mode: fewer model calls, the same hidden tests passing</text>
+        </g>
+        <g class="hk approve" data-hook="start learn">
+          <rect x="384" y="430" width="128" height="26" rx="13"/>
+          <text x="448" y="447" text-anchor="middle">person-approved</text>
+        </g>
+        <g class="hk learnrow" data-hook="learn sum">
+          <rect x="36" y="528" width="488" height="40" rx="12"/>
+          <text x="280" y="553" text-anchor="middle">trace → learner → reflexes → your review → the next session</text>
+        </g>
+      </svg>
+    </figure>
+
+    <ol class="plug-steps">
+      <li class="plug-step" id="plug-loop" data-step="loop">
+        <p class="plug-when">The agent loop</p>
+        <h2>Every turn of the loop is one model call.</h2>
+        <p>You ask. Claude Code sends the conversation to the model, which runs on GPUs in a data centre, and gets back the next step: read a file, make an edit, run a command. The tool runs on your machine, its result goes back to the model, and the loop turns again until the work is done.</p>
+        <p>Claude Code lets outside tools speak at fixed moments in that loop, called hooks. Adage listens at them. It answers on your CPU, with no network, and never calls a model of its own.</p>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p>The Claude Code plugin registers <code>SessionStart</code>, <code>UserPromptSubmit</code>, <code>PreToolUse</code> (Bash only), <code>PostToolBatch</code>, <code>PostToolUseFailure</code>, <code>Stop</code> and <code>SessionEnd</code> (<code>plugin/claude-code/hooks/hooks.json</code>). Each call is a short-lived <code>adage hook claude &lt;event&gt;</code> process with a budget of a few seconds (30 seconds for the two that can run a check). On any error it fails open: the agent carries on as if Adage were not installed. About one session in ten is a silent control, so its effect can be measured.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-start" data-step="start">
+        <p class="plug-when"><code>SessionStart</code> · before the first word <span class="plug-mode exec">Execution mode</span></p>
+        <h2>It says which check it will run for you.</h2>
+        <p>In execution mode, if a person has approved one of this repository's checks, the agent hears it up front, in one plain sentence: which tests Adage runs, after which edits, and that it runs them again at the end. No approval, no sentence. In advisory mode the agent hears nothing here.</p>
+        <blockquote class="plug-quote">In this repository Adage runs <code>.venv/bin/python -m pytest tests/test_validate.py -q</code> (approved by a person, sandboxed) after edits to tests/*.py then CHANGELOG.rst, and again when you finish if files changed since.</blockquote>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p><code>adage-exec</code>'s SessionStart adds an <code>&lt;adage-reflex … kind="execution-contract"&gt;</code> block naming at most two current verification grants. Only a grant whose approval key still matches is named: a lapsed one promises nothing, and the person is told instead, in a line the agent never sees. Control sessions get no note. Source: <code>crates/adage-exec/src/hook.rs</code>.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-prompt" data-step="prompt">
+        <p class="plug-when"><code>UserPromptSubmit</code> · your request arrives <span class="plug-mode">Advisory</span></p>
+        <h2>It recognises the task, and says where things stand.</h2>
+        <p>Adage compares your request with the tasks this repository keeps repeating, using a small model built into the binary. On a match it hands over a procedure card, once: the files to touch, the commands that worked and the ones that failed. Then it reads those files itself, read-only, and adds where they stand right now: line counts, the last definitions, the end of the test file, the changelog's head. The agent goes straight to the right line instead of paging through files.</p>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p>Matching runs locally against a bundled static embedding model (potion-base-8M, int8); a card is delivered once per session when the prompt's similarity to its family clears <code>learn.card_threshold</code> (0.811). The orientation (<code>crates/adage-runtime/src/orient.rs</code>) reads only the card's own files, skips dotfiles, ignored, secret-holding and symlinked files and anything over 1 MiB, withholds secret-looking lines, and stays under about 1,200 tokens. Instincts and learned reflexes for the prompt are matched here too.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-pre" data-step="pre">
+        <p class="plug-when"><code>PreToolUse</code> · before a command runs <span class="plug-mode">Advisory</span></p>
+        <h2>It fixes the command before it can fail.</h2>
+        <p>Instincts know how your repository is set up. If the agent starts the tests with the system Python, Adage points the command at the project's own verified environment before it runs, so it does not fail and cost another call. In execution mode, if Adage's passing check already covers the test run the agent is about to start, the agent gets a note saying so. A note, never a refusal: the command still runs.</p>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p>The rewrite uses Claude Code's <code>updatedInput</code> and changes only the interpreter word of a top-level command (<code>python3 -m pytest</code> becomes <code>.venv/bin/python -m pytest</code>), never text in a heredoc, a quoted string or a <code>-c</code> payload. It is on by default in Claude Code, shown to you each time, and <code>adage delegate rewrites off</code> turns it off. The receipt note needs a passing run in this session on byte-identical inputs.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-post" data-step="post">
+        <p class="plug-when"><code>PostToolBatch</code> · after the edits, before the next model call <span class="plug-mode">Advisory</span><span class="plug-mode exec">Execution mode</span></p>
+        <h2>The next step arrives before the model asks.</h2>
+        <p>In advisory mode, this is where learned advice lands: after editing the schema, regenerate; after these edits, these checks, in this order. It arrives with the tool results, before the model decides what to do next.</p>
+        <p>In execution mode, when the agent's edits match the learned pattern (here: the tests, then the changelog), Adage also runs the person-approved test command in a sandbox, right there on your CPU, and hands back a short receipt: whether it passed, how long it took, and the agent's own new tests by name.</p>
+        <blockquote class="plug-quote"><span class="plug-q-label">A receipt, as Adage writes it (example values)</span>Adage ran <code>.venv/bin/python -m pytest tests/test_validate.py -q</code> after your edits: passed (exit 0, 1.2 s; receipt 3f9c2a7e01b4). Tests: 1202 collected; exit 0; the tests added in this session: test_finite.</blockquote>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p><code>PostToolBatch</code> fires once the agent's batch of tool calls has resolved and before the next model request. A learned context (an edit to <code>tests/*.py</code>, then <code>CHANGELOG.rst</code>, within eight events) nominates the command; the person's E2 grant authorises exactly that command; <code>adage-exec</code> stages the inputs, runs it in an OS sandbox with no network, journals it and applies only declared outputs (pytest's cache). Test names come from pytest's own cache record, never from its output. Learned directives (for example "after editing <code>schema/*.json</code>, run <code>make gen</code>") arrive here too, and a failing command gets dead-end advice at <code>PostToolUseFailure</code>.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-stop" data-step="stop">
+        <p class="plug-when"><code>Stop</code> · the agent says it is done <span class="plug-mode">Advisory</span><span class="plug-mode exec">Execution mode</span></p>
+        <h2>It checks the finish line.</h2>
+        <p>If a step this repository always needs is still owed (say, regenerating code after a schema edit), the agent is asked once to finish it, in a message marked as coming from Adage, not from you. In execution mode, if the code changed since the last passing run, Adage also runs the approved check once more: a pass lets the agent stop, a failure goes back with the failing tests named. It asks at most twice a session, so it can never loop.</p>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p>The finish-line check (the Stop gate) goes through the same request, policy, sandbox, staging and journal as any action; a failure continues the agent once with a message that begins <code>Adage finish-line check:</code>. A learned finish-line step due at the same moment (such as <code>make gen</code> after a schema edit) is asked in the same continuation. If Adage cannot confirm a run completed, it tells the agent not to retry and pauses actions in that worktree until a person looks.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-learn" data-step="learn">
+        <p class="plug-when"><code>SessionEnd</code> · after the session</p>
+        <h2>It learns, and you decide what may run.</h2>
+        <p>When a session stops or ends, Adage starts a background learner for this repository. It reads the trace Claude Code left on your machine and turns steps that keep paying off into reflexes. Instincts work from day one; learned reflexes take over as evidence builds. Evidence thresholds and review determine which guidance becomes active. Inspect what Adage learned and review candidates that need a decision. Automatic execution always needs separate permission for the exact command. Change the command, its scripts or its environment, and the approval stops matching.</p>
+        <details class="plug-more"><summary>Technical detail</summary><div>
+          <p>The learner (<code>adage condition --auto</code>) runs detached, at most once per <code>learn.min_interval_secs</code> (120 s) per repository, and never touches the network. Letting Adage run a check takes three decisions at a terminal, each refused inside an agent session: <code>adage delegate policy --max-level e2</code>, <code>adage review delegate …</code> for one command, and <code>adage delegate on</code>.</p>
+        </div></details>
+      </li>
+      <li class="plug-step" id="plug-sum" data-step="sum">
+        <p class="plug-when">What it adds up to</p>
+        <h2>Does the guidance reduce repeated work?</h2>
+        <p>A guidance hook adds context; it does not itself skip a model call. It may help an agent avoid a failed command or a repeated search. We measure the whole task with and without Adage to see whether that actually helped.</p>
+        <div data-heldout="plug">{{heldout:plug}}</div>
+        <p class="plug-links"><a class="btn" href="/evidence">How we tested it</a><a class="textlink" href="#walk">How it learns, stage by stage ↓</a></p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section class="howintro" aria-labelledby="how-h1">
+  <div class="wrap">
+    <p class="kicker">How it learns</p>
+    <h2 class="display" id="how-h1">From a transcript to a reflex, <span class="soft">stage by stage.</span></h2>
+    <p class="lede">Your coding agent keeps rediscovering how your repository works. Adage watches what worked in past sessions, turns the habits that keep paying off into reflexes, and hands your agent the right next step at the right moment. Then it checks that it helped.</p>
+    <p class="howtips">Take the quick tour below, or switch to the full tour for every step. Hover, tap or tab to a <span class="termdemo">dotted word</span> to see what it means.</p>
+    <ol class="stagemap" id="stagemap" aria-label="The stages"></ol>
+  </div>
+</section>
+
+<section class="walk" id="walk" aria-label="Interactive walkthrough">
+  <div class="walkgrid">
+    <nav class="chapters" aria-label="Chapters">
+      <p class="chapters-h">Traces to reflexes</p>
+      <div class="tourmode" role="group" aria-label="Tour length">
+        <button type="button" data-tour="quick" aria-pressed="true">Quick tour</button>
+        <button type="button" data-tour="full" aria-pressed="false">Full tour</button>
+      </div>
+      <label class="chapsel"><span class="sr">Chapter</span><select id="chapsel"></select></label>
+      <ol class="chaplist" id="chaplist"></ol>
+      <p class="chapnote" id="tournote">The quick tour stops at the key moments. The full tour shows every step.</p>
+    </nav>
+    <div class="stage" id="stage">
+      <div class="stagebox">
+        <canvas id="howgl" aria-hidden="true"></canvas>
+        <div class="howlayer" id="howlayer" aria-hidden="true"></div>
+        <p class="nogl" id="nogl" hidden>This view draws in 3D with WebGL, which this browser has turned off. Every step still reads here.</p>
+        <ul class="howlegend" id="howlegend" aria-label="Legend" hidden></ul>
+        <div class="caption" id="caption" aria-live="polite">
+          <div class="capmeta" id="capmeta"></div>
+          <h2 class="captitle" id="captitle"></h2>
+          <p class="capplain" id="capplain"></p>
+          <div class="capmore" id="capmore" hidden>
+            <p class="capbody" id="capbody"></p>
+            <canvas class="capfig" id="capfig" role="img" hidden></canvas>
+            <div class="capchips" id="capchips"></div>
+          </div>
+          <div class="capactions">
+            <button class="capbtn" id="capmorebtn" type="button" aria-expanded="false" aria-controls="capmore"><span>More detail</span><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg></button>
+            <a class="capmath" id="capmath" href="#math" hidden></a>
+          </div>
+        </div>
+      </div>
+      <div class="transport">
+        <button class="tbtn" id="prev" type="button" aria-label="Previous step"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2 4 8l7 6z"/></svg></button>
+        <button class="tbtn" id="play" type="button" aria-label="Play"><svg viewBox="0 0 16 16" aria-hidden="true"><path id="playicon" d="M4 2l10 6-10 6z"/></svg></button>
+        <button class="tbtn" id="next" type="button" aria-label="Next step"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2l7 6-7 6z"/></svg></button>
+        <ol class="ticks" id="ticks" aria-label="Steps"></ol>
+        <span class="count" id="count"></span>
+      </div>
+    </div>
+  </div>
+  <p class="wrap walkhint">Drag the scene to turn it; pinch or ctrl-scroll to zoom. Keys: ← → step, space plays, D shows more detail. The data is a small sample set of traces, the same one the <code>adage map</code> tour uses.</p>
+</section>
+
+<section class="band math" id="math" aria-labelledby="math-h">
+  <div class="wrap">
+    <p class="kicker reveal">The math</p>
+    <h2 class="display reveal" id="math-h">Every threshold, <span class="soft">written down.</span></h2>
+    <p class="lede reveal">Adage never asks a model whether a reflex is good. Each decision is arithmetic over counted traces, with the constants below. The values below are the defaults.</p>
+
+    <div class="mbar reveal">
+      <nav class="mathtoc" aria-label="Math sections">
+        <a href="#m-read">Reading traces</a><a href="#m-graph">Graph engine</a><a href="#m-evidence">Evidence</a><a href="#m-uplift">Uplift</a><a href="#m-intent">Intent</a><a href="#m-cards">Procedure cards</a><a href="#m-train">Skills</a><a href="#m-seal">The index</a><a href="#m-hook">The hook</a><a href="#m-measure">Measurement</a>
+      </nav>
+      <div class="mctl" aria-label="Move through the math" role="group">
+        <button class="tbtn" id="mprev" type="button" aria-label="Previous block"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2 4 8l7 6z"/></svg></button>
+        <span class="count" id="mcount" aria-live="polite">01 / 10</span>
+        <button class="tbtn" id="mnext" type="button" aria-label="Next block"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2l7 6-7 6z"/></svg></button>
+      </div>
+    </div>
+
+    <div class="mtrack" id="mtrack" role="region" aria-roledescription="carousel" aria-label="The math, one block at a time" tabindex="0">
+    <article class="mblock" id="m-read" aria-labelledby="m-read-h" aria-roledescription="slide">
+      <header><span class="mnum">01</span><h3 id="m-read-h">Reading traces: one shape for every harness</h3></header>
+      <div class="mlead">
+        <div class="mplain">
+          <p class="mshort"><b>In short.</b> Every session becomes the same simple list of actions, whichever agent wrote it, and each action is labelled by what it does.</p>
+          <p class="mexample"><b>For example.</b> “Look up ticket W-1041” and “look up ticket W-1042” become the same step, <code>look up {id}</code>, so Adage can see the agent doing the same thing twice.</p>
+        </div>
+        <div class="mkey">
+          <ol class="effects" aria-label="Effects, lowest to highest">
+            <li><b>observe</b><span>reads, lookups</span></li><li><b>verify</b><span>tests, checks</span></li><li><b>regenerate</b><span>codegen, builds</span></li><li><b>environment</b><span>installs</span></li><li><b>author</b><span>edits</span></li><li><b>publish</b><span>push, release</span></li>
+          </ol>
+          <p class="mlegend">From safest to riskiest. The further along a step is, the less Adage may push it: lookups and checks can be insisted on, edits and publishing are never suggested.</p>
+        </div>
+      </div>
+      <details class="mmore">
+        <summary>More detail</summary>
+        <div class="mmore-body">
+          <p>A transcript becomes a prompt followed by a flat list of steps. Tool calls that share one message id form one turn; results join their calls by id, wherever they appear. A compound shell command splits into one step per sub-action, and a failure is blamed on its last part only, unless the command used <code>||</code>.</p>
+          <p>Each step gets a template key, with specifics replaced (a ticket becomes <code>{id}</code>), and an effect. Effects are ranked, and the rank caps how strongly a step may ever be directed (shown above).</p>
+          <p class="fine">Observe and verify steps may fire. A regenerate step fires only after its edit. An install primes at most and starts nascent until a person reviews it. Edits and publishing are never directed. Only the hook's own output counts as a directive: what a directive named is exposed from the moment it arrived, and is no evidence for a reflex that directs it, so a reflex never learns from its own advice. Sub-agent transcripts are read too.</p>
+          <p class="src">In the code: <code>crates/adage-learn/src/{lib,import,codex,opencode,cache}.rs</code> · <code>crates/adage-core/src/types.rs</code></p>
+        </div>
+      </details>
+      <p class="mback"><a href="?ch=read#walk" data-ch="read">← See it in the walkthrough: Read what the agent did</a></p>
+    </article>
+    <article class="mblock" id="m-graph" aria-labelledby="m-graph-h" aria-roledescription="slide">
+      <header><span class="mnum">02</span><h3 id="m-graph-h">Graph engine: repeated subgraphs, chosen by compression</h3></header>
+      <div class="mlead">
+        <div class="mplain">
+          <p class="mshort"><b>In short.</b> A habit is a run of actions that keeps repeating. Adage counts how often it held, allows for small samples, and keeps only habits that let it describe the sessions more briefly.</p>
+          <p class="mexample"><b>For example.</b> <code>make gen</code> followed an edit in <code>registry/</code> in 7 of 8 sessions. With only 8 to go on, Adage leans that 7/8 toward the broader habit’s rate and scores it cautiously, at 0.59.</p>
+        </div>
+        <div class="mkey">
+          <div class="formula">
+            <math display="block"><mrow><mi>θ</mi><mo>∼</mo><mi>Beta</mi><mo stretchy="false">(</mo><mi>α</mi><mo>,</mo><mi>β</mi><mo stretchy="false">)</mo><mo>,</mo><mspace width="0.8em"/><mi>α</mi><mo>=</mo><mi>s</mi><mo>+</mo><mi>κ</mi><mi>m</mi><mo>,</mo><mspace width="0.6em"/><mi>β</mi><mo>=</mo><mo stretchy="false">(</mo><mi>n</mi><mo>−</mo><mi>s</mi><mo stretchy="false">)</mo><mo>+</mo><mi>κ</mi><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>m</mi><mo stretchy="false">)</mo><mo>,</mo><mspace width="0.6em"/><mi>κ</mi><mo>=</mo><mn>2</mn></mrow></math>
+          </div>
+          <p class="mlegend">Where <i>s</i> is the sessions the habit held in, <i>n</i> the sessions it could have, <i>m</i> the rate of the broader habit it refines, and <i>κ</i> = 2 how many sessions’ worth of weight that guess gets. <i>θ</i> is the habit’s true rate; Adage scores the low end of its likely range.</p>
+        </div>
+      </div>
+      <details class="mmore">
+        <summary>More detail</summary>
+        <div class="mmore-body">
+          <p>The graph engine is Adage's only learner, and it has no list of reflex kinds to look for: a reflex is whatever reliably precedes a step, and how it is delivered follows from its shape. Events are embedded and clustered into prototype labels, so each trace becomes a string, and repeated subgraphs become repeated substrings. Mining starts from a step worth delivering and grows closed patterns around it. A pattern is read as a prediction, <i>after this context, this follows</i>, with <i>s</i> supporting traces out of <i>n</i> opportunities. Its confidence is shrunk toward its parent pattern's confidence <i>m</i> (shown above).</p>
+          <p>Counts are discounted with a 60-day half-life, and a candidate is judged by the posterior's 5% quantile, <i>q</i><sub>0.05</sub>. Calibration then compares posterior means with held-out outcomes on 3 task-grouped folds, using isotonic regression over 200 bins.</p>
+          <p>Frequent is not the same as useful, so selection is by minimum description length: a reflex earns its place by describing the traces in fewer bits.</p>
+          <div class="formula">
+            <math display="block"><mrow><mi>L</mi><mo stretchy="false">(</mo><mi>D</mi><mo>,</mo><mi>CT</mi><mo stretchy="false">)</mo><mo>=</mo><mi>L</mi><mo stretchy="false">(</mo><mi>CT</mi><mo stretchy="false">)</mo><mo>+</mo><mi>L</mi><mo stretchy="false">(</mo><mi>D</mi><mo>∣</mo><mi>CT</mi><mo stretchy="false">)</mo><mo>,</mo><mspace width="1em"/><mi>L</mi><mo stretchy="false">(</mo><mi>X</mi><mo>∣</mo><mi>CT</mi><mo stretchy="false">)</mo><mo>=</mo><mo>−</mo><msub><mi>log</mi><mn>2</mn></msub><mfrac><mrow><mi>u</mi><mo stretchy="false">(</mo><mi>X</mi><mo stretchy="false">)</mo></mrow><mrow><msub><mo>∑</mo><mi>Y</mi></msub><mi>u</mi><mo stretchy="false">(</mo><mi>Y</mi><mo stretchy="false">)</mo></mrow></mfrac></mrow></math>
+          </div>
+          <p class="fine">A pattern in the code table costs its items' codes, plus 4 bits per item and log<sub>2</sub> 6 bits for its length. Tables fill best gain first, re-checking each gain before accepting it. Candidates that would deliver different directives never compete: each delivery shape gets its own table, and dead ends one per failing runner. Winners compile to delivery shapes (run, avoid, read-batch, obligation, sequence, advise), and every compiled reflex is then counted again on the traces as its own trigger and step read them (Evidence, below); until then it is provisional, prime at most. An interlock drops any reflex that would direct a runner a dead end says fails. Survivors go to one track per repository, <code>&lt;repo&gt;/learned</code>, with a <code>.why.json</code> beside it for people. On the offline bench's core suite, a deterministic replay whose committed baseline <code>cargo test</code> reproduces exactly, the learner scores J 0.6307. The synthetic sessions carry that score; the recorded demo sessions score below zero. It is a regression check, not a measure of savings.</p>
+          <p class="src">In the code: <code>crates/adage-graph</code> · <code>crates/adage-learn/src/{bridge,engine}.rs</code> · design: <code>docs/tracks/track-g-graph-engine.md</code></p>
+        </div>
+      </details>
+      <p class="mback"><a href="?ch=subgraphs#walk" data-ch="subgraphs">← See it in the walkthrough: Spot the patterns</a></p>
+    </article>
+    <article class="mblock" id="m-evidence" aria-labelledby="m-evidence-h" aria-roledescription="slide">
+      <header><span class="mnum">03</span><h3 id="m-evidence-h">Evidence: the Wilson lower bound</h3></header>
+      <div class="mlead">
+        <div class="mplain">
+          <p class="mshort"><b>In short.</b> A rate from a few examples cannot be taken at face value. Adage scores each reflex by the lowest its true rate is likely to be, and lets it insist only once that score reaches 0.80.</p>
+          <p class="mexample"><b>For example.</b> 6 of 8 is a 75% rate, but with so few sessions the true rate could be as low as 41%. Even a perfect record needs 16 sessions to reach 0.80. Try it below.</p>
+        </div>
+        <div class="mkey">
+          <div class="formula">
+            <math display="block" aria-label="LB equals, over 1 plus z squared over n: p-hat plus z squared over 2n, minus z times the square root of p-hat times 1 minus p-hat over n plus z squared over 4 n squared">
+              <mrow><mi>LB</mi><mo>=</mo>
+              <mfrac>
+                <mrow><mover><mi>p</mi><mo>^</mo></mover><mo>+</mo><mfrac><msup><mi>z</mi><mn>2</mn></msup><mrow><mn>2</mn><mi>n</mi></mrow></mfrac><mo>−</mo><mi>z</mi><msqrt><mrow><mfrac><mrow><mover><mi>p</mi><mo>^</mo></mover><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mover><mi>p</mi><mo>^</mo></mover><mo stretchy="false">)</mo></mrow><mi>n</mi></mfrac><mo>+</mo><mfrac><msup><mi>z</mi><mn>2</mn></msup><mrow><mn>4</mn><msup><mi>n</mi><mn>2</mn></msup></mrow></mfrac></mrow></msqrt></mrow>
+                <mrow><mn>1</mn><mo>+</mo><mfrac><msup><mi>z</mi><mn>2</mn></msup><mi>n</mi></mfrac></mrow>
+              </mfrac>
+              <mo>,</mo><mspace width="1em"/><mover><mi>p</mi><mo>^</mo></mover><mo>=</mo><mfrac><mi>k</mi><mi>n</mi></mfrac><mo>,</mo><mspace width="0.6em"/><mi>z</mi><mo>=</mo><mn>1.959964</mn></mrow>
+            </math>
+          </div>
+          <p class="mlegend">Where <i>k</i> is the sessions that took the step, <i>n</i> the sessions where it applied, and <i>z</i> = 1.96 sets 95% confidence. LB is the cautious score.</p>
+        </div>
+      </div>
+      <div class="calc" id="wilson" role="group" aria-labelledby="calc-h">
+        <p class="calc-h" id="calc-h">Try it: how many sessions before a reflex can insist?</p>
+        <div class="calc-in">
+          <label><span>sessions that took the step, <i>k</i></span><input id="wk" type="range" min="0" max="40" value="7"><output id="wk-o" for="wk">7</output></label>
+          <label><span>sessions where it applied, <i>n</i></span><input id="wn" type="range" min="1" max="40" value="8"><output id="wn-o" for="wn">8</output></label>
+        </div>
+        <div class="calc-out">
+          <div class="bar" aria-hidden="true"><i class="rate" id="w-rate"></i><i class="lb" id="w-lb"></i><i class="firebar"></i><span class="firelbl">fire bar 0.80</span></div>
+          <p id="w-say" aria-live="polite"></p>
+        </div>
+      </div>
+      <details class="mmore">
+        <summary>More detail</summary>
+        <div class="mmore-body">
+          <p>Every advisory reflex the learner compiles is judged again on the traces, exactly as its own trigger and step read them. Evidence is counted in <em>distinct traces</em>, and a trace a directive already steered toward the step is left out. Out of <i>n</i> traces where a reflex had its chance, <i>k</i> took its path. A rate from few traces is uncertain, so strength is judged by the lower end of the 95% Wilson score interval, not by the rate (shown above).</p>
+          <p>Predictive execution has a separate test: by default, at least five unsteered sessions across more than one task, with a compatible successful continuation supporting at least 90% of matching edit or sequence contexts. Intervening observations are allowed within a bounded window; later mutations and task changes end it. Every matching opportunity counts, including those without a supporting outcome. This evidence creates a candidate for human execution approval; it grants no permission and proves no savings by itself.</p>
+          <dl class="consts">
+            <div><dt>Fire</dt><dd>LB ≥ 0.80 and k ≥ 5, within the effect's ceiling</dd></div>
+            <div><dt>Prime</dt><dd>a new reflex primes at a rate of 0.50; an existing one keeps its place down to 0.30</dd></div>
+            <div><dt>Finish line</dt><dd>the command must belong to the edit: <math><mrow><mi>P</mi><mo stretchy="false">(</mo><mi>c</mi><mo>∣</mo><mi>e</mi><mo stretchy="false">)</mo><mo>−</mo><mi>P</mi><mo stretchy="false">(</mo><mi>c</mi><mo>∣</mo><mo>¬</mo><mi>e</mi><mo stretchy="false">)</mo><mo>≥</mo><mn>0.30</mn></mrow></math></dd></div>
+            <div><dt>Dead end</dt><dd>the runner fails in ≥ 9 of 10 traces that ran it, a different check that works follows it, and the pair appears in ≥ 5 traces; a dead end inhibits</dd></div>
+            <div><dt>Distinct tasks</dt><dd>the traces supporting a step after an edit or a command must span at least 2 tasks</dd></div>
+            <div><dt>Outcome lift</dt><dd>a step too few traces took can still prime, never fire, when the traces that took it succeeded more often than those that did not: the 95% lower bound on the difference ≥ 0.20</dd></div>
+          </dl>
+          <p class="src">In the code: <code>crates/adage-tracks/src/model.rs</code> (<code>wilson_lower</code>, <code>ceiling</code>) · <code>crates/adage-learn/src/{engine,evidence}.rs</code> · <code>crates/adage-tracks/src/params.rs</code></p>
+        </div>
+      </details>
+      <p class="mback"><a href="?ch=judge#walk" data-ch="judge">← See it in the walkthrough: Check the evidence</a></p>
+    </article>
+    <article class="mblock" id="m-uplift" aria-labelledby="m-uplift-h" aria-roledescription="slide">
+      <header><span class="mnum">04</span><h3 id="m-uplift-h">Uplift: does telling the agent change anything?</h3></header>
+      <div class="mlead">
+        <div class="mplain">
+          <p class="mshort"><b>In short.</b> Telling an agent what it would do anyway is noise. Adage compares how often agents take a step when told with how often they take it unprompted, and stays quiet when the difference is small.</p>
+          <p class="mexample"><b>For example.</b> If agents regenerate after an edit 79% of the time on their own and 97% when reminded, the reminder adds 18 points: worth saying. Under 10 points, the reflex stays quiet until a person approves it.</p>
+        </div>
+        <div class="mkey">
+          <div class="formula">
+            <math display="block"><mrow><mi>u</mi><mo>=</mo><mi>E</mi><mo stretchy="false">[</mo><msub><mi>p</mi><mtext>follow</mtext></msub><mo stretchy="false">]</mo><mo>−</mo><mi>E</mi><mo stretchy="false">[</mo><msub><mi>p</mi><mtext>self</mtext></msub><mo stretchy="false">]</mo><mo>,</mo><mspace width="1em"/><msub><mi>p</mi><mtext>self</mtext></msub><mo>∼</mo><mi>Beta</mi><mo stretchy="false">(</mo><msub><mi>κ</mi><mi>s</mi></msub><msub><mi>m</mi><mi>s</mi></msub><mo>+</mo><mi>k</mi><mo>,</mo><mspace width="0.3em"/><msub><mi>κ</mi><mi>s</mi></msub><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><msub><mi>m</mi><mi>s</mi></msub><mo stretchy="false">)</mo><mo>+</mo><mi>n</mi><mo>−</mo><mi>k</mi><mo stretchy="false">)</mo><mo>,</mo><mspace width="0.6em"/><msub><mi>κ</mi><mi>s</mi></msub><mo>=</mo><mn>4</mn><mo>,</mo><mspace width="0.6em"/><msub><mi>κ</mi><mi>f</mi></msub><mo>=</mo><mn>11.8</mn></mrow></math>
+          </div>
+          <p class="mlegend">Where <i>p</i><sub>follow</sub> is how often agents take the step when told and <i>p</i><sub>self</sub> how often they take it unprompted. Each starts from a typical rate for its kind of advice (<i>m</i>) and moves toward this repository’s own sessions (<i>k</i> of <i>n</i>); <i>κ</i> sets how much the starting guess counts.</p>
+        </div>
+      </div>
+      <div class="calc" id="uplift" role="group" aria-labelledby="upl-h">
+        <p class="calc-h" id="upl-h">Try it: is it worth saying?</p>
+        <div class="calc-in">
+          <label><span>agents take the step on their own, <i>p</i><sub>self</sub></span><input id="us" type="range" min="0" max="100" value="79"><output id="us-o" for="us">79%</output></label>
+          <label><span>agents take it when told, <i>p</i><sub>follow</sub></span><input id="uf" type="range" min="0" max="100" value="97"><output id="uf-o" for="uf">97%</output></label>
+        </div>
+        <div class="calc-out">
+          <div class="bar ubar" aria-hidden="true"><i class="uself" id="u-self"></i><i class="ugain" id="u-gain"></i></div>
+          <p id="u-say" aria-live="polite"></p>
+        </div>
+      </div>
+      <details class="mmore">
+        <summary>More detail</summary>
+        <div class="mmore-body">
+          <p>A step agents always take on their own is not worth saying. For each reflex Adage estimates two rates: <i>p</i><sub>follow</sub>, how often agents take the step when told, and <i>p</i><sub>self</sub>, how often they take it unaided. Each is a Beta posterior that starts from a prior for its kind of directive and is updated by this repository's evidence: unexposed traces in the same situation and the control arm's would-have judgements for <i>p</i><sub>self</sub>, treated judgements for <i>p</i><sub>follow</sub>.</p>
+          <dl class="consts">
+            <div><dt>Quiet</dt><dd>a reflex with <i>u</i> &lt; 0.10, once at least 3 situations of the repository's own evidence say so, is kept nascent, listed in <code>adage review</code> as quiet, until a person approves it; a prior alone never silences one</dd></div>
+            <div><dt>Priors</dt><dd><i>p</i><sub>self</sub> from randomised control data: 0.29 for a dead end, 0.32 for a run after an edit, 0.88 for a finish line or a sequence, 0.93 for reading listed files, 0.95 at the prompt; <i>p</i><sub>follow</sub> 0.88–0.99 by kind</dd></div>
+            <div><dt>Not gated</dt><dd>procedure cards, reflexes a person wrote, and the demo thresholds, where uplift is still estimated and shown</dd></div>
+          </dl>
+          <p class="src">In the code: <code>crates/adage-learn/src/value.rs</code> (<code>uplift</code>, <code>assess</code>) · <code>crates/adage-tracks/src/params.rs</code> (<code>UPLIFT_MIN</code>)</p>
+        </div>
+      </details>
+      <p class="mback"><a href="?ch=judge#walk" data-ch="judge">← See it in the walkthrough: Check the evidence</a></p>
+    </article>
+    <article class="mblock" id="m-intent" aria-labelledby="m-intent-h" aria-roledescription="slide">
+      <header><span class="mnum">05</span><h3 id="m-intent-h">Intent: prompts that mean the same thing</h3></header>
+      <div class="mlead">
+        <div class="mplain">
+          <p class="mshort"><b>In short.</b> Requests are placed on a map of meaning, so ones that mean the same thing sit close together. Families of similar requests that usually start the same way become reflexes.</p>
+          <p class="mexample"><b>For example.</b> “Why is CI failing on main?” and “the main build is red, can you look?” share almost no words, yet land side by side, and both usually start with <code>make test</code>.</p>
+        </div>
+        <div class="mkey">
+          <div class="formula">
+            <math display="block"><mrow><mi mathvariant="bold">e</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo><mfrac><mi mathvariant="bold">v</mi><mrow><mo stretchy="false">‖</mo><mi mathvariant="bold">v</mi><mo stretchy="false">‖</mo></mrow></mfrac><mo>,</mo><mspace width="0.6em"/><mi mathvariant="bold">v</mi><mo>=</mo><mfrac><mn>1</mn><mrow><mo stretchy="false">|</mo><mi>T</mi><mo stretchy="false">|</mo></mrow></mfrac><munder><mo>∑</mo><mrow><mi>t</mi><mo>∈</mo><mi>T</mi></mrow></munder><msub><mi mathvariant="bold">W</mi><mi>t</mi></msub><mo>,</mo><mspace width="1em"/><mo>cos</mo><mo stretchy="false">(</mo><mi>a</mi><mo>,</mo><mi>b</mi><mo stretchy="false">)</mo><mo>=</mo><mi mathvariant="bold">e</mi><mo stretchy="false">(</mo><mi>a</mi><mo stretchy="false">)</mo><mo>·</mo><mi mathvariant="bold">e</mi><mo stretchy="false">(</mo><mi>b</mi><mo stretchy="false">)</mo></mrow></math>
+          </div>
+          <p class="mlegend">Where <i>W<sub>t</sub></i> is the model’s row of numbers for word <i>t</i>, <i>T</i> the words in the request, and <i>v</i> their average, scaled to length 1. Two requests are as alike as their arrows point the same way: 1 for the same meaning, 0 for unrelated.</p>
+        </div>
+      </div>
+      <details class="mmore">
+        <summary>More detail</summary>
+        <div class="mmore-body">
+          <p>Prompts are cut to their first 128 words, with tickets, paths, URLs, SHAs, versions and code replaced by placeholders. A static model bundled in the <code>adage</code> binary (potion-base-8M, int8, 7.7 MB, SHA-256 pinned; nothing to download) embeds each one as the mean of its WordPiece token rows, scaled to unit length, so similarity is a dot product (shown above).</p>
+          <p>Each prompt links to its 10 nearest neighbours (found exactly, ties broken by index), and links below cosine 0.60 are cut. Louvain then groups the graph by modularity, visiting nodes in a fixed order so the result never varies:</p>
+          <div class="formula">
+            <math display="block"><mrow><mi>Q</mi><mo>=</mo><mfrac><mn>1</mn><mrow><mn>2</mn><mi>m</mi></mrow></mfrac><munder><mo>∑</mo><mrow><mi>i</mi><mo>,</mo><mi>j</mi></mrow></munder><mrow><mo>[</mo><msub><mi>A</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>−</mo><mi>γ</mi><mfrac><mrow><msub><mi>k</mi><mi>i</mi></msub><msub><mi>k</mi><mi>j</mi></msub></mrow><mrow><mn>2</mn><mi>m</mi></mrow></mfrac><mo>]</mo></mrow><mi>δ</mi><mo stretchy="false">(</mo><msub><mi>c</mi><mi>i</mi></msub><mo>,</mo><msub><mi>c</mi><mi>j</mi></msub><mo stretchy="false">)</mo><mo>,</mo><mspace width="1em"/><mi>γ</mi><mo>=</mo><mn>2.0</mn></mrow></math>
+          </div>
+          <p>A community becomes a family when at least 60% of its traces took the same first route (the first check or lookup before editing). Routes that appear in more than 80% of all traces say nothing about intent and are ignored. Each kept family gets its own threshold, chosen on this repository's prompts:</p>
+          <div class="formula">
+            <math display="block"><mrow><msup><mi>t</mi><mo>*</mo></msup><mo>=</mo><munder><mrow><mi>arg</mi><mo>⁡</mo><mi>max</mi></mrow><mi>t</mi></munder><mspace width="0.3em"/><mi>LB</mi><mo stretchy="false">(</mo><msub><mi>k</mi><mi>t</mi></msub><mo>,</mo><msub><mi>n</mi><mi>t</mi></msub><mo stretchy="false">)</mo></mrow></math>
+          </div>
+          <p class="fine">Here <i>n<sub>t</sub></i> counts prompts at cosine ≥ <i>t</i> from the family centre and <i>k<sub>t</sub></i> those whose trace ran the family's route. At the hook, a new prompt matches the most similar centre whose threshold it clears; it fires only if that family's LB reaches 0.80, and otherwise primes. With the explicit hashed fallback in place of a model there are no intent reflexes, and nothing fails.</p>
+          <p class="src">In the code: <code>crates/adage-graph/src/compile/intent.rs</code> · <code>crates/adage-intent</code></p>
+        </div>
+      </details>
+      <p class="mback"><a href="?ch=intent#walk" data-ch="intent">← See it in the walkthrough: Recognise similar requests</a></p>
+    </article>
+    <article class="mblock" id="m-cards" aria-labelledby="m-cards-h" aria-roledescription="slide">
+      <header><span class="mnum">06</span><h3 id="m-cards-h">Procedure cards: the task a repository repeats</h3></header>
+      <div class="mlead">
+        <div class="mplain">
+          <p class="mshort"><b>In short.</b> When two sessions start with similar requests and edit similar files, they are the same kind of task. A task seen at least twice, once successfully, gets a procedure card.</p>
+          <p class="mexample"><b>For example.</b> Adding <code>flag_url.go</code> one week and <code>flag_port.go</code> the next count as the same task: same folder, same kind of name, same extension.</p>
+        </div>
+        <div class="mkey">
+          <div class="formula">
+            <math display="block"><mrow><mo>cos</mo><mo stretchy="false">(</mo><msub><mi>p</mi><mi>a</mi></msub><mo>,</mo><msub><mi>p</mi><mi>b</mi></msub><mo stretchy="false">)</mo><mo>≥</mo><mn>0.6</mn><mspace width="0.8em"/><mtext>and</mtext><mspace width="0.8em"/><mfrac><mrow><mo stretchy="false">|</mo><msub><mi>F</mi><mi>a</mi></msub><mo>∩</mo><msub><mi>F</mi><mi>b</mi></msub><mo stretchy="false">|</mo></mrow><mrow><mo stretchy="false">|</mo><msub><mi>F</mi><mi>a</mi></msub><mo>∪</mo><msub><mi>F</mi><mi>b</mi></msub><mo stretchy="false">|</mo></mrow></mfrac><mo>≥</mo><mn>0.25</mn></mrow></math>
+          </div>
+          <p class="mlegend">Where <i>p<sub>a</sub></i> and <i>p<sub>b</sub></i> are the two first requests, compared by meaning, and <i>F<sub>a</sub></i> and <i>F<sub>b</sub></i> the shapes of the files each session edited. The second part is the share of file shapes they have in common.</p>
+        </div>
+      </div>
+      <details class="mmore">
+        <summary>More detail</summary>
+        <div class="mmore-body">
+          <p>Most work in a repository is a variation of something done before. Two traces are one <em>family</em> when their first prompts are similar and the files they edited have the same shapes (directory, name tokens, extension, so <code>flag_url.go</code> and <code>flag_port.go</code> agree) (shown above).</p>
+          <p>A family with a passing trace gets a card: the files edited in at least half its traces, in order, with the lines the latest passing trace added; the commands most traces ran, kept when they mostly worked and listed to avoid when they mostly failed; and the check the passing traces finished with.</p>
+          <p>The delivered card leaves those added lines out. In their place it says where the card's files stand in the checkout when it is delivered: each file's line count, a Python source's last top-level definitions with their lines, a test file's last lines and a changelog's first headings. Adage reads them itself, read-only, and runs no command. This orientation has been measured only in one development study on a single task; the card benchmarks used the earlier form.</p>
+          <dl class="consts">
+            <div><dt>Forms</dt><dd>from at least 2 traces, one of them passing; at most 16 cards per repository, the best supported</dd></div>
+            <div><dt>Delivered</dt><dd>once per session, as prime, when a new prompt's best cosine to the family's prompts reaches 0.811 (<code>learn.card_threshold</code>); up to 0.10 below, at the first edit of one of the card's files</dd></div>
+            <div><dt>Bounded</dt><dd>at most 800 tokens, plus at most about 1,200 for the orientation; never quotes <code>.env</code> files, files git ignores, or anything that looks like a secret; never shared in a pack</dd></div>
+            <div><dt>Verified</dt><dd><code>adage train cards</code> replays a card's commands on a clean checkout in a sandbox, and the next learn keeps only those that worked</dd></div>
+          </dl>
+          <p class="src">In the code: <code>crates/adage-learn/src/cards.rs</code> · <code>crates/adage-tracks/src/card.rs</code></p>
+        </div>
+      </details>
+      <p class="mback"><a href="?ch=intent#walk" data-ch="intent">← See it in the walkthrough: Recognise similar requests</a></p>
+    </article>
+    <article class="mblock" id="m-train" aria-labelledby="m-train-h" aria-roledescription="slide">
+      <header><span class="mnum">07</span><h3 id="m-train-h">Skills: compiled, then verified</h3></header>
+      <div class="mlead">
+        <div class="mplain">
+          <p class="mshort"><b>In short.</b> Reflexes learned from a written guide are accepted only if agents follow them about as well as they follow the guide itself, at no more than 10% extra cost.</p>
+          <p class="mexample"><b>For example.</b> If 9 of 10 sessions follow the learned reflex, 9 of 10 follow the guide, and the reflex costs no more, it is accepted, and the guide no longer has to sit in every prompt.</p>
+        </div>
+        <div class="mkey">
+          <div class="formula">
+            <math display="block"><mrow><msub><mi>f</mi><mtext>reflex</mtext></msub><mo>≥</mo><mn>0.70</mn><mo>,</mo><mspace width="0.8em"/><msub><mi>f</mi><mtext>skill</mtext></msub><mo>−</mo><msub><mi>f</mi><mtext>reflex</mtext></msub><mo>≤</mo><mn>0.10</mn><mo>,</mo><mspace width="0.8em"/><mfrac><msub><mi>c</mi><mtext>reflex</mtext></msub><msub><mi>c</mi><mtext>skill</mtext></msub></mfrac><mo>≤</mo><mn>1.10</mn></mrow></math>
+          </div>
+          <p class="mlegend">Where <i>f</i> is the share of sessions that followed the step and <i>c</i> the cost, in turns or dollars, with the reflex or with the guide.</p>
+        </div>
+      </div>
+      <details class="mmore">
+        <summary>More detail</summary>
+        <div class="mmore-body">
+          <p><code>adage train &lt;SKILL.md&gt;</code> compiles a skill's procedure into one pack of reflexes by rules, with no model and no agent session: which command, after which edit, in which order. Every compiled command is replayed on a clean checkout of <code>HEAD</code> in <code>adage-exec</code>'s sandbox, with the network off, your working tree untouched and the <code>.venv</code> lent read-only. A command that fails there is stale and dropped; one that could not be replayed is kept at prime at most; judgment stays text. Nothing is installed until <code>adage train accept</code>.</p>
+          <p>Skill-steered sessions are optional evidence, and they cost money. The skill's claims get generated tasks plus controls, your own agent runs each headlessly in a sealed clone with no remote, the traces go through the same learner, and reflexes are staged at prime, never activated. Held-out tasks then run in three arms: no skill, the skill in the prompt, and the staged reflexes through the hooks. A reflex is accepted when (shown above).</p>
+          <p class="fine">Here <i>f</i> is the share of sessions that followed the step and <i>c</i> the cost in turns or dollars. A claim the agents contradict, like a test command that fails where another works, comes back as a dead end, and the skill is told which of its claims are stale.</p>
+          <p class="src">In the code: <code>crates/adage-train/src/{compile,verify,report}.rs</code> · <code>docs/training.md</code></p>
+        </div>
+      </details>
+      <p class="mback"><a href="?ch=train#walk" data-ch="train">← See it in the walkthrough: Learn from a written guide</a></p>
+    </article>
+    <article class="mblock" id="m-seal" aria-labelledby="m-seal-h" aria-roledescription="slide">
+      <header><span class="mnum">08</span><h3 id="m-seal-h">The index: one sealed file</h3></header>
+      <div class="mlead">
+        <div class="mplain">
+          <p class="mshort"><b>In short.</b> Every active reflex is merged into one file, and a fingerprint of that file names its version, so Adage always knows exactly which set of reflexes it is using.</p>
+          <p class="mexample"><b>For example.</b> Change one reflex and the fingerprint changes completely: <code>a1de421c7f5760b4</code> becomes something else entirely.</p>
+        </div>
+        <div class="mkey">
+          <div class="formula">
+            <math display="block"><mrow><mi>generation</mi><mo>=</mo><msub><mrow><mi>hex</mi><mo stretchy="false">(</mo><mi>SHA-256</mi><mo stretchy="false">(</mo><mi>index</mi><mo stretchy="false">)</mo><mo stretchy="false">)</mo></mrow><mrow><mo stretchy="false">[</mo><mn>0</mn><mo>:</mo><mn>16</mn><mo stretchy="false">)</mo></mrow></msub></mrow></math>
+          </div>
+          <p class="mlegend">SHA-256 turns the file into a fingerprint; its first 16 characters are kept as the index’s generation.</p>
+        </div>
+      </div>
+      <details class="mmore">
+        <summary>More detail</summary>
+        <div class="mmore-body">
+          <p>Every installed track compiles into one list. The same behaviour gets the same id wherever it was found, so duplicates collide, and precedence decides which copy stays: your own evidence, then a teammate's signed pack, then an instinct. The survivors are serialised in order and hashed, and the hook reads only that file (shown above).</p>
+          <p class="fine">Tracks are versioned: evidence moving bumps the patch number, an added reflex the minor, a changed or removed one the major. Imported reflexes start forming and never fire until your own traces confirm them. Instincts, 8 in the default set, deliver as prime at most and extinguish themselves if they keep misfiring. Tracks and the index are readable by their owner only.</p>
+          <p class="src">In the code: <code>crates/adage-tracks/src/{index,interlock}.rs</code> · <code>adage-instincts</code> · <code>adage-pack</code></p>
+        </div>
+      </details>
+      <p class="mback"><a href="?ch=seal#walk" data-ch="seal">← See it in the walkthrough: Package what was learned</a></p>
+    </article>
+    <article class="mblock" id="m-hook" aria-labelledby="m-hook-h" aria-roledescription="slide">
+      <header><span class="mnum">09</span><h3 id="m-hook-h">The hook: a pure decision, and a control arm</h3></header>
+      <div class="mlead">
+        <div class="mplain">
+          <p class="mshort"><b>In short.</b> About 1 in 10 sessions is left alone as a comparison group. A fingerprint of the session’s id decides, so the choice is random but always the same for the same session.</p>
+          <p class="mexample"><b>For example.</b> Session T2’s fingerprint comes out at 0.064, under 0.10, so Adage stays silent in it and only notes what it would have said.</p>
+        </div>
+        <div class="mkey">
+          <div class="formula">
+            <math display="block"><mrow><mi>x</mi><mo>=</mo><mfrac><mrow><msub><mi>u32</mi><mi>le</mi></msub><mo stretchy="false">(</mo><mi>SHA-256</mi><mo stretchy="false">(</mo><mtext>"adage-arm:"</mtext><mo>∥</mo><mi>session</mi><mo stretchy="false">)</mo><mo stretchy="false">[</mo><mn>0</mn><mo>:</mo><mn>4</mn><mo stretchy="false">)</mo><mo stretchy="false">)</mo></mrow><mrow><msup><mn>2</mn><mn>32</mn></msup><mo>−</mo><mn>1</mn></mrow></mfrac><mo>,</mo><mspace width="1em"/><mtext>control</mtext><mo>⇔</mo><mi>x</mi><mo>&lt;</mo><mn>0.10</mn></mrow></math>
+          </div>
+          <p class="mlegend">The session id is fingerprinted with SHA-256, and its first 4 bytes are read as a number <i>x</i> between 0 and 1. Below 0.10 means the control group.</p>
+        </div>
+      </div>
+      <details class="mmore">
+        <summary>More detail</summary>
+        <div class="mmore-body">
+          <p>Each hook event runs a pure function of the event and the index. Before anything is said, the session is assigned to an arm by a hash, so the assignment is stable and reproducible (shown above).</p>
+          <p>A control session runs the same decision, records what it would have said, and stays silent. Each record carries its propensity, the probability of the arm it got. The share is 0.10 unless <code>runtime.control</code> or <code>ADAGE_CONTROL</code> sets another.</p>
+          <p>On Claude Code the hook also runs before each shell command (<code>PreToolUse</code>), for the one change Adage makes by default: a Python test run or scratch repro under the system Python, in a repository whose <code>.venv</code> was verified to hold pytest and the project, runs with <code>.venv/bin/python</code> instead. The command is read as a shell reads it, and only the command word of a top-level simple command changes: never a heredoc, a quoted string or a <code>-c</code> payload. A command that activates an environment, <code>cd</code>s outside the checkout or pins another Python version is left alone; one your permission rules would not allow once rewritten gets advice instead. You see each rewrite, a control session records it without rewriting, and <code>adage delegate rewrites off</code> (or <code>runtime.rewrite = false</code>) turns it off.</p>
+          <dl class="consts">
+            <div><dt>Slots</dt><dd>a value from the prompt binds only if it matches the contract learned from real values and is a plain token: at most 200 characters from <code>A–Z a–z 0–9 _ . / : @ = + , -</code>, with no leading dash</dd></div>
+            <div><dt>Followed</dt><dd>a directive stays pending for 3 tool batches; it is followed if a batch runs its canonical command (options may be added), ignored otherwise, and misfired when the agent followed it and the command failed</dd></div>
+            <div><dt>Wrapper</dt><dd>each directive reaches the agent as <code>&lt;adage-reflex track="…" route="…" strength="…" kind="…"&gt;</code>, with a last line saying where it came from</dd></div>
+            <div><dt>Fails open</dt><dd>if the hook errors or runs out of time, the agent carries on as if Adage were not installed</dd></div>
+          </dl>
+          <p>Approved execution is a separate path. With <code>adage-exec</code> enabled and a local grant for the exact reflex, E1 prefetches a read-only result; E2 runs an action in a disposable stage and applies permitted outputs. The invocation is selected and run on the CPU without a model request. The next model request may still consume its result. Learning a command does not approve it, and a delivered procedure card does not demonstrate CPU execution or saved turns.</p>
+          <p>When a person has approved one learned verification, Adage owns it in treated sessions: at the session start the agent is told which command Adage runs and when; after a run it gets a short receipt naming the tests that ran, including the ones it added; and when it finishes, Adage runs the check again if it has not passed on the current files, asking the agent to continue once if it fails. A person is told in one line when an approval stops matching. On real repositories it has so far one development result, on a single task, and no held-out result. Savings are counted in model calls, tokens and API cost; GPU use and energy are not measured.</p>
+          <p class="src">In the code: <code>crates/adage-runtime/src/{lib,pretool,render}.rs</code> (<code>assign_arm</code>) · <code>crates/adage-hook</code></p>
+        </div>
+      </details>
+      <p class="mback"><a href="?ch=hook#walk" data-ch="hook">← See it in the walkthrough: Speak up at the right moment</a></p>
+    </article>
+    <article class="mblock" id="m-measure" aria-labelledby="m-measure-h" aria-roledescription="slide">
+      <header><span class="mnum">10</span><h3 id="m-measure-h">Measurement: the task is the unit</h3></header>
+      <div class="mlead">
+        <div class="mplain">
+          <p class="mshort"><b>In short.</b> Adage measures by task, not by run: it compares each task with and without Adage, averages the differences, then checks how often pure chance would do as well.</p>
+          <p class="mexample"><b>For example.</b> Across 8 sample tasks, runs with Adage averaged 9.9 fewer turns. Shuffling which runs had Adage 10,000 times never produced a gap that large, so luck is a poor explanation.</p>
+        </div>
+        <div class="mkey">
+          <div class="formula">
+            <math display="block"><mrow><msub><mi>d</mi><mi>j</mi></msub><mo>=</mo><msubsup><mover><mi>x</mi><mo>¯</mo></mover><mi>j</mi><mtext>adage</mtext></msubsup><mo>−</mo><msubsup><mover><mi>x</mi><mo>¯</mo></mover><mi>j</mi><mtext>control</mtext></msubsup><mo>,</mo><mspace width="1em"/><mi>T</mi><mo>=</mo><mfrac><mn>1</mn><mi>J</mi></mfrac><munderover><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>J</mi></munderover><msub><mi>d</mi><mi>j</mi></msub></mrow></math>
+          </div>
+          <p class="mlegend">Where <i>x̄</i> is a task’s average (turns, cost or pass rate) in each arm, <i>d<sub>j</sub></i> the difference for task <i>j</i>, and <i>T</i> the average difference over all <i>J</i> tasks.</p>
+        </div>
+      </div>
+      <details class="mmore">
+        <summary>More detail</summary>
+        <div class="mmore-body">
+          <p>Runs of one task are not independent, so the task, not the run, is the unit. For each of <i>J</i> tasks, compare the arms' means, then average over tasks (shown above).</p>
+          <p>No distribution is assumed. Arm labels are shuffled within each task, never across tasks, 10,000 times, and the p-value counts how often chance does at least as well:</p>
+          <div class="formula">
+            <math display="block"><mrow><mi>p</mi><mo>=</mo><mfrac><mrow><mn>1</mn><mo>+</mo><mo>#</mo><mo stretchy="false">{</mo><mi>b</mi><mo>:</mo><mo stretchy="false">|</mo><msubsup><mi>T</mi><mi>b</mi><mo>*</mo></msubsup><mo stretchy="false">|</mo><mo>≥</mo><mo stretchy="false">|</mo><mi>T</mi><mo stretchy="false">|</mo><mo stretchy="false">}</mo></mrow><mrow><mn>1</mn><mo>+</mo><mi>N</mi></mrow></mfrac><mo>,</mo><mspace width="1em"/><mi>N</mi><mo>=</mo><mn>10,000</mn></mrow></math>
+          </div>
+          <p>Whether the effect would hold for new tasks is a separate question. A sign-flip test over the task differences answers it exactly up to 16 tasks, where its smallest possible p is 2/2<sup><i>J</i></sup>:</p>
+          <div class="formula">
+            <math display="block"><mrow><msub><mi>p</mi><mtext>flip</mtext></msub><mo>=</mo><mfrac><mrow><mo>#</mo><mo stretchy="false">{</mo><mi mathvariant="bold">s</mi><mo>∈</mo><msup><mrow><mo stretchy="false">{</mo><mo>±</mo><mn>1</mn><mo stretchy="false">}</mo></mrow><mi>J</mi></msup><mo>:</mo><mrow><mo stretchy="false">|</mo><msub><mo>∑</mo><mi>j</mi></msub><msub><mi>s</mi><mi>j</mi></msub><msub><mi>d</mi><mi>j</mi></msub><mo stretchy="false">|</mo></mrow><mo>≥</mo><mrow><mo stretchy="false">|</mo><msub><mo>∑</mo><mi>j</mi></msub><msub><mi>d</mi><mi>j</mi></msub><mo stretchy="false">|</mo></mrow><mo stretchy="false">}</mo></mrow><msup><mn>2</mn><mi>J</mi></msup></mfrac></mrow></math>
+          </div>
+          <p>Turns, cost and pass rate are tested together, so Holm's step-down corrects for looking at several metrics. With the <i>m</i> p-values sorted ascending:</p>
+          <div class="formula">
+            <math display="block"><mrow><msub><mover><mi>p</mi><mo>~</mo></mover><mrow><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow></msub><mo>=</mo><munder><mi>max</mi><mrow><mi>k</mi><mo>≤</mo><mi>i</mi></mrow></munder><mspace width="0.3em"/><mi>min</mi><mo stretchy="false">(</mo><mn>1</mn><mo>,</mo><mspace width="0.2em"/><mo stretchy="false">(</mo><mi>m</mi><mo>−</mo><mi>k</mi><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mspace width="0.1em"/><msub><mi>p</mi><mrow><mo stretchy="false">(</mo><mi>k</mi><mo stretchy="false">)</mo></mrow></msub><mo stretchy="false">)</mo></mrow></math>
+          </div>
+          <dl class="consts">
+            <div><dt>Interval</dt><dd>a 95% percentile bootstrap that resamples whole tasks 2,000 times</dd></div>
+            <div><dt>Per reflex</dt><dd>a share is stated only with at least 10 treated and 5 control traces</dd></div>
+            <div><dt>Offline bench</dt><dd>before any agent runs, a learner scores <math><mrow><mi>J</mi><mo>=</mo><mtext>turns saved</mtext><mo>−</mo><mn>2.0</mn><mo>×</mo><mtext>false directives</mtext><mo>+</mo><mn>1.0</mn><mo>×</mo><mtext>route F1</mtext></mrow></math> per session</dd></div>
+            <div><dt>Your savings</dt><dd><code>adage savings</code> estimates, per session, control minus treated: API-list-equivalent cost, model turns and turns to the first edit, each session weighted by its recorded propensity (Hajek), winsorised at the 95th percentile, with an expanded percentile interval from 2,000 bootstrap resamples stratified by arm. Dollars appear only with at least 10 control and 30 treated sessions; before that, counts. Beside it, always: how often each arm ended asking the person for help</dd></div>
+          </dl>
+          <p class="src">In the code: <code>crates/adage-cli/src/savings.rs</code> · <code>demo/report.py</code> (<code>cluster_perm_p</code>, <code>task_signflip_p</code>, <code>cluster_boot_ci</code>, <code>holm</code>) · <code>crates/adage-eval</code> · <code>evals/live</code></p>
+        </div>
+      </details>
+      <p class="mback"><a href="?ch=measure#walk" data-ch="measure">← See it in the walkthrough: Prove it helped</a></p>
+    </article>
+    </div>
+  </div>
+</section>
+
+<section class="band access" aria-labelledby="how-cta">
+  <div class="wrap narrow">
+    <h2 class="display" id="how-cta">See it on your own traces</h2>
+    <p class="lede">The same walkthrough ships inside <code>adage map</code>, where the chapters replay with your repository's reflexes.</p>
+    <p class="ctarow"><a class="btn primary" href="/get-started">Get started</a><a class="btn" href="/">Back to the overview</a></p>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap footrow">
+    <span class="mark small">Adage</span>
+    <span>Agent traces become reflexes.</span>
+    <span class="muted">Apache-2.0</span>
+  </div>
+</footer>
+</body>
+</html>

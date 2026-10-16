@@ -1,0 +1,1147 @@
+{
+ "repo": "urfave-cli",
+ "url": "https://github.com/urfave/cli",
+ "repo_key": "github.com/urfave/cli",
+ "tasks": [
+  {
+   "id": "urfave-cli-fe6ff489",
+   "sha": "fe6ff489b7722c3c1e91cc81971c581f347b3250",
+   "base": "56745f79ee5fb703d6840aa12bce91f01b2ac837",
+   "date": "2025-03-31T07:12:59-04:00",
+   "subject": "Merge pull request #2081 from dearchap/issue_2077",
+   "src_files": [
+    "command_run.go"
+   ],
+   "test_files": [
+    "args_test.go"
+   ],
+   "gold_files": [
+    "command_run.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   foo - A new cli application\n\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.213s\nFAIL",
+   "fixed_seconds": 3.76,
+   "n_tests": 1,
+   "prompt": "When a subcommand has its `OnUsageError` handler set and the user supplies arguments that fail validation (e.g. a required argument is missing), the handler is never called even though `cmd.Run` returns a usage error. For example, build a command tree with a subcommand that requires a positional argument and set `cmd.Commands[0].OnUsageError` to a func that increments a counter, then run the app with too few arguments \u2014 the run correctly errors out but the counter stays at 0. `OnUsageError` should be invoked for the command whenever a usage error occurs. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-c6c5804c",
+   "sha": "c6c5804ca57ab98c6c209098df309403edd3c33a",
+   "base": "65c6366e4295e29b56d4824b3866800b8cb2d910",
+   "date": "2025-04-24T16:18:10-04:00",
+   "subject": "Merge pull request #2108 from bystones/fix_2098",
+   "src_files": [
+    "command_run.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_run.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   foo - A new cli application\n\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.252s\nFAIL",
+   "fixed_seconds": 6.26,
+   "n_tests": 1,
+   "prompt": "Context values set by a parent command's `Before` function aren't visible in the parent's `After` function or in a subcommand's flag `Action` callbacks when a subcommand is invoked. For example, if `bar`'s `Before` returns `context.WithValue(ctx, bkey, \"bval\")` and it has a subcommand `baz` whose own `Before` adds another value, then `bar`'s `After`, `baz`'s `Action`/`After`, and flag `Action` callbacks on either command should all see both values via `ctx.Value`, but currently some of these callbacks receive a context missing the values. Please fix the context propagation so all these callbacks consistently see the values added by `Before` at any level.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-e26a1a9c",
+   "sha": "e26a1a9cea85fc85af2834b4f6420220dbaa44f0",
+   "base": "d1930685387ed94dbfd02d62a5bce0a71593a518",
+   "date": "2025-05-19T21:18:35-04:00",
+   "subject": "Merge pull request #2139 from zzspoon/issue_2135",
+   "src_files": [
+    "examples_test.go",
+    "template.go"
+   ],
+   "test_files": [
+    "command_test.go",
+    "help_test.go"
+   ],
+   "gold_files": [
+    "examples_test.go",
+    "template.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\n--- FAIL: TestShowSubcommandHelp_GlobalOptions (0.00s)\n    help_test.go:726: \n        \tError Trace:\t/tmp/adage-repobench/validate/urfave-cli-e26a1a9c/repo/help_test.go:726\n        \tError:      \t\"NAME:\\n   foo frobbly\\n\\nUSAGE:\\n   foo frobbly [command [command options]]\\n\\nOPTIONS:\\n   --bar string  \\n   --help, -h    show help\\n\\nGLOBAL OPTIONS:\\n   --foo string  \\n\" does not contain \"NAME:\\n   foo frobbly\\n\\nUSAGE:\\n   foo frobbly [options]\\n\\nOPTIONS:\\n   --bar string  \\n   --help, -h    show help\\n\\nGLOBAL OPTIONS:\\n   --foo string  \\n\"\n        \tTest:       \tTestShowSubcommandHelp_GlobalOptions\n        \tMessages:   \texpected output to include global options\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.456s\nFAIL",
+   "fixed_seconds": 8.12,
+   "n_tests": 1,
+   "prompt": "The auto-generated USAGE line for a subcommand's help text is wrong when the subcommand has no children of its own. Running help for such a subcommand (e.g. `app help foo bar`, where `bar` takes no subcommands) prints something like `foo bar [command [command options]] [arguments...]`, but since `bar` has no subcommands it should print `foo bar [options] [arguments...]` instead. Please fix the USAGE text formatting so it doesn't reference `[command [command options]]` for commands that have no subcommands.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-7492c456",
+   "sha": "7492c456d027c47390de10c0a0a9409d8c78b21a",
+   "base": "8fcbe6c1f3d9f471d55c02d0e6dd375b8e9dc836",
+   "date": "2025-05-21T08:19:18-04:00",
+   "subject": "Merge pull request #2142 from urfave/2141",
+   "src_files": [
+    "flag_bool_with_inverse.go"
+   ],
+   "test_files": [
+    "flag_bool_with_inverse_test.go",
+    "help_test.go",
+    "testdata/godoc-v3.x.txt"
+   ],
+   "gold_files": [
+    "flag_bool_with_inverse.go",
+    "godoc-current.txt"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "FAIL\tgithub.com/urfave/cli/v3 [build failed]\nFAIL\n\n# github.com/urfave/cli/v3 [github.com/urfave/cli/v3.test]\n./flag_bool_with_inverse_test.go:513:23: cannot use &BoolWithInverseFlag{} (value of type *BoolWithInverseFlag) as RequiredFlag value in variable declaration: *BoolWithInverseFlag does not implement RequiredFlag (missing method IsRequired)\n./flag_bool_with_inverse_test.go:519:22: cannot use &BoolWithInverseFlag{} (value of type *BoolWithInverseFlag) as VisibleFlag value in variable declaration: *BoolWithInverseFlag does not implement VisibleFlag (missing method IsVisible)",
+   "fixed_seconds": 7.97,
+   "n_tests": 1,
+   "prompt": "A `BoolWithInverseFlag` doesn't show up correctly in generated help output \u2014 e.g. registering a flag like `&BoolWithInverseFlag{Name: \"bf\"}` among the global flags and running `--help` omits its `--[no-]bf` entry from the GLOBAL OPTIONS listing. It also appears that `BoolWithInverseFlag` doesn't fully behave like other flag types with respect to visibility/required-ness when used through the generic `Flag` interfaces. Please fix `BoolWithInverseFlag` so it is properly listed in help output and behaves consistently with other flag types.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-db7d18f2",
+   "sha": "db7d18f23ca87a199e8726fb1c4d1dd6c4229f47",
+   "base": "c1855736d81861a94d9a61f838ea73de96200e43",
+   "date": "2025-08-09T17:55:31-04:00",
+   "subject": "Merge pull request #2171 from dearchap/issue_2169",
+   "src_files": [
+    "flag_slice_base.go"
+   ],
+   "test_files": [
+    "command_test.go",
+    "flag_test.go"
+   ],
+   "gold_files": [
+    "flag_slice_base.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.252s\nFAIL",
+   "fixed_seconds": 7.78,
+   "n_tests": 1,
+   "prompt": "`StringSliceFlag` has a `Config` option `StringConfig{TrimSpace: true}` intended to trim whitespace around each comma-separated value, but it isn't actually applied \u2014 values parsed from flags/env/stdin keep their surrounding whitespace regardless of the setting. For example, parsing the env value `\"foo , bar \"` into a `&StringSliceFlag{Name: \"names\", Sources: EnvVars(\"NAMES\"), Config: StringConfig{TrimSpace: true}}` should yield `[\"foo\", \"bar\"]` but currently doesn't trim the entries. Please fix `StringSliceFlag` so the `TrimSpace` config option is honored.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-495e1d30",
+   "sha": "495e1d30c76923fbefbc095c0b01f9398529bb67",
+   "base": "83247f01cdbc1e692c59b2c358db0f5f9bd6b3b7",
+   "date": "2025-10-21T06:20:41-04:00",
+   "subject": "Merge pull request #2214 from dearchap/def_text",
+   "src_files": [
+    "docs.go",
+    "flag_impl.go"
+   ],
+   "test_files": [
+    "flag_test.go",
+    "help_test.go"
+   ],
+   "gold_files": [
+    "docs.go",
+    "flag_impl.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "      And also indented lines.\\n\\n\\n   And then another long line.\\n   Blah blah blah does anybody\\n   ever read these things?\\n\"\n        \t            \tactual  : \"NAME:\\n    - here's a sample\\n      App.Usage string long\\n      enough that it should be\\n      wrapped in this test\\n\\nUSAGE:\\n   i'm not sure how\\n   App.UsageText differs from\\n   App.Usage, but this should\\n   also be wrapped in this\\n   test\\n\\nDESCRIPTION:\\n   here's a sample\\n   App.Description string long\\n   enough that it should be\\n   wrapped in this test\\n\\n   with a newline\\n      and an indented line\\n\\nGLOBAL OPTIONS:\\n   --foo, -h here's a\\n      really long help text\\n      line, let's see where it\\n      wraps. blah blah blah\\n      and so on. (default:\\n      false)\\n\\nCOPYRIGHT:\\n   Here's a sample copyright\\n   text string long enough\\n   that it should be wrapped.\\n   Including newlines.\\n      And also indented lines.\\n\\n\\n   And then another long line.\\n   Blah blah blah does anybody\\n   ever read these things?\\n\"\n        \t            \t\n        \t            \tDiff:\n        \t            \t--- Expected\n        \t            \t+++ Actual\n        \t            \t@@ -27,3 +27,4 @@\n        \t            \t       wraps. blah blah blah\n        \t            \t-      and so on.\n        \t            \t+      and so on. (default:\n        \t            \t+      false)\n        \t            \t \n        \tTest:       \tTestWrappedHelp\n        \tMessages:   \tUnexpected wrapping\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.476s\nFAIL",
+   "fixed_seconds": 8.5,
+   "n_tests": 1,
+   "prompt": "Help output and default-value reporting for `BoolFlag` is inconsistent. Currently a `BoolFlag` with default value `false` still prints `(default: false)` in `--help` output, which is noisy since false is the flag's zero value; the default annotation should be omitted in that case. Separately, the value-reporting API used for documentation (`GetValue()`) returns an empty string for `BoolFlag` regardless of its value, and returns an unquoted string for `StringFlag` (e.g. `bar` instead of `\"bar\"`), which is inconsistent with other flag types. Please make the default-text display and `GetValue()` behavior consistent across flag types.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-08b187a9",
+   "sha": "08b187a934944024e50b402c606f978907499486",
+   "base": "9dad0d4550e060c3cc9b989395424a2ce0d44fe2",
+   "date": "2025-11-02T09:12:20-05:00",
+   "subject": "Merge pull request #2211 from dearchap/issue_2208",
+   "src_files": [
+    "command.go",
+    "command_parse.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command.go",
+    "command_parse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   --help, -h  show help\n--- FAIL: TestLocalFlagError (0.00s)\n    command_test.go:3051: \n        \tError Trace:\t/tmp/adage-repobench/validate/urfave-cli-08b187a9/repo/command_test.go:3051\n        \tError:      \tAn error is expected but got nil.\n        \tTest:       \tTestLocalFlagError\npanic: runtime error: invalid memory address or nil pointer dereference [recovered]\n\tpanic: runtime error: invalid memory address or nil pointer dereference\n[signal SIGSEGV: segmentation violation code=0x1 addr=0x18 pc=0x7258f0]\n\ngoroutine 300 [running]:\ntesting.tRunner.func1.2({0x89ec40, 0xd31c90})\n\t/usr/local/go1.24.7/src/testing/testing.go:1734 +0x21c\ntesting.tRunner.func1()\n\t/usr/local/go1.24.7/src/testing/testing.go:1737 +0x35e\npanic({0x89ec40?, 0xd31c90?})\n\t/usr/local/go1.24.7/src/runtime/panic.go:792 +0x132\ngithub.com/urfave/cli/v3.TestLocalFlagError(0xc00045e700)\n\t/tmp/adage-repobench/validate/urfave-cli-08b187a9/repo/command_test.go:3052 +0x250\ntesting.tRunner(0xc00045e700, 0x94bf38)\n\t/usr/local/go1.24.7/src/testing/testing.go:1792 +0xf4\ncreated by testing.(*T).Run in goroutine 1\n\t/usr/local/go1.24.7/src/testing/testing.go:1851 +0x413\nFAIL\tgithub.com/urfave/cli/v3\t0.122s\nFAIL",
+   "fixed_seconds": 10.0,
+   "n_tests": 1,
+   "prompt": "A flag declared with `Local: true` on a top-level command is unexpectedly usable when invoking a subcommand instead of being rejected. For example:\n```go\ncmd := &Command{\n    Flags: []Flag{&Int64Flag{Name: \"cmdFlag\", Local: true}},\n    Commands: []*Command{{Name: \"subcmd\"}},\n}\ncmd.Run(ctx, []string{\"app\", \"subcmd\", \"--cmdFlag\", \"11\"})\n```\nThis should fail with an error like `flag provided but not defined: -cmdFlag` since the flag is local to the parent command, but the run doesn't produce that error. Please fix local flag handling so a `Local` flag is not accepted when parsing a subcommand's arguments.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-2240690b",
+   "sha": "2240690b11d48e705bd123082c787e05a9ac196c",
+   "base": "41334d4310a39c326518c5cd070fd7c27c4f7700",
+   "date": "2025-11-16T13:57:53-05:00",
+   "subject": "Merge pull request #2224 from dearchap/issue_2223",
+   "src_files": [
+    "command_parse.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_parse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.493s\nFAIL",
+   "fixed_seconds": 9.53,
+   "n_tests": 1,
+   "prompt": "Passing an empty value after `=` for a string flag isn't always detected as an error. For instance, running an app with `--f_string=` should fail with `flag needs an argument: --f_string=`, and this still holds when another flag follows it, e.g. `--f_string= --f_bool`, but in that case the expected error isn't produced. Please fix the flag parsing so an empty value after `=` is consistently treated as a missing argument even when followed by other flags.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-2ac6b5ae",
+   "sha": "2ac6b5ae20c1d18b8e3b056da5b1aee89da8f1bc",
+   "base": "c49c451a4f4f49a40d2dda1b42973cf569f3c1ec",
+   "date": "2025-12-12T11:49:34-05:00",
+   "subject": "Merge pull request #2232 from dearchap/disc_2168",
+   "src_files": [
+    "command_run.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_run.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.359s\nFAIL",
+   "fixed_seconds": 7.55,
+   "n_tests": 1,
+   "prompt": "When a Command has DefaultCommand set, invoking the binary without naming a command doesn't forward the trailing positional arguments to the default command's Action. For example:\n\ncmd := &cli.Command{\n    DefaultCommand: \"foobar\",\n    Commands: []*cli.Command{\n        {Name: \"foobar\", Action: func(ctx context.Context, c *cli.Command) error {\n            fmt.Println(c.Args().Slice())\n            return nil\n        }},\n    },\n}\ncmd.Run(context.Background(), []string{\"app\", \"xy\", \"zdf\"})\n\nI'd expect \"foobar\" to run with args [\"xy\", \"zdf\"], and the same when the command name is given explicitly (e.g. `app foobar xy zdf`). Separately, invoking a nonexistent subcommand name alongside an empty top-level command name should produce an error instead of silently succeeding. Please fix the default command resolution so argument forwarding and error handling behave correctly.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-07f2236f",
+   "sha": "07f2236fa94babc58c5e8d93497b756248dc4889",
+   "base": "c32fd204eea8343b388287fa0e8812ad01a71e0f",
+   "date": "2026-01-17T20:44:23-05:00",
+   "subject": "Merge pull request #2245 from dearchap/issue_2244",
+   "src_files": [
+    "command_run.go"
+   ],
+   "test_files": [
+    "completion_test.go",
+    "help_test.go"
+   ],
+   "gold_files": [
+    "command_run.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   --help, -h  show help\n--- FAIL: Test_HelpCommand_RequiredFlagsNoDefault (0.00s)\n    help_test.go:163: \n        \tError Trace:\t/tmp/adage-repobench/validate/urfave-cli-07f2236f/repo/help_test.go:163\n        \tError:      \t\"NAME:\\n   test help - Shows a list of commands or help for one command\\n\\nUSAGE:\\n   test help [command]\\n\" does not contain \"NAME:\\n   test - A new cli application\\n\\nUSAGE:\\n   test [global options] [arguments...]\\n\\nGLOBAL OPTIONS:\\n   --foo int, -f int  \\n   --help, -h         show help\\n\"\n        \tTest:       \tTest_HelpCommand_RequiredFlagsNoDefault\n        \tMessages:   \texpected output to include usage text\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.714s\nFAIL",
+   "fixed_seconds": 8.17,
+   "n_tests": 1,
+   "prompt": "Required flags are being enforced even when the user is just asking for help or shell completion, which blocks those features from working. For example:\n\ncmd := &cli.Command{\n    Flags: []cli.Flag{&cli.Int64Flag{Name: \"foo\", Aliases: []string{\"f\"}, Required: true}},\n}\ncmd.Run(context.Background(), []string{\"app\", \"help\"})\n\nThis currently errors out complaining that --foo is required instead of printing the help text. The same problem happens when EnableShellCompletion is set and a required flag is missing - completion should still work. Please fix this so the required-flag check is skipped when running the help or completion commands.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-42779d5d",
+   "sha": "42779d5de5399f012b326e6a010f7e86c223823d",
+   "base": "fd14621cbcd644aa35483480d40f7cdf7b69f4c0",
+   "date": "2026-02-21T18:51:47-05:00",
+   "subject": "Merge pull request #2255 from dearchap/issue_2254",
+   "src_files": [
+    "command_parse.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_parse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.357s\nFAIL",
+   "fixed_seconds": 8.99,
+   "n_tests": 1,
+   "prompt": "With UseShortOptionHandling enabled, combining several short boolean flags with a short flag that takes a value causes the trailing positional argument to be mishandled. For example, given flags -s and -o (bool) and -m (string), running:\n\napp short -som hello /path/to/root\n\nwhere the subcommand has a positional Argument bound to a destination variable - the destination doesn't end up receiving \"/path/to/root\" as expected. Please fix the short-option parsing so the argument following a combined short-option token is handled correctly.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-65ded987",
+   "sha": "65ded98732f170d2485f7a0a4ba9c0012ba8c9cd",
+   "base": "600026fe69d2c2354a7a162d10ae43b271911a7f",
+   "date": "2026-03-01T07:04:50-05:00",
+   "subject": "Merge pull request #2269 from TimSoethout/main",
+   "src_files": [
+    "help.go"
+   ],
+   "test_files": [
+    "help_test.go"
+   ],
+   "gold_files": [
+    "help.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\n--- FAIL: TestShowSubcommandHelp_GlobalOptions_HideHelpCommand (0.00s)\n    help_test.go:843: \n        \tError Trace:\t/tmp/adage-repobench/validate/urfave-cli-65ded987/repo/help_test.go:843\n        \tError:      \t\"NAME:\\n   foo frobbly\\n\\nUSAGE:\\n   foo frobbly\\n\\nOPTIONS:\\n   --bar string  \\n   --help, -h    show help\\n\" does not contain \"NAME:\\n   foo frobbly\\n\\nUSAGE:\\n   foo frobbly [options]\\n\\nOPTIONS:\\n   --bar string  \\n   --help, -h    show help\\n\\nGLOBAL OPTIONS:\\n   --foo string  \\n\"\n        \tTest:       \tTestShowSubcommandHelp_GlobalOptions_HideHelpCommand\n        \tMessages:   \texpected output to include global options\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.329s\nFAIL",
+   "fixed_seconds": 8.09,
+   "n_tests": 1,
+   "prompt": "When a subcommand sets HideHelpCommand: true, its --help output stops showing the GLOBAL OPTIONS section inherited from the parent command, even though the subcommand's own OPTIONS are shown correctly. For example:\n\ncmd := &cli.Command{\n    Flags: []cli.Flag{&cli.StringFlag{Name: \"foo\"}},\n    Commands: []*cli.Command{\n        {\n            Name: \"frobbly\",\n            HideHelpCommand: true,\n            Flags: []cli.Flag{&cli.StringFlag{Name: \"bar\", Local: true}},\n            Action: func(context.Context, *cli.Command) error { return nil },\n        },\n    },\n}\ncmd.Run(context.Background(), []string{\"foo\", \"frobbly\", \"--help\"})\n\nI'd expect the output to still include a GLOBAL OPTIONS section listing --foo. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-a107ee4e",
+   "sha": "a107ee4e9d5ada60a8f10292a045e9a4cbae1450",
+   "base": "f109a216385fc57b71f7513b6377206b6e68514a",
+   "date": "2026-03-13T18:02:01-04:00",
+   "subject": "Merge pull request #2274 from siutsin/fix-MutuallyExclusiveFlags",
+   "src_files": [
+    "command_run.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_run.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.514s\nFAIL",
+   "fixed_seconds": 9.41,
+   "n_tests": 1,
+   "prompt": "MutuallyExclusiveFlags defined on a parent command aren't consistently enforced on its subcommands, especially once a subcommand defines its own MutuallyExclusiveFlags group. For example:\n\nroot := &cli.Command{\n    Name: \"root\",\n    MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{{Flags: [][]cli.Flag{{&cli.StringFlag{Name: \"alpha\"}}, {&cli.StringFlag{Name: \"beta\"}}}}},\n    Commands: []*cli.Command{{Name: \"sub\", Action: noop}},\n}\nroot.Run(context.Background(), []string{\"root\", \"sub\", \"--alpha\", \"hello\", \"--beta\", \"world\"})\n\nThis should error because alpha and beta are mutually exclusive, and it should keep erroring even for deeper subcommand chains (grandchildren) and even when the subcommand defines its own separate mutually-exclusive group. Please fix the mutual-exclusivity check so it's applied across the full parent command chain.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-a2d0cf1d",
+   "sha": "a2d0cf1d520d827910502403d0f0e232bf2c94da",
+   "base": "4dc6aa66962b42149d6a95c722577c7cadc28bcd",
+   "date": "2026-03-24T19:45:23-04:00",
+   "subject": "Merge pull request #2290 from dearchap/issue_2281",
+   "src_files": [
+    "flag_impl.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "flag_impl.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.248s\nFAIL",
+   "fixed_seconds": 8.87,
+   "n_tests": 1,
+   "prompt": "A StringSliceFlag marked Local on a subcommand doesn't accumulate repeated values correctly. For example:\n\napp := &cli.Command{\n    Commands: []*cli.Command{\n        {\n            Name: \"sub\",\n            Flags: []cli.Flag{&cli.StringSliceFlag{Name: \"paths\", Aliases: []string{\"p\"}, Local: true, Destination: &got}},\n            Action: func(_ context.Context, cmd *cli.Command) error { return nil },\n        },\n    },\n}\napp.Run(context.Background(), []string{\"app\", \"sub\", \"-p\", \"/a\", \"-p\", \"/b\", \"-p\", \"/c\"})\n\nI'd expect `got` to contain all three values [\"/a\", \"/b\", \"/c\"], but it doesn't. Please fix the flag value accumulation for local slice flags.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-d3f95867",
+   "sha": "d3f95867d3899a9dda3456d9421125c594b2f109",
+   "base": "a2d0cf1d520d827910502403d0f0e232bf2c94da",
+   "date": "2026-03-25T09:37:02-04:00",
+   "subject": "Merge pull request #2295 from dearchap/issue_2275",
+   "src_files": [
+    "command.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.421s\nFAIL",
+   "fixed_seconds": 8.94,
+   "n_tests": 1,
+   "prompt": "Flag Action callbacks run in the order the flags appear on the command line rather than the order they're declared on the Command, which makes the execution order unpredictable. For example:\n\ncmd := &cli.Command{\n    Flags: []cli.Flag{\n        &cli.BoolFlag{Name: \"a\", Action: func(...) error { str += \"a\"; return nil }},\n        &cli.BoolFlag{Name: \"b\", Action: func(...) error { str += \"b\"; return nil }},\n        &cli.BoolFlag{Name: \"c\", Action: func(...) error { str += \"c\"; return nil }},\n    },\n}\ncmd.Run(context.Background(), []string{\"app\", \"--c\", \"--b\", \"--a\"})\n\nI'd expect `str` to always end up as \"abc\" (declaration order) regardless of the order flags are passed on the command line, but right now it depends on the CLI argument order. Please make flag action execution order consistent.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-41c4f5ff",
+   "sha": "41c4f5ff8d7c6944fd97d0bcf1f5a1d47de75092",
+   "base": "d3f95867d3899a9dda3456d9421125c594b2f109",
+   "date": "2026-03-25T09:37:47-04:00",
+   "subject": "Merge pull request #2297 from idelchi/issue_2293",
+   "src_files": [
+    "command_parse.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_parse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.406s\nFAIL",
+   "fixed_seconds": 8.29,
+   "n_tests": 1,
+   "prompt": "Passing an empty value with `=` syntax, like `--name=`, is incorrectly rejected with a \"flag needs an argument\" error instead of setting the flag to an empty string. For example:\n\ncmd := &cli.Command{\n    Flags: []cli.Flag{&cli.StringFlag{Name: \"name\", Destination: &val}},\n}\ncmd.Run(context.Background(), []string{\"app\", \"--name=\"})\n\nThis should succeed with val set to \"\", not error out. Also, when a positional argument follows, like `app --name= positional`, the positional argument is incorrectly consumed as part of parsing instead of remaining as a normal positional argument. Please fix the handling of `--flag=` with an empty value.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-78e356c8",
+   "sha": "78e356c8ef99e4c360ad82118ed5089f2309975b",
+   "base": "41c4f5ff8d7c6944fd97d0bcf1f5a1d47de75092",
+   "date": "2026-03-25T09:53:02-04:00",
+   "subject": "Merge pull request #2296 from idelchi/issue_2292",
+   "src_files": [
+    "command_parse.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_parse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.284s\nFAIL",
+   "fixed_seconds": 8.82,
+   "n_tests": 1,
+   "prompt": "When running a command with positional arguments, any empty string or whitespace-only argument seems to break the parsing loop. For example:\n\n```go\ncmd := &cli.Command{\n    Action: func(_ context.Context, cmd *cli.Command) error {\n        fmt.Println(cmd.Args().Slice())\n        return nil\n    },\n}\ncmd.Run(context.Background(), []string{\"app\", \"hello\", \"\", \"world\"})\n```\n\nI'd expect this to print `[hello  world]` (preserving the empty arg), but the parse loop doesn't behave correctly when it encounters an empty or whitespace-only positional argument. Please investigate and fix the parsing so empty/whitespace positional args are handled correctly and don't disrupt the rest of the argument list.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-bb94d631",
+   "sha": "bb94d631ab4e494d625cc5f0487a29052a71047c",
+   "base": "d525e78922331468649ed06f88834cc21a4296dd",
+   "date": "2026-04-08T09:26:44-04:00",
+   "subject": "Merge pull request #2287 from markshep-wbg/fix-command-help",
+   "src_files": [
+    "examples_test.go",
+    "help.go"
+   ],
+   "test_files": [
+    "help_test.go"
+   ],
+   "gold_files": [
+    "examples_test.go",
+    "help.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "            \t            \t \n            \t            \t@@ -14,5 +16,3 @@\n            \t            \t \n            \t            \t-OPTIONS:{{template \"visibleFlagTemplate\" .}}{{end}}{{if .VisiblePersistentFlags}}\n            \t            \t+OPTIONS:{{template \"visibleFlagTemplate\" .}}{{end}}\n            \t            \t \n            \t            \t-GLOBAL OPTIONS:{{template \"visiblePersistentFlagTemplate\" .}}{{end}}\n            \t            \t-\n            \tTest:       \tTestShowCommandHelp_HelpPrinterCustom/standard_command\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.337s\nFAIL",
+   "fixed_seconds": 8.16,
+   "n_tests": 1,
+   "prompt": "When a user runs `myapp help my-command` for a top-level command (not a subcommand), the help output uses the wrong template compared to running `myapp my-command --help` directly, so the two produce inconsistent help text for the same command. Expected behaviour is that invoking help for a command via the `help` subcommand renders the same template as invoking `--help` on that command directly. Please fix this inconsistency.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-afd7b867",
+   "sha": "afd7b867a787ab0b83670908de2faa6ff5dcea94",
+   "base": "f831e58087b3c898676444b18632befa34b9056f",
+   "date": "2026-04-16T12:40:04-04:00",
+   "subject": "Merge pull request #2309 from lawrence3699/fix/slice-separator-env-var",
+   "src_files": [
+    "command_run.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_run.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.430s\nFAIL",
+   "fixed_seconds": 9.32,
+   "n_tests": 1,
+   "prompt": "SliceFlagSeparator doesn't seem to be applied when a slice flag's value comes from an environment variable, only when it's passed on the command line. For example:\n\n```go\nos.Setenv(\"APP_FOO\", \"0 1 2\")\ncmd := &cli.Command{\n    SliceFlagSeparator: \" \",\n    Flags: []cli.Flag{\n        &cli.StringSliceFlag{Name: \"foo\", Sources: cli.EnvVars(\"APP_FOO\")},\n    },\n}\ncmd.Run(context.Background(), []string{\"app\"})\n```\n\nI'd expect `cmd.Value(\"foo\")` to be `[0 1 2]`, but the separator isn't being applied to the env var value. Please fix this so SliceFlagSeparator is consistently applied regardless of where the flag value comes from.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-efc63527",
+   "sha": "efc63527f896aa4440fb7434de1980c577f80488",
+   "base": "afd7b867a787ab0b83670908de2faa6ff5dcea94",
+   "date": "2026-04-16T12:41:17-04:00",
+   "subject": "Merge pull request #2310 from Yanhu007/fix/exit-empty-message",
+   "src_files": [
+    "errors.go"
+   ],
+   "test_files": [
+    "errors_test.go"
+   ],
+   "gold_files": [
+    "errors.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.361s\nFAIL",
+   "fixed_seconds": 9.86,
+   "n_tests": 1,
+   "prompt": "When exiting via `cli.Exit(\"\", code)` with an empty message, an unwanted blank line is still printed to stderr. Expected behaviour: if the exit message is empty, nothing should be written to stderr at all. Please fix `HandleExitCoder` (or wherever exit messages are printed) so an empty message produces no stderr output.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-bc00bd4d",
+   "sha": "bc00bd4d77dae229ec7d0cb46b67760e168b28c9",
+   "base": "efc63527f896aa4440fb7434de1980c577f80488",
+   "date": "2026-04-16T12:42:30-04:00",
+   "subject": "Merge pull request #2311 from alliasgher/fix-boolwithinverse-string-panic",
+   "src_files": [
+    "flag_bool_with_inverse.go"
+   ],
+   "test_files": [
+    "flag_bool_with_inverse_test.go"
+   ],
+   "gold_files": [
+    "flag_bool_with_inverse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nGLOBAL OPTIONS:\n   --[no-]env  \n   --help, -h  show help\n--- FAIL: TestBoolWithInverseFlagStringNoPanicWithNoTabStringer (0.00s)\npanic: runtime error: slice bounds out of range [-1:] [recovered]\n\tpanic: runtime error: slice bounds out of range [-1:]\n\ngoroutine 499 [running]:\ntesting.tRunner.func1.2({0x8f3b20, 0xc00042b7d0})\n\t/usr/local/go1.24.7/src/testing/testing.go:1734 +0x21c\ntesting.tRunner.func1()\n\t/usr/local/go1.24.7/src/testing/testing.go:1737 +0x35e\npanic({0x8f3b20?, 0xc00042b7d0?})\n\t/usr/local/go1.24.7/src/runtime/panic.go:792 +0x132\ngithub.com/urfave/cli/v3.(*BoolWithInverseFlag).String(0xc0001ffa40)\n\t/tmp/adage-repobench/validate/urfave-cli-bc00bd4d/repo/flag_bool_with_inverse.go:182 +0x1d9\ngithub.com/urfave/cli/v3.TestBoolWithInverseFlagStringNoPanicWithNoTabStringer(0xc000208380)\n\t/tmp/adage-repobench/validate/urfave-cli-bc00bd4d/repo/flag_bool_with_inverse_test.go:541 +0x9c\ntesting.tRunner(0xc000208380, 0x9537b8)\n\t/usr/local/go1.24.7/src/testing/testing.go:1792 +0xf4\ncreated by testing.(*T).Run in goroutine 1\n\t/usr/local/go1.24.7/src/testing/testing.go:1851 +0x413\nFAIL\tgithub.com/urfave/cli/v3\t0.150s\nFAIL",
+   "fixed_seconds": 8.31,
+   "n_tests": 1,
+   "prompt": "Calling `.String()` on a `BoolWithInverseFlag` panics with `slice bounds out of range [-1:]` if a custom `FlagStringer` is installed that returns a string without a tab character. For example:\n\n```go\ncli.FlagStringer = func(f cli.Flag) string { return \"no tab here\" }\nflag := &cli.BoolWithInverseFlag{Name: \"verbose\"}\nflag.String() // panics\n```\n\nExpected behaviour is that `String()` should not assume the stringer output always contains a tab character, and should still return something sensible containing the flag name. Please fix this panic.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-b79d7689",
+   "sha": "b79d76894ba609be305dbb458a95f1bad6ef7f2f",
+   "base": "2925d6fb2123083aff8262e7442cd276c941c232",
+   "date": "2026-04-18T14:48:22-04:00",
+   "subject": "Merge pull request #2316 from morozov/fix-completion-double-dash",
+   "src_files": [
+    "command_parse.go",
+    "help.go"
+   ],
+   "test_files": [
+    "command_test.go",
+    "completion_test.go",
+    "help_test.go"
+   ],
+   "gold_files": [
+    "command_parse.go",
+    "help.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "            \tError Trace:\t/tmp/adage-repobench/validate/urfave-cli-b79d7689/repo/help_test.go:1453\n            \tError:      \tNot equal: \n            \t            \texpected: \"--excitement\\n--hat-shape\\n\"\n            \t            \tactual  : \"\"\n            \t            \t\n            \t            \tDiff:\n            \t            \t--- Expected\n            \t            \t+++ Actual\n            \t            \t@@ -1,3 +1 @@\n            \t            \t---excitement\n            \t            \t---hat-shape\n            \t            \t \n            \tTest:       \tTestDefaultCompleteWithFlags/flag-suggestion-double-dash-shows-all-flags\n            \tMessages:   \twritten help does not match\n--- FAIL: Test_checkShellCompleteFlag (0.00s)\n    --- FAIL: Test_checkShellCompleteFlag/double_dash_is_the_token_being_completed (0.00s)\n        help_test.go:1926: \n            \tError Trace:\t/tmp/adage-repobench/validate/urfave-cli-b79d7689/repo/help_test.go:1926\n            \tError:      \tNot equal: \n            \t            \texpected: true\n            \t            \tactual  : false\n            \tTest:       \tTest_checkShellCompleteFlag/double_dash_is_the_token_being_completed\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.375s\nFAIL",
+   "fixed_seconds": 9.02,
+   "n_tests": 1,
+   "prompt": "Shell completion doesn't offer flag suggestions once a `--` has been typed (or when completing a flag prefix like `--l`) even though flags should still be completable in that position. For example, completing `foo bar -- <TAB>` should suggest long flags like `--l1`, and completing `foo bar --l<TAB>` should suggest `--l1`, but currently these produce no flag completions. Please fix completion so it correctly suggests matching flags in these cases instead of treating `--` as suppressing all further flag completion.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-f2cd020b",
+   "sha": "f2cd020bd861a905691710c34d8cd6694906c32f",
+   "base": "b79d76894ba609be305dbb458a95f1bad6ef7f2f",
+   "date": "2026-05-03T17:31:10-04:00",
+   "subject": "Merge pull request #2319 from barry3406/fix/help-subcommand-flag-parsing",
+   "src_files": [
+    "command.go",
+    "command_run.go"
+   ],
+   "test_files": [
+    "help_test.go"
+   ],
+   "gold_files": [
+    "command.go",
+    "command_run.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "        \t            \t--- Expected\n        \t            \t+++ Actual\n        \t            \t@@ -1 +1 @@\n        \t            \t-foo\n        \t            \t+\n        \tTest:       \tTest_HelpCommand_ParsesFlags\n        \tMessages:   \texpected --topic flag on help subcommand to be parsed\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.502s\nFAIL",
+   "fixed_seconds": 9.38,
+   "n_tests": 1,
+   "prompt": "If a user defines their own subcommand named `help` with its own flags, those flags are not parsed when the command is invoked. For example:\n\n```go\ncmd := &cli.Command{\n    Name: \"app\",\n    Commands: []*cli.Command{\n        {\n            Name: \"help\",\n            Flags: []cli.Flag{&cli.StringFlag{Name: \"topic\", Aliases: []string{\"t\"}}},\n            Action: func(_ context.Context, c *cli.Command) error {\n                fmt.Println(c.String(\"topic\"))\n                return nil\n            },\n        },\n    },\n}\ncmd.Run(context.Background(), []string{\"app\", \"help\", \"--topic\", \"foo\"})\n```\n\nI'd expect this to print `foo`, but the `--topic` flag is silently dropped because commands named \"help\" skip flag parsing. Please fix this so a user-defined command named \"help\" has its flags parsed normally.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-b5aa7101",
+   "sha": "b5aa7101bd66f4340bfd737fe4bf12496d625632",
+   "base": "f2cd020bd861a905691710c34d8cd6694906c32f",
+   "date": "2026-05-09T17:35:44-04:00",
+   "subject": "Merge pull request #2321 from wucm667/fix/bool-inverse-alias-help",
+   "src_files": [
+    "flag_bool_with_inverse.go"
+   ],
+   "test_files": [
+    "flag_bool_with_inverse_test.go",
+    "testdata/godoc-v3.x.txt"
+   ],
+   "gold_files": [
+    "flag_bool_with_inverse.go",
+    "godoc-current.txt"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.347s\nFAIL",
+   "fixed_seconds": 9.16,
+   "n_tests": 1,
+   "prompt": "When a `BoolWithInverseFlag` has aliases defined, they don't show up in the flag's help/string output. For example, a flag `&cli.BoolWithInverseFlag{Name: \"color\", Aliases: []string{\"c\"}}` should render as `--[no-]color, -c\t(default: false)` when calling `.String()`, but the aliases are currently omitted entirely. Please fix `String()` so it includes any configured aliases alongside the `--[no-]` form.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-9229c617",
+   "sha": "9229c617cb4ed5983b42fd8cd689895c332a3e3e",
+   "base": "7f454752e4070fdc37850b93c4b43ef59614daae",
+   "date": "2026-05-16T10:52:21-04:00",
+   "subject": "Merge pull request #2280 from MohitPanchariya/issue2257",
+   "src_files": [
+    "command_run.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_run.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.396s\nFAIL",
+   "fixed_seconds": 9.93,
+   "n_tests": 1,
+   "prompt": "When a root command has a flag and a subcommand, and the user also passes a trailing positional argument whose value happens to match the flag's name, the resulting `Args()` on the context are wrong. For example:\n\n```go\ncmd := &Command{\n    Name:  \"rootCommand\",\n    Flags: []Flag{&StringFlag{Name: \"flag\"}},\n    Commands: []*Command{{Name: \"subCommand\"}},\n    Action: func(ctx context.Context, c *Command) error {\n        fmt.Println(c.Args().Slice()) // expect [\"flag\"]\n        return nil\n    },\n}\ncmd.Run(context.Background(), []string{\"rootCommand\", \"--flag\", \"flagvalue\", \"flag\"})\n```\n\nThe trailing `flag` argument should be treated as a plain positional argument (`[\"flag\"]`), not misinterpreted because it shares a name with a defined flag. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-77c21506",
+   "sha": "77c21506ec8566a24d6e27f2a2d0f547807f6e76",
+   "base": "eb79f0545a47972c87c7c41b99d36fc5012423c9",
+   "date": "2026-05-24T17:20:29-04:00",
+   "subject": "Merge pull request #2329 from c-tonneslan/fix/inherit-parent-writer-to-subcommand",
+   "src_files": [
+    "command_setup.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_setup.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.262s\nFAIL",
+   "fixed_seconds": 9.61,
+   "n_tests": 1,
+   "prompt": "When a custom Writer and ErrWriter are set on a root Command, subcommands don't inherit them \u2014 their `c.Writer`/`c.ErrWriter` end up pointing at `os.Stdout`/`os.Stderr` instead of the parent's writers. Example:\n\n```go\nvar out, errOut bytes.Buffer\nroot := &Command{\n    Name: \"demo\", Writer: &out, ErrWriter: &errOut,\n    Commands: []*Command{{\n        Name: \"sub\",\n        Action: func(_ context.Context, c *Command) error {\n            fmt.Fprintln(c.Writer, \"from sub\")\n            return nil\n        },\n    }},\n}\nroot.Run(context.Background(), []string{\"demo\", \"sub\"})\n// out is empty; \"from sub\" went to os.Stdout instead\n```\n\nA Writer/ErrWriter set on the root command should be inherited by subcommands so output written via `c.Writer`/`c.ErrWriter` inside a subcommand's Action actually goes to the configured buffer. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-2c38e7b6",
+   "sha": "2c38e7b6c7e3b25df239997b37111e639cb26b0f",
+   "base": "213b98c817bf5531f8c1eec4d7d1f7bf3c423a97",
+   "date": "2026-06-14T05:39:14-04:00",
+   "subject": "Merge pull request #2360 from dearchap/issue_2126",
+   "src_files": [
+    "command_run.go",
+    "help.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_run.go",
+    "help.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.277s\nFAIL",
+   "fixed_seconds": 10.19,
+   "n_tests": 1,
+   "prompt": "When `--help`/`-h` is passed together with an unrecognized flag, the parse error for the unknown flag takes precedence and help is not shown \u2014 but it should be the other way around. For example:\n\n```go\ncmd := &Command{Action: func(ctx context.Context, cmd *Command) error { return nil }}\nerr := cmd.Run(context.Background(), []string{\"command\", \"--help\", \"--undefined\"})\n```\n\nThis currently reports an \"Incorrect Usage\" parse error instead of printing help and returning nil. The same happens for `-h` on the root command and for `--help` combined with a bad flag on a subcommand. Whenever `--help`/`-h` is present, it should take precedence and display help without error, regardless of other unrecognized flags in the same invocation (a bad flag alone, without `--help`, should still produce the usual \"Incorrect Usage\" error). Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-183b3a2c",
+   "sha": "183b3a2c640e0f3b4e9a084b65f1cea9acd79fb1",
+   "base": "2c38e7b6c7e3b25df239997b37111e639cb26b0f",
+   "date": "2026-06-14T09:21:27-04:00",
+   "subject": "Merge pull request #2363 from dearchap/issue_2250",
+   "src_files": [
+    "command_run.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_run.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.364s\nFAIL",
+   "fixed_seconds": 10.56,
+   "n_tests": 1,
+   "prompt": "When a subcommand is invoked with `--help`, the root command's `After` hook still runs even though the subcommand's Action never executes. For example:\n\n```go\nvar afterCalled bool\ncmd := &Command{\n    After: func(_ context.Context, _ *Command) error { afterCalled = true; return nil },\n    Commands: []*Command{{Name: \"sub\", Action: func(context.Context, *Command) error { return nil }}},\n}\ncmd.Run(context.Background(), []string{\"app\", \"sub\", \"--help\"})\n// afterCalled is true, but sub's Action never ran\n```\n\n`After` should only be invoked when the command actually executes normally (as it correctly does for `[]string{\"app\", \"sub\"}`), not when help is displayed for a subcommand instead of running it. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-49e84c0a",
+   "sha": "49e84c0ad91ada4dfffe075505b4af03c3232695",
+   "base": "02425744c749f33572ec7a62a0a56e3d9a1f0191",
+   "date": "2026-06-28T07:40:38-04:00",
+   "subject": "Merge pull request #2330 from c-tonneslan/fix/version-alias-conflict-with-user-flag",
+   "src_files": [
+    "command_setup.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_setup.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "FAIL\tgithub.com/urfave/cli/v3 [build failed]\nFAIL\n\n# github.com/urfave/cli/v3 [github.com/urfave/cli/v3.test]\n./command_test.go:3065:29: undefined: dropClashingAliases",
+   "fixed_seconds": 10.27,
+   "n_tests": 1,
+   "prompt": "When the built-in version flag's short alias `-v` clashes with a user-defined flag that also uses `-v` as an alias (e.g. a `--verbose`/`-v` bool flag), `--version` itself stops working. For example:\n\n```go\ncmd := &Command{\n    Name: \"boom\", Version: \"0.1.0\",\n    Flags: []Flag{&BoolFlag{Name: \"verbose\", Aliases: []string{\"v\"}}},\n    Action: func(_ context.Context, _ *Command) error { return nil },\n}\ncmd.Run(context.Background(), []string{\"boom\", \"--version\"})\n```\n\nHere `--version` (the long form) should still print the version and short-circuit the action, even though the `-v` short alias was ceded to the user's `verbose` flag because of the naming clash. Only the clashing alias should be dropped from the version flag, not the whole flag or its primary long name. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-02bdfb09",
+   "sha": "02bdfb095e7c87878040716efe62e50efafbf158",
+   "base": "49e84c0ad91ada4dfffe075505b4af03c3232695",
+   "date": "2026-06-28T07:45:02-04:00",
+   "subject": "Merge pull request #2374 from urfave/fix/completion-subcommand-order",
+   "src_files": [
+    "completion.go"
+   ],
+   "test_files": [
+    "completion_test.go"
+   ],
+   "gold_files": [
+    "completion.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "FAIL\tgithub.com/urfave/cli/v3 [build failed]\nFAIL\n\n# github.com/urfave/cli/v3 [github.com/urfave/cli/v3.test]\n./completion_test.go:140:16: undefined: completionShells\n./completion_test.go:142:22: undefined: completionShells\n./completion_test.go:525:56: undefined: completionShells\n./completion_test.go:526:28: undefined: completionShells\n./completion_test.go:558:56: undefined: completionShells\n./completion_test.go:559:28: undefined: completionShells",
+   "fixed_seconds": 10.19,
+   "n_tests": 1,
+   "prompt": "The shell completion subcommands (bash, zsh, fish, pwsh) shown in help output appear in a random order between runs instead of a consistent one, apparently because they're built from a map. This makes generated docs and help text unstable across invocations even though nothing about the command definition changed. Building the completion command repeatedly should always list its subcommands in the same, fixed order (bash, zsh, fish, pwsh), and every registered completion shell should be represented. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-c5f123b3",
+   "sha": "c5f123b3909fb3270433574d9940650579cf9820",
+   "base": "02bdfb095e7c87878040716efe62e50efafbf158",
+   "date": "2026-06-28T07:49:37-04:00",
+   "subject": "Merge pull request #2322 from lihan3238/fix-2249",
+   "src_files": [
+    "command_parse.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_parse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.379s\nFAIL",
+   "fixed_seconds": 10.19,
+   "n_tests": 1,
+   "prompt": "When a Command sets `DefaultCommand`, flags defined on that default subcommand aren't recognized if the subcommand name is omitted from the invocation \u2014 the user gets an error even though the flag belongs to the command that would run by default. For example:\n\n```go\ncmd := &Command{\n    DefaultCommand: \"run1\",\n    Commands: []*Command{\n        {Name: \"run1\", Flags: []Flag{&StringFlag{Name: \"foo\", Required: true}}, Action: func(ctx context.Context, cmd *Command) error { return nil }},\n        {Name: \"run2\", Flags: []Flag{&StringFlag{Name: \"value\", Required: true}}, Action: func(ctx context.Context, cmd *Command) error { return nil }},\n    },\n}\ncmd.Run(context.Background(), []string{\"c\", \"--foo\", \"bar\"})\n```\n\nThis should route to `run1` and accept `--foo bar`, but it fails instead. This also affects short flags and combined short-option handling (e.g. `-f baz` for an aliased flag). Please fix this so a DefaultCommand's own flags work correctly even when its name is omitted.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-fd8b8c5d",
+   "sha": "fd8b8c5d7e30cc3247a957f3b4de0e1b0b2a72ef",
+   "base": "c6f4cf7e9223793478cfcde9b8f135cc8f86e78f",
+   "date": "2026-08-15T09:48:04-04:00",
+   "subject": "Merge pull request #2388 from vidigoat/fix/hidden-flag-completion",
+   "src_files": [
+    "help.go"
+   ],
+   "test_files": [
+    "help_test.go"
+   ],
+   "gold_files": [
+    "help.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\n--- FAIL: TestDefaultCompleteWithFlags (0.00s)\n    --- FAIL: TestDefaultCompleteWithFlags/typical-flag-suggestion-hidden-non-bool (0.00s)\n        help_test.go:1504: \n            \tError Trace:\t/tmp/adage-repobench/validate/urfave-cli-fd8b8c5d/repo/help_test.go:1504\n            \tError:      \tNot equal: \n            \t            \texpected: \"--excitement\\n\"\n            \t            \tactual  : \"--excellent\\n--excitement\\n\"\n            \t            \t\n            \t            \tDiff:\n            \t            \t--- Expected\n            \t            \t+++ Actual\n            \t            \t@@ -1 +1,2 @@\n            \t            \t+--excellent\n            \t            \t --excitement\n            \tTest:       \tTestDefaultCompleteWithFlags/typical-flag-suggestion-hidden-non-bool\n            \tMessages:   \twritten help does not match\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.362s\nFAIL",
+   "fixed_seconds": 10.32,
+   "n_tests": 1,
+   "prompt": "Shell completion suggestions incorrectly include hidden flags that aren't boolean. It looks like completion only skips hidden flags when they're `BoolFlag`s, but hidden flags of other types (e.g. `StringFlag`) still show up as suggestions. For example, with a `StringFlag{Name: \"excellent\", Hidden: true}` and a `StringFlag{Name: \"excitement\"}` both matching a `--e` prefix, completion should only suggest `--excitement`, but the hidden one leaks through too. All hidden flags, regardless of type, should be excluded from completion suggestions. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-d5ce7733",
+   "sha": "d5ce7733f5f914615a50873c2447b2950adad785",
+   "base": "fd8b8c5d7e30cc3247a957f3b4de0e1b0b2a72ef",
+   "date": "2026-08-15T10:09:49-04:00",
+   "subject": "Merge pull request #2400 from mrueg/fix/nil-deref-interface-typed-flags",
+   "src_files": [
+    "flag_impl.go"
+   ],
+   "test_files": [
+    "flag_test.go"
+   ],
+   "gold_files": [
+    "flag_impl.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "Incorrect Usage: invalid value \"s\" for flag -cd: strconv.ParseInt: parsing \"s\": invalid syntax\n\n--- FAIL: TestFlagBaseInterfaceValueType (0.00s)\n    --- FAIL: TestFlagBaseInterfaceValueType/SchemaItemsType (0.00s)\npanic: runtime error: invalid memory address or nil pointer dereference [recovered]\n\tpanic: runtime error: invalid memory address or nil pointer dereference\n[signal SIGSEGV: segmentation violation code=0x1 addr=0xa8 pc=0x7b553c]\n\ngoroutine 918 [running]:\ntesting.tRunner.func1.2({0x8bba20, 0xd6bcb0})\n\t/usr/local/go1.24.7/src/testing/testing.go:1734 +0x21c\ntesting.tRunner.func1()\n\t/usr/local/go1.24.7/src/testing/testing.go:1737 +0x35e\npanic({0x8bba20?, 0xd6bcb0?})\n\t/usr/local/go1.24.7/src/runtime/panic.go:792 +0x132\ngithub.com/urfave/cli/v3.(*FlagBase[...]).SchemaItemsType(0x66b?)\n\t/tmp/adage-repobench/validate/urfave-cli-d5ce7733/repo/flag_impl.go:320 +0x3c\ngithub.com/urfave/cli/v3.TestFlagBaseInterfaceValueType.func1(0xc0004ea380)\n\t/tmp/adage-repobench/validate/urfave-cli-d5ce7733/repo/flag_test.go:3527 +0x79\ntesting.tRunner(0xc0004ea380, 0x96e440)\n\t/usr/local/go1.24.7/src/testing/testing.go:1792 +0xf4\ncreated by testing.(*T).Run in goroutine 917\n\t/usr/local/go1.24.7/src/testing/testing.go:1851 +0x413\nFAIL\tgithub.com/urfave/cli/v3\t0.368s\nFAIL",
+   "fixed_seconds": 9.66,
+   "n_tests": 1,
+   "prompt": "When a flag whose Value type is an interface (like GenericFlag) is left with its zero value, calling flag introspection or parsing it from an env source panics with a nil pointer dereference instead of behaving gracefully. For example:\n\n```go\nfl := &GenericFlag{Name: \"gen\"}\nfl.SchemaItemsType() // panics\n```\n\nSimilarly, parsing a GenericFlag with no Value set but a Sources env var that is empty or set should not panic. Please fix this so interface-typed flags with an unset Value don't cause a panic.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-f8c26d53",
+   "sha": "f8c26d53c061a6f5d055cf345923fe1e3515756c",
+   "base": "d5ce7733f5f914615a50873c2447b2950adad785",
+   "date": "2026-08-15T10:13:44-04:00",
+   "subject": "Merge pull request #2401 from mrueg/fix/panic-on-empty-osargs",
+   "src_files": [
+    "command_setup.go",
+    "help.go"
+   ],
+   "test_files": [
+    "command_test.go",
+    "help_test.go"
+   ],
+   "gold_files": [
+    "command_setup.go",
+    "help.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nGLOBAL OPTIONS:\n   --help, -h  show help\n--- FAIL: Test_checkShellCompleteFlag (0.00s)\n    --- FAIL: Test_checkShellCompleteFlag/no_arguments_at_all (0.00s)\npanic: runtime error: index out of range [-1] [recovered]\n\tpanic: runtime error: index out of range [-1]\n\ngoroutine 1170 [running]:\ntesting.tRunner.func1.2({0x90bb80, 0xc00001e7b0})\n\t/usr/local/go1.24.7/src/testing/testing.go:1734 +0x21c\ntesting.tRunner.func1()\n\t/usr/local/go1.24.7/src/testing/testing.go:1737 +0x35e\npanic({0x90bb80?, 0xc00001e7b0?})\n\t/usr/local/go1.24.7/src/runtime/panic.go:792 +0x132\ngithub.com/urfave/cli/v3.checkShellCompleteFlag(0xc0003a0380?, {0xda3060, 0x0, 0x0})\n\t/tmp/adage-repobench/validate/urfave-cli-f8c26d53/repo/help.go:480 +0x151\ngithub.com/urfave/cli/v3.Test_checkShellCompleteFlag.func1(0xc0003a0380)\n\t/tmp/adage-repobench/validate/urfave-cli-f8c26d53/repo/help_test.go:1985 +0x45\ntesting.tRunner(0xc0003a0380, 0xc0004d2ea0)\n\t/usr/local/go1.24.7/src/testing/testing.go:1792 +0xf4\ncreated by testing.(*T).Run in goroutine 1085\n\t/usr/local/go1.24.7/src/testing/testing.go:1851 +0x413\nFAIL\tgithub.com/urfave/cli/v3\t0.351s\nFAIL",
+   "fixed_seconds": 10.42,
+   "n_tests": 1,
+   "prompt": "Calling Run with an empty argument slice causes an index out of range panic instead of running the command's default Action. For example:\n\n```go\ncmd := &Command{Name: \"foo\", Action: func(context.Context, *Command) error { return nil }}\ncmd.Run(context.Background(), []string{})\n```\n\nThis panics even for plain commands and ones with shell completion enabled. Please fix Run so it handles an empty args slice without panicking, still invoking the Action as expected.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-4c19740a",
+   "sha": "4c19740af571db4fa063de81c7ab0e56c5085fa2",
+   "base": "f8c26d53c061a6f5d055cf345923fe1e3515756c",
+   "date": "2026-08-15T10:15:08-04:00",
+   "subject": "Merge pull request #2403 from fzlzjerry/fix/2402-bool-inverse-default-text",
+   "src_files": [
+    "flag_bool_with_inverse.go"
+   ],
+   "test_files": [
+    "flag_bool_with_inverse_test.go",
+    "flag_test.go"
+   ],
+   "gold_files": [
+    "flag_bool_with_inverse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.365s\nFAIL",
+   "fixed_seconds": 10.26,
+   "n_tests": 1,
+   "prompt": "BoolWithInverseFlag ignores the DefaultText field when rendering its default value in help output and via GetDefaultText. For example:\n\n```go\nfl := &BoolWithInverseFlag{Name: \"vividly\", DefaultText: \"auto\"}\nfmt.Println(fl.GetDefaultText()) // prints \"false\" instead of \"auto\"\n```\n\nThe rendered flag help also shows `(default: false)` instead of `(default: auto)`. Please make BoolWithInverseFlag honor a custom DefaultText the same way other flag types do.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-339a3758",
+   "sha": "339a3758c3b9512dc461588385bd2bff016acb0d",
+   "base": "4c19740af571db4fa063de81c7ab0e56c5085fa2",
+   "date": "2026-08-15T21:30:15-04:00",
+   "subject": "Merge pull request #2386 from BrandonIrizarry/bci",
+   "src_files": [
+    "flag_mutex.go"
+   ],
+   "test_files": [
+    "flag_mutex_test.go"
+   ],
+   "gold_files": [
+    "flag_mutex.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nNAME:\n   cli.test - A new cli application\n\nUSAGE:\n   cli.test [global options] [command [command options]]\n\nCOMMANDS:\n   nully  \n\nGLOBAL OPTIONS:\n   --help, -h  show help\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.340s\nFAIL",
+   "fixed_seconds": 11.12,
+   "n_tests": 1,
+   "prompt": "In a mutually exclusive flag group with more than two flags, setting two non-adjacent members doesn't produce the correct conflict error. For example, given a group containing flags `i`, `ai`, and `q`, running with `--i 11 --q` should report that `i` conflicts with `q`, but the error message/behavior is wrong because the conflict check doesn't consider all members of the group. Please fix the mutually exclusive flag validation so it correctly detects and reports conflicts between any pair of set flags in the group, not just adjacent ones.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-79f8fc7a",
+   "sha": "79f8fc7a415bb2a36c2bb8b9f840d838dfb13a07",
+   "base": "339a3758c3b9512dc461588385bd2bff016acb0d",
+   "date": "2026-08-15T21:35:50-04:00",
+   "subject": "Merge pull request #2395 from utkarshalpha/fix/hide-help-command-inheritance",
+   "src_files": [
+    "command.go",
+    "command_setup.go"
+   ],
+   "test_files": [
+    "help_test.go",
+    "testdata/godoc-v3.x.txt"
+   ],
+   "gold_files": [
+    "command.go",
+    "command_setup.go",
+    "godoc-current.txt"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "USAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\n--- FAIL: TestHideHelpCommand_WithSubcommands (0.01s)\n    help_test.go:1297: \n        \tError Trace:\t/tmp/adage-repobench/validate/urfave-cli-79f8fc7a/repo/help_test.go:1297\n        \tError:      \tAn error is expected but got nil.\n        \tTest:       \tTestHideHelpCommand_WithSubcommands\n--- FAIL: TestHideHelpCommand_SubcommandCannotOptBackIn (0.00s)\n    help_test.go:1325: \n        \tError Trace:\t/tmp/adage-repobench/validate/urfave-cli-79f8fc7a/repo/help_test.go:1325\n        \tError:      \tAn error is expected but got nil.\n        \tTest:       \tTestHideHelpCommand_SubcommandCannotOptBackIn\nIncorrect Usage: flag provided but not defined: -help\n\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.473s\nFAIL",
+   "fixed_seconds": 9.51,
+   "n_tests": 1,
+   "prompt": "When HideHelpCommand is set to true on a root Command, its subcommands still show the built-in `help` command/topic in their own `--help` output and don't inherit the hidden setting. For example:\n\n```go\ncmd := &Command{\n    HideHelpCommand: true,\n    Commands: []*Command{{Name: \"nully\", Commands: []*Command{{Name: \"nully2\"}}}},\n}\ncmd.Run(ctx, []string{\"cli.test\", \"nully\", \"--help\"}) // still lists \"help, h\"\n```\n\nThis should behave like HideHelp already does: once a command hides the help command, all of its descendant subcommands should inherit that and not be able to opt back in even if they explicitly set HideHelpCommand to false. Please fix this inheritance.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-69b39a41",
+   "sha": "69b39a411e1424d4fc3550a5d618cab5f20c5c7b",
+   "base": "dfcc6ec88024dfce2c191036cc1b5611a1ec51d4",
+   "date": "2026-09-04T10:05:37-04:00",
+   "subject": "Merge pull request #2421 from justadityaraj/fix/show-inherited-persistent-flags",
+   "src_files": [
+    "command.go"
+   ],
+   "test_files": [
+    "help_test.go"
+   ],
+   "gold_files": [
+    "command.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "ntOptions (0.00s)\n    help_test.go:934: \n        \tError Trace:\t/tmp/adage-repobench/validate/urfave-cli-69b39a41/repo/help_test.go:934\n        \tError:      \t\"NAME:\\n   root mid leaf\\n\\nUSAGE:\\n   root mid leaf [options]\\n\\nOPTIONS:\\n   --help, -h  show help\\n\\nGLOBAL OPTIONS:\\n   --root-persistent string  \\n   --shared string           from root\\n\" does not contain \"--mid-persistent string\"\n        \tTest:       \tTestShowSubcommandHelp_InheritedPersistentOptions\n    help_test.go:935: \n        \tError Trace:\t/tmp/adage-repobench/validate/urfave-cli-69b39a41/repo/help_test.go:935\n        \tError:      \t\"NAME:\\n   root mid leaf\\n\\nUSAGE:\\n   root mid leaf [options]\\n\\nOPTIONS:\\n   --help, -h  show help\\n\\nGLOBAL OPTIONS:\\n   --root-persistent string  \\n   --shared string           from root\\n\" does not contain \"from intermediate\"\n        \tTest:       \tTestShowSubcommandHelp_InheritedPersistentOptions\n    help_test.go:936: \n        \tError Trace:\t/tmp/adage-repobench/validate/urfave-cli-69b39a41/repo/help_test.go:936\n        \tError:      \t\"NAME:\\n   root mid leaf\\n\\nUSAGE:\\n   root mid leaf [options]\\n\\nOPTIONS:\\n   --help, -h  show help\\n\\nGLOBAL OPTIONS:\\n   --root-persistent string  \\n   --shared string           from root\\n\" should not contain \"from root\"\n        \tTest:       \tTestShowSubcommandHelp_InheritedPersistentOptions\nIncorrect Usage: flag provided but not defined: -help\n\nIncorrect Usage: flag provided but not defined: -help\n\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.546s\nFAIL",
+   "fixed_seconds": 10.0,
+   "n_tests": 1,
+   "prompt": "When a Command has nested subcommands several levels deep, running `--help` on a deeply nested subcommand only shows flags inherited from its immediate parent, not from further-up ancestors. For example:\n\n```go\ncmd := &Command{\n    Flags: []Flag{&StringFlag{Name: \"root-persistent\"}, &StringFlag{Name: \"shared\", Usage: \"from root\"}},\n    Commands: []*Command{{\n        Name: \"mid\",\n        Flags: []Flag{&StringFlag{Name: \"mid-persistent\"}, &StringFlag{Name: \"shared\", Usage: \"from intermediate\"}},\n        Commands: []*Command{{Name: \"leaf\"}},\n    }},\n}\ncmd.Run(ctx, []string{\"root\", \"mid\", \"leaf\", \"--help\"})\n```\n\nThe help output for `leaf` is missing `--root-persistent` even though it should be inherited from the root, while `--mid-persistent` and the `shared` flag's usage text from the closer ancestor (`mid`) are correctly shown. Please fix subcommand help so it shows persistent flags inherited from all ancestors, with the closest ancestor's definition winning for flags defined at multiple levels.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-50812189",
+   "sha": "50812189740e4ef6939c4037b0ef37adc100ac29",
+   "base": "69b39a411e1424d4fc3550a5d618cab5f20c5c7b",
+   "date": "2026-09-04T10:27:30-04:00",
+   "subject": "Merge pull request #2423 from lenamonj/fix-positional-whitespace",
+   "src_files": [
+    "command_parse.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_parse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   foo [global options]\n\nGLOBAL OPTIONS:\n   --it int    (default: 5)\n   --help, -h  show help\nIncorrect Usage: invalid value \"false\" for flag -it: not valid\n\nNAME:\n   foo - A new cli application\n\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nIncorrect Usage: flag provided but not defined: -help\n\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.512s\nFAIL",
+   "fixed_seconds": 11.1,
+   "n_tests": 1,
+   "prompt": "Positional arguments that contain only whitespace, or leading/trailing whitespace, are getting trimmed or otherwise altered before they reach the Action via cmd.Args(). For example:\n\n```go\ncmd := &Command{\n    Name: \"prog\",\n    Action: func(_ context.Context, cmd *Command) error {\n        fmt.Println(cmd.Args().Slice()) // expected [\"  padded  \", \"\\ttabbed\\t\"]\n        return nil\n    },\n}\ncmd.Run(context.Background(), []string{\"prog\", \"  padded  \", \"\\ttabbed\\t\"})\n```\n\nThe whitespace in these positional arguments should be preserved exactly as passed in. Please fix argument parsing so it doesn't strip whitespace from positional args.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-72ca6b88",
+   "sha": "72ca6b88802bbe74d24aa2d4a83a07bff4b0e2ea",
+   "base": "50812189740e4ef6939c4037b0ef37adc100ac29",
+   "date": "2026-09-13T17:21:44-04:00",
+   "subject": "Merge pull request #2427 from youdie006/timestamp-yearless-january-first",
+   "src_files": [
+    "flag_timestamp.go"
+   ],
+   "test_files": [
+    "flag_test.go"
+   ],
+   "gold_files": [
+    "flag_timestamp.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   foo [global options]\n\nGLOBAL OPTIONS:\n   --it int    (default: 5)\n   --help, -h  show help\nIncorrect Usage: invalid value \"false\" for flag -it: not valid\n\nNAME:\n   foo - A new cli application\n\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nIncorrect Usage: flag provided but not defined: -help\n\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.249s\nFAIL",
+   "fixed_seconds": 11.98,
+   "n_tests": 1,
+   "prompt": "TimestampFlag with a year-less layout (one without a year component, e.g. \"01-02\") mishandles a parsed date of January 1st. For example:\n\n```go\ncmd := &Command{\n    Flags: []Flag{&TimestampFlag{Name: \"time\", Config: TimestampConfig{Layouts: []string{\"01-02\"}}}},\n    Action: func(_ context.Context, cmd *Command) error {\n        fmt.Println(cmd.Timestamp(\"time\"))\n        return nil\n    },\n}\ncmd.Run(context.Background(), []string{\"app\", \"--time\", \"01-01\"})\n```\n\nParsing \"01-01\" should produce January 1 of the current year (same as any other date would resolve to the current year), but it doesn't come out correctly, apparently because January 1 is being confused with Go's zero-value date. The same issue affects layouts like \"Jan _2 15:04:05\" when the day is January 1. Please fix the year-less timestamp handling so January 1 is treated like any other date.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-7fc67828",
+   "sha": "7fc67828d030c0892f7504df3ac29ce4a59979ba",
+   "base": "4c05a5cb71d9c95b596ea2ab33e3ad369f5b03a9",
+   "date": "2026-09-14T10:29:01-04:00",
+   "subject": "Merge pull request #2426 from fzlzjerry/fix/2248-partial-flags-after-positional-args",
+   "src_files": [
+    "help.go"
+   ],
+   "test_files": [
+    "completion_partial_regression_test.go"
+   ],
+   "gold_files": [
+    "help.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   foo [global options]\n\nGLOBAL OPTIONS:\n   --it int    (default: 5)\n   --help, -h  show help\nIncorrect Usage: invalid value \"false\" for flag -it: not valid\n\nNAME:\n   foo - A new cli application\n\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nIncorrect Usage: flag provided but not defined: -help\n\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.330s\nFAIL",
+   "fixed_seconds": 11.98,
+   "n_tests": 1,
+   "prompt": "Shell completion for a partially-typed flag stops working once a positional argument has already been given, especially for subcommands. For example, with EnableShellCompletion on a command that has a subcommand `sub` with flags `--param-sub-one` and `--param-sub-two`, running `app sub value --pa --generate-shell-completion` should print the matching `--param-sub-*` flag names, but instead nothing useful is produced (and it should also work for deeper nested subcommands and multiple positional args). Completion right after `--` should still produce no flag suggestions. Please fix flag-name completion so it works correctly regardless of preceding positional arguments and at any subcommand depth.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-9b981a04",
+   "sha": "9b981a04295de5121091c479f8a7a0476d2e8d38",
+   "base": "7fc67828d030c0892f7504df3ac29ce4a59979ba",
+   "date": "2026-09-14T10:29:17-04:00",
+   "subject": "Merge pull request #2425 from BenYang12/fix/preserve-equals-flag-whitespace",
+   "src_files": [
+    "command_parse.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_parse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   foo [global options]\n\nGLOBAL OPTIONS:\n   --it int    (default: 5)\n   --help, -h  show help\nIncorrect Usage: invalid value \"false\" for flag -it: not valid\n\nNAME:\n   foo - A new cli application\n\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nIncorrect Usage: flag provided but not defined: -help\n\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.413s\nFAIL",
+   "fixed_seconds": 11.14,
+   "n_tests": 1,
+   "prompt": "When a flag value is passed using the `--flag=value` equals form, surrounding whitespace in the value is being stripped even though it shouldn't be by default, while the same whitespace is preserved when the value is passed as a separate argument (`--flag value`). This affects string, slice, and map flags, including values with only whitespace, tabs, newlines, unicode spaces, or an embedded `=` character. Whitespace should only be trimmed when a flag explicitly opts into `TrimSpace` via its `StringConfig`. Also check that trailing whitespace after an `=value` for int/bool flags still correctly produces a parse error. Please fix flag value parsing so equals-form values preserve whitespace consistently with space-separated values.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-b7cfd406",
+   "sha": "b7cfd40630f5767e58b35d21137444af15722c5d",
+   "base": "7885ee8216c71ecfafd59156c1ad6229586dbc9a",
+   "date": "2026-09-20T09:51:53-04:00",
+   "subject": "Merge pull request #2432 from jakezwang/fix/inverse-bool-external-count",
+   "src_files": [
+    "flag_bool_with_inverse.go"
+   ],
+   "test_files": [
+    "flag_bool_with_inverse_test.go"
+   ],
+   "gold_files": [
+    "flag_bool_with_inverse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   foo [global options]\n\nGLOBAL OPTIONS:\n   --it int    (default: 5)\n   --help, -h  show help\nIncorrect Usage: invalid value \"false\" for flag -it: not valid\n\nNAME:\n   foo - A new cli application\n\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nIncorrect Usage: flag provided but not defined: -help\n\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.296s\nFAIL",
+   "fixed_seconds": 10.3,
+   "n_tests": 1,
+   "prompt": "`BoolWithInverseFlag` miscounts occurrences when an external counter is supplied via `Config.Count`. For example, setting `fl.Config.Count = &count` (with `count` pre-initialized to some value) and then running the command with the flag passed twice (e.g. `--env --env` or via its alias/inverse forms like `--no-env`) should add 2 to the external counter and make `fl.Count()` return 2, but the external counter isn't updated correctly. This should also behave correctly when `OnlyOnce` is set, where a duplicate use should error and the count should only increase by 1. Please fix the counting logic for `BoolWithInverseFlag` when an external count pointer is configured.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-ae1fde92",
+   "sha": "ae1fde92d52c18cb0e713172915a0b94f1c5daa3",
+   "base": "277cbea35016fe8e389643ffe9f659ea2e9efe8b",
+   "date": "2026-09-20T10:19:32-04:00",
+   "subject": "Merge pull request #2434 from znnnnnnn-wil/fix/2433-unicode-flag-runes",
+   "src_files": [
+    "command_parse.go",
+    "docs.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_parse.go",
+    "docs.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   foo [global options]\n\nGLOBAL OPTIONS:\n   --it int    (default: 5)\n   --help, -h  show help\nIncorrect Usage: invalid value \"false\" for flag -it: not valid\n\nNAME:\n   foo - A new cli application\n\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nIncorrect Usage: flag provided but not defined: -help\n\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.392s\nFAIL",
+   "fixed_seconds": 11.09,
+   "n_tests": 1,
+   "prompt": "Flags whose name is a single non-ASCII Unicode character (e.g. a Hebrew letter like `\u05e9`) aren't parsed correctly. For example, defining `&StringFlag{Name: \"\u05e9\"}` and then running the command with `-\u05e9 value`, the flag's prefix and parsing should treat `\u05e9` as a single-rune short flag (so `prefixFor(\"\u05e9\")` should return `\"-\"`) and correctly capture `value`, but currently it doesn't. Please fix flag name/prefix handling so single-rune Unicode flag names work the same way single-rune ASCII flag names do.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-e3f7e35f",
+   "sha": "e3f7e35fff660dfee418092358709ea6440cc839",
+   "base": "4fa44ab9ea85ac65410c91c77efeb72a4e8517bc",
+   "date": "2026-09-24T17:16:03+08:00",
+   "subject": "Merge pull request #2440 from lazerg/fix/2439-inverse-bool-short-option-group",
+   "src_files": [
+    "command_parse.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_parse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   foo [global options]\n\nGLOBAL OPTIONS:\n   --it int    (default: 5)\n   --help, -h  show help\nIncorrect Usage: invalid value \"false\" for flag -it: not valid\n\nNAME:\n   foo - A new cli application\n\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nIncorrect Usage: flag provided but not defined: -help\n\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.282s\nFAIL",
+   "fixed_seconds": 10.63,
+   "n_tests": 1,
+   "prompt": "When `UseShortOptionHandling` is enabled, a `BoolWithInverseFlag` cannot be set as part of a combined short option group. For example, given `&BoolWithInverseFlag{Name: \"color\", Aliases: []string{\"c\"}}` and `&BoolFlag{Name: \"verbose\", Aliases: []string{\"v\"}}`, running with `-cv` or `-vc` should set both `color` and `verbose` to true (same as passing `-c -v` separately), but currently the inverse bool flag isn't recognized/set correctly inside the combined group. Please fix short option group parsing to handle `BoolWithInverseFlag` properly.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-19f06441",
+   "sha": "19f06441ef1fb27b617d0160b85f9269f6459493",
+   "base": "e3f7e35fff660dfee418092358709ea6440cc839",
+   "date": "2026-09-24T20:08:42+08:00",
+   "subject": "Merge pull request #2419 from official-burak/fix-bare-dash-keeps-following-args",
+   "src_files": [
+    "command_parse.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_parse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   foo [global options]\n\nGLOBAL OPTIONS:\n   --it int    (default: 5)\n   --help, -h  show help\nIncorrect Usage: invalid value \"false\" for flag -it: not valid\n\nNAME:\n   foo - A new cli application\n\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nIncorrect Usage: flag provided but not defined: -help\n\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.343s\nFAIL",
+   "fixed_seconds": 11.89,
+   "n_tests": 1,
+   "prompt": "Passing a bare `-` argument on the command line causes everything after it to be dropped or mishandled instead of being kept as regular arguments. For example, running a command with args `cmd - foo bar` should leave `[\"-\", \"foo\", \"bar\"]` as the parsed positional arguments, and `cmd - --option my-option foo` should still parse `--option` as a flag while keeping `[\"-\", \"foo\"]` as arguments; a `--` terminator after the bare dash should still stop flag parsing, and an undefined flag after the bare dash should still error. Please fix argument parsing so a bare dash no longer swallows or mishandles the arguments that follow it.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-d1d81084",
+   "sha": "d1d810845dbc6b7074c159f2ebb9bbb7a91619b6",
+   "base": "19f06441ef1fb27b617d0160b85f9269f6459493",
+   "date": "2026-09-24T20:41:10+08:00",
+   "subject": "Merge pull request #2438 from SulimanAbdulrazzaq/fix/short-option-multibyte-last-flag",
+   "src_files": [
+    "command_parse.go"
+   ],
+   "test_files": [
+    "command_test.go"
+   ],
+   "gold_files": [
+    "command_parse.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "   foo [global options]\n\nGLOBAL OPTIONS:\n   --it int    (default: 5)\n   --help, -h  show help\nIncorrect Usage: invalid value \"false\" for flag -it: not valid\n\nNAME:\n   foo - A new cli application\n\nUSAGE:\n   foo [global options]\n\nGLOBAL OPTIONS:\n   --[no-]it   (default: false)\n   --help, -h  show help\nIncorrect Usage: flag provided but not defined: -h\n\nIncorrect Usage: flag provided but not defined: -help\n\nIncorrect Usage: flag provided but not defined: -help\n\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.357s\nFAIL",
+   "fixed_seconds": 12.19,
+   "n_tests": 1,
+   "prompt": "When `UseShortOptionHandling` is enabled and a short option group ends with a flag whose name is a multi-byte Unicode rune, parsing fails or produces wrong results. For example, with flags `&BoolFlag{Name: \"v\"}` and `&StringFlag{Name: \"\u05e9\"}`, running `app -v\u05e9 value operand` should set `v` to true, capture `\"value\"` for `\u05e9`, and leave `[\"operand\"]` as arguments, but this isn't handled correctly; also running `app -v\u05e9` with no following value should produce a proper 'flag needs an argument' error naming `\u05e9`. Please fix short option group parsing to correctly handle a multi-byte rune flag at the end of the group.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "urfave-cli-58ec406e",
+   "sha": "58ec406eff149315193d8632c08317f70f6deee1",
+   "base": "d1d810845dbc6b7074c159f2ebb9bbb7a91619b6",
+   "date": "2026-09-26T21:30:27+08:00",
+   "subject": "Merge pull request #2437 from sb123sb123/fix/2173-zsh-persistent-flag-completion",
+   "src_files": [
+    "help.go"
+   ],
+   "test_files": [
+    "completion_partial_regression_test.go",
+    "help_test.go"
+   ],
+   "gold_files": [
+    "help.go"
+   ],
+   "hidden_command": "go test -count=1 ./",
+   "base_exit": 1,
+   "base_tail": "            \t            \t@@ -1,3 +1,2 @@\n            \t            \t --excitement:an exciting flag\n            \t            \t---everybody-jump-on\n            \t            \t \n            \tTest:       \tTestDefaultCompleteWithFlags/zsh-autocomplete-with-flag-descriptions\n            \tMessages:   \twritten help does not match\n    --- FAIL: TestDefaultCompleteWithFlags/zsh-autocomplete-with-empty-flag-descriptions (0.00s)\n        help_test.go:1725: \n            \tError Trace:\t/tmp/adage-repobench/validate/urfave-cli-58ec406e/repo/help_test.go:1725\n            \tError:      \tNot equal: \n            \t            \texpected: \"--excitement\\n--everybody-jump-on\\n\"\n            \t            \tactual  : \"--excitement\\n\"\n            \t            \t\n            \t            \tDiff:\n            \t            \t--- Expected\n            \t            \t+++ Actual\n            \t            \t@@ -1,3 +1,2 @@\n            \t            \t --excitement\n            \t            \t---everybody-jump-on\n            \t            \t \n            \tTest:       \tTestDefaultCompleteWithFlags/zsh-autocomplete-with-empty-flag-descriptions\n            \tMessages:   \twritten help does not match\nFAIL\nFAIL\tgithub.com/urfave/cli/v3\t0.388s\nFAIL",
+   "fixed_seconds": 11.2,
+   "n_tests": 1,
+   "prompt": "Shell completion for flag names doesn't include flags inherited from parent commands (persistent flags), and this gets worse once a positional argument has already been typed. For example, if the top-level command defines `--config` and a subcommand `add` takes a positional argument, running `app add value --conf --generate-shell-completion` should suggest `--config:path to config file`, but the parent's flags aren't offered. More generally, completing a partial flag name on any subcommand should list matches from that subcommand plus matches from all of its parent commands, not just its own flags. Please fix shell completion so it also considers persistent/inherited flags from ancestor commands.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  }
+ ]
+}

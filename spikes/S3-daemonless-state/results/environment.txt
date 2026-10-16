@@ -1,0 +1,7 @@
+date: 2026-09-23T04:19:31Z
+host: Apple M3 Pro, 5P+6E cores, 18 GB
+os: macOS 26.6.2 (Darwin 25.6.0)
+rustc: rustc 1.98.1 (48a229cea 2026-09-01)
+loadavg at start: { 6.06 10.05 8.26 }
+bench root: target/bench
+note: other spike agents were running concurrently during the recorded run

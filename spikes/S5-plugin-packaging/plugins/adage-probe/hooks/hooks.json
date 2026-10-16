@@ -1,0 +1,151 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/log-event.sh",
+              "SessionStart",
+              "/Users/stevenbooth/Documents/skill-compile/spikes/S5-plugin-packaging/logs/adage-probe.log"
+            ]
+          },
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/log-args.sh",
+              "/Users/stevenbooth/Documents/skill-compile/spikes/S5-plugin-packaging/logs/adage-probe-args.log",
+              "exec-form",
+              "$PATH",
+              "${CLAUDE_PLUGIN_ROOT}"
+            ]
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/log-args.sh /Users/stevenbooth/Documents/skill-compile/spikes/S5-plugin-packaging/logs/adage-probe-args.log shell-form \"$PATH\" \"${CLAUDE_PLUGIN_ROOT}\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/log-event.sh",
+              "UserPromptSubmit",
+              "/Users/stevenbooth/Documents/skill-compile/spikes/S5-plugin-packaging/logs/adage-probe.log"
+            ]
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/log-event.sh",
+              "PreToolUse:Agent",
+              "/Users/stevenbooth/Documents/skill-compile/spikes/S5-plugin-packaging/logs/adage-probe.log"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/log-event.sh",
+              "PostToolUse",
+              "/Users/stevenbooth/Documents/skill-compile/spikes/S5-plugin-packaging/logs/adage-probe.log"
+            ]
+          },
+          {
+            "type": "command",
+            "async": true,
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/log-event-slow.sh",
+              "PostToolUse-async",
+              "/Users/stevenbooth/Documents/skill-compile/spikes/S5-plugin-packaging/logs/adage-probe-slow.log",
+              "5"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/log-event.sh",
+              "PostToolBatch",
+              "/Users/stevenbooth/Documents/skill-compile/spikes/S5-plugin-packaging/logs/adage-probe.log"
+            ]
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/log-event.sh",
+              "SubagentStart",
+              "/Users/stevenbooth/Documents/skill-compile/spikes/S5-plugin-packaging/logs/adage-probe.log"
+            ]
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/log-event.sh",
+              "Stop",
+              "/Users/stevenbooth/Documents/skill-compile/spikes/S5-plugin-packaging/logs/adage-probe.log"
+            ]
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/log-event.sh",
+              "SessionEnd",
+              "/Users/stevenbooth/Documents/skill-compile/spikes/S5-plugin-packaging/logs/adage-probe.log"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

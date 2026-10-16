@@ -1,0 +1,51 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 230
+expression: text
+---
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home                                     ◆ harbor-dispatch ▾ · LIVE
+─────────━━━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ LIVE   harbor-dispatch · 2 sessions · since 12:04 · last call 12:33:10
+ ╭─ ▁▃▅ Activity ──────────────── peak 1/min ─╮ ╭─ ▪ Tool calls ─────╮ ╭─ ◠ Fired ──────────╮ ╭─ ✓ Followed ───────╮ ╭─ ■ Finish lines ───╮
+ │             ██ ██████ ██████ ██████ ██████ │ │ ▀▀█ ▀█             │ │ ▀▀█                │ │ ▀▀█                │ │ ▀█                 │
+ │             ██ ██████ ██████ ██████ ██████ │ │ █▀▀  █             │ │  ▀█                │ │ █▀▀                │ │  █                 │
+ │ ▁▁▁▁▁▁▁▁▁▁▁▁██▁██████▁██████▁██████▁██████ │ │ ▀▀▀ ▀▀▀            │ │ ▀▀▀                │ │ ▀▀▀                │ │ ▀▀▀                │
+ │ ──────────────────◆───────◆◆────────────── │ │ in 14 steps        │ │ FIRE 2  INHIBIT 1  │ │ ━━━━━━━━──── 67%   │ │ met                │
+ │ 42 min ago                             now │ │ 2 sessions         │ │ reflexes delivered │ │ of 3 fired         │ │ 1 reminder sent    │
+ ╰────────────────────────────────────────────╯ ╰────────────────────╯ ╰────────────────────╯ ╰────────────────────╯ ╰────────────────────╯
+
+   ┊ ↑ earlier: 1 session · 1 turn · 1 step                                                      │ Reflexes in play  3 ────────────────────
+  Claude Code  session started 12:08 ─────────────────────────────────────────────────────────   │  INHIBIT  when npm test fails here, run …
+ ╭─ ❯ PROMPT ───────────────────────────────────────────────────────────────────── 12:09:50 ─╮   │   fired 1  ━━━━━━  followed 1  ━━━━━━
+ │ 10 steps, 15 calls · Read ×5 · Search ×5 · Run ×4 · Edit · adage fired 3 · 2 followed     │   │  FIRE  after editing registry/*.csv, run…
+ ╰─┬─┬───────────────────────────────────────────────────────────────────────────────────────╯   │   fired 1  ━━━━━━  followed 0  ──────
+   │ │  ╭─ ◆ adage · FIRE ─────────────────────╮      ╭─ RUN ────────────────────────────────╮   │  FIRE  on a prompt that names a ticket, …
+   │ ╰─▶│ on a prompt that names a ticket, run │ ───▶ │ bin/fetch-incident INC-2045          │   │   fired 1  ━━━━━━  followed 1  ━━━━━━
+   │    │ bin/fetch-incident {item}            │      │                                      │   │
+   │    ╰─ at the prompt · 12:09:50 ───────────╯      ╰─ ✓ followed ─────────────────────────╯   │ Learning ───────────────────────────────
+   ┊   5 steps, nothing to say   Read ×5 · Search ×5                                  12:15:40   │ ╭─ ◆ conditioned 12:34 ─────── by hand ─╮
+   ├── Run  bin/fetch-incident INC-2045                             ✓ followed adage  12:16:50   │ │ 24 of 25 traces · 0.73 s              │
+   ├─┬ Edit                                                                           12:18:00   │ │ 1 change                              │
+   │ │  ╭─ ◆ adage · FIRE ─────────────────────╮      ╭─ RUN ────────────────────────────────╮   │ │ ◠ on a prompt that name… prime → fire │
+   │ ╰─▶│ after editing registry/*.csv, run    │ ───▶ │ npm run codegen                      │   │ │ ○ 2 patterns forming                  │
+   │    │ npm run codegen                      │      │                                      │   │ │   closest 4 of 5 traces ━━━━━━━━━━╸── │
+   │    ╰─ after this step · 12:18:00 ─────────╯      ╰─ ✓ finish line met ──────────────────╯   │ │ ◇────────◇──────────────────◆  3 runs │
+   ├─┬ Run  npm test                                                      ✗ 1 failed  12:19:10   │ ╰────────────────────────  l  all runs ─╯
+   │ │  ╭─ ◆ adage · INHIBIT ──────────────────╮      ╭─ RUN ────────────────────────────────╮   │ ○ 3 to review · adage review
+   │ ╰─▶│ when npm test fails here, run npm    │ ───▶ │ npm run check                        │   │
+   │    │ run check                            │      │                                      │   │ Health ─────────────────────────────────
+   │    ╰─ after a failure · 12:19:10 ─────────╯      ╰─ ✓ headed off ───────────────────────╯   │ + hooks claude    + 4 reflexes
+   ├── Run  npm run check                                           ✓ followed adage  12:20:20   │ + auto-condition
+   ├── ◆ adage ■ finish line: asked the agent to go on before it stops                12:21:30   │ ! no model · adage models fetch
+   ├─┬ Run  npm run codegen                                                           12:22:40   │
+   │ ╰─ ◆ adage ✓ finish line met: npm run codegen                                               │
+   ╰── ◇ done                                                                         12:23:50   │
+  ◇ turn 12:25–12:28 · 2 steps, nothing to say   Read ×3                                         │
+ ╭─ ❯ PROMPT ───────────────────────────────────────────────────────────────────── 12:29:40 ─╮   │
+ │ 2 steps, 3 calls · Run ×2 · Read                                                          │   │
+ ╰─┬─────────────────────────────────────────────────────────────────────────────────────────╯   │
+   ├── ◆ adage ↪ pointed the test run at .venv/bin/python                             12:30:50   │
+   ├── Run  pytest tests/                                                             12:32:00   │
+   ├── Run · Read                                                                     12:33:10   │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   p  pause   f  repository   /  filter   enter  inspect                                                      q  quit

@@ -1,0 +1,49 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes   3   3 Map   4 Health  2   5 Settings   6 Home                                              ◆ harbor-dispatch ▾ · LIVE
+──────────────────━━━━━━━━━━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ / filter reflexes, commands, files                                         │ ▤ The gist of card-carrier-rules
+ FIRE 3  PRIME 6  INHIBIT 1  ◌ quiet 1  all states ▾                        │    PRIME    Suggests   ○ nascent ── ● forming ── ○ firm  procedure card
+                                                                            │
+  ▾ incidents · v0.3.0 ──────────────────────────────────────── 3 reflexes  │ ╭─ WHEN ────────────────╮         ╭─ DO ───────────────────────╮
+  F a prompt names a ti… → the gist of lookup-incident     ▰▰▰▰▰▱    24/25  │ │ a prompt means: add a │─── ▤ ──▶│ procedure card: 3 file(s), │
+  F bin/fetch-incident … → the gist of read-linked-files   ▰▰▰▰▰▱    13/17  │ │ carrier rule          │         │ from 4 session(s)          │
+  I npm test fails: HAR… → the gist of dead-end-npm-test   ▰▰▱▱▱▱    11/43  │ ╰───────────────────────╯         ╰────────────────────────────╯
+                                                                            │
+  ▾ intents · v0.3.0 ──────────────────────────────────────────── 1 reflex  │ Evidence ──────────────────────────────────────────────────────────────
+  P a prompt means: run… → the gist of start-wi…  forming  ▰▰▰▰▱▱      6/9  │ Learned from     ━━━━━━━━━━━━━━━━━━━╸──────  3 of 4 traces passed
+                                                                            │ Since installed  nothing yet: it has not fired here
+  ▾ Learned here · v0.3.0 ───────────────────────────────────── 2 reflexes  │
+▌ P a prompt means: add… → the gist of card-car…  forming  ▰▰▰▰▰▱ 4 traces  │ What the agent sees · example values ──────────────────────────  r  raw
+  P edit …/rules_*.ts    → the gist of tests-after-rules…         by value  │ No preview: the reflex has no directive text.
+                                                                            │
+  ▾ From pack · harbor-skills · v0.3.0 ────────────────────────── 1 reflex  │ Procedure card ────────────────────────────────────────────────────────
+  F edit CHANGELOG.md    → the gist of release-notes-s2-…                –  │ Files            1 registry/carriers.csv      4/4 traces
+                                                                            │                  2 src/dispatch/rules_<x>.ts  4/4 traces
+  ▾ Waiting for review ────────────────────────────────────────── 1 reflex  │                  3 test/rules.test.ts         3/4 traces
+  ○ edit api/*.yaml      → the gist of regen-openapi-cli…  ▰▰▰▰▰▱      3/4  │ Commands         ✓ npm run codegen  4/4 · verified on a clean checkout
+                                                                            │                  ○ npm run check    3/4 · not replayed
+  ▾ Quiet · agents already do this; approve to deliver ────────── 1 reflex  │ Avoid            ✗ npm test         HARBOR_ENV is not set
+  ◌ bin/fetch-incident … → the gist of read-before-edit-…  ▰▰▰▰▰▱    21/23  │ Finish with      npm run check
+                                                                            │ Gets it          a prompt at similarity ≥ 0.81, once
+  ▾ Instincts · v0.1.0 ──────────────────────────────────────── 1 instinct  │                  0.71–0.81: once one of these files is edited
+  P edit registry/*.csv  → the gist of finish-line/regen…         built in  │ Limits           prime at most, never strengthened
+                                                                            │                  first-hand only, never shared
+  ▸ Extinguished ──────────────────────────────────────────────── 1 reflex  │
+                                                                            │ Review ────────────────────────────────────────────────────────────────
+                                                                            │  w  weaken    x  extinguish    a  approve    n  pin    d  delegate
+                                                                            │  t  traces (0)    o  open in map
+                                                                            │
+                                                                            │ ▸ Details ────────────────────────────────────────────────  enter  open
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   /  filter   f  repository   j/k  move   enter  expand   tab  next tab                                                q  quit

@@ -1,0 +1,39 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home                                                   harbor-dispatch · LIVE
+─────────────────────────────────────────────────────────────────────━━━━━━━━─────────────────────────────────────────────────────────────────────────
+ ◆ harbor-dispatch · your agent's reflexes, learned from its own traces
+   Claude Code connected · auto-condition on
+ » adage {VERSION} · 99.0.0 is out · u update (adage update: Adage, its hooks and the plugin together)
+
+ ╭─ ◠ Reflexes ─────────────────────╮ ╭─ → Fired ────────────────────────╮ ╭─ ◆ Conditioned ──────────────────╮ ╭─ ! Health ───────────────────────╮
+ │ █▀▀                              │ │ █▀█                              │ │ Sep 23                           │ │ Healthy                          │
+ │ ▀▀█                              │ │ █ █                              │ │ 2 changes                        │ │ 2 to look at                     │
+ │ ▀▀▀                              │ │ ▀▀▀                              │ │ auto-condition                   │ │ ━━━━━━━━────                     │
+ │ in effect here                   │ │ last Sep 23                      │ │                                  │ │                                  │
+ │ 1 to review                      │ │ ▁▁▁▁▁▁▁ 7 days                   │ │                                  │ │                                  │
+ ╰──────────────────────────────────╯ ╰──────────────────────────────────╯ ╰──────────────────────────────────╯ ╰──────────────────────────────────╯
+
+ Get started · enter opens the one selected ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ╭───────────────────────────────────────────────────────────────────────╮ ╭───────────────────────────────────────────────────────────────────────╮
+ │ ⌂  Open repository                                                    │ │ ⇄  Connect your agent                                                 │
+ │    Choose the project you want Adage to understand.                   │ │    Hook Adage into Claude Code, Codex or OpenCode.                    │
+ ╰────────────────────────────────────────────────────────  enter  open ─╯ ╰───────────────────────────────────────────────────────────────────────╯
+ ╭───────────────────────────────────────────────────────────────────────╮ ╭───────────────────────────────────────────────────────────────────────╮
+ │ ≡  History sources                                                    │ │ ◠  Condition now                                                      │
+ │    See exactly which local traces Adage can read.                     │ │    Learn reflexes from those traces; bind instincts.                  │
+ ╰───────────────────────────────────────────────────────────────────────╯ ╰───────────────────────────────────────────────────────────────────────╯
+ ╭───────────────────────────────────────────────────────────────────────╮ ╭───────────────────────────────────────────────────────────────────────╮
+ │ ✓  Review reflexes                                                    │ │ ↗  Explore the web map                                                │
+ │    Check each reflex and its evidence.                                │ │    Follow whole traces and outcomes in your browser.                  │
+ ╰───────────────────────────────────────────────────────────────────────╯ ╰───────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+ : or ctrl-k opens every action; ? explains this screen
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   enter  choose   j/k  move                                                                                            q  quit

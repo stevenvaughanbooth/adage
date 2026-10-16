@@ -1,0 +1,13 @@
+---
+source: crates/adage-cli/src/savings.rs
+expression: "rendered(&s, adage_term::Theme::plain())"
+---
+adage savings · github.com/acme/billing · adds cost
+
+estimate    adds ~$0.201 per trace, API-list equivalent (95% CI $0.200–$0.202) · 40 vs 12 control traces
+turns       20.1 more model turns (95% CI 20.0–20.2; 30.2 with Adage, 10.1 without)
+priced      API-list prices as of 2026-06-24
+help        ended asking you for help: 0% with Adage, 0% without
+recent      61 traces · 188 directives · 152 followed · 7 dead ends headed off · 3 finish lines met · 2 rewrites (last 30 days)
+
+next  adage review · weaken or extinguish what does not help

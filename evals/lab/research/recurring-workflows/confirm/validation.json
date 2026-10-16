@@ -1,0 +1,122 @@
+[
+ {
+  "task": "go-flag--url",
+  "ok": true,
+  "base_hidden_failed": [],
+  "base_suite_failed": [
+   "(build or setup failure)"
+  ],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 11.76,
+  "n_tests": 1
+ },
+ {
+  "task": "go-flag--port",
+  "ok": true,
+  "base_hidden_failed": [],
+  "base_suite_failed": [
+   "(build or setup failure)"
+  ],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 11.06,
+  "n_tests": 1
+ },
+ {
+  "task": "go-flag--regexp",
+  "ok": true,
+  "base_hidden_failed": [],
+  "base_suite_failed": [
+   "(build or setup failure)"
+  ],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 10.64,
+  "n_tests": 1
+ },
+ {
+  "task": "go-flag--ip",
+  "ok": true,
+  "base_hidden_failed": [],
+  "base_suite_failed": [
+   "(build or setup failure)"
+  ],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 11.3,
+  "n_tests": 1
+ },
+ {
+  "task": "go-flag--percent",
+  "ok": true,
+  "base_hidden_failed": [],
+  "base_suite_failed": [
+   "(build or setup failure)"
+  ],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 9.32,
+  "n_tests": 1
+ },
+ {
+  "task": "go-flag--bytesize",
+  "ok": true,
+  "base_hidden_failed": [],
+  "base_suite_failed": [
+   "(build or setup failure)"
+  ],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 9.67,
+  "n_tests": 1
+ },
+ {
+  "task": "go-flag--date",
+  "ok": true,
+  "base_hidden_failed": [],
+  "base_suite_failed": [
+   "(build or setup failure)"
+  ],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 11.36,
+  "n_tests": 1
+ },
+ {
+  "task": "go-flag--hexcolor",
+  "ok": true,
+  "base_hidden_failed": [],
+  "base_suite_failed": [
+   "(build or setup failure)"
+  ],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 12.61,
+  "n_tests": 1
+ },
+ {
+  "task": "go-flag--cidr",
+  "ok": true,
+  "base_hidden_failed": [],
+  "base_suite_failed": [
+   "(build or setup failure)"
+  ],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 10.45,
+  "n_tests": 1
+ },
+ {
+  "task": "go-flag--semver",
+  "ok": true,
+  "base_hidden_failed": [],
+  "base_suite_failed": [
+   "(build or setup failure)"
+  ],
+  "gold_passed": true,
+  "gold_failed": [],
+  "gold_seconds": 12.03,
+  "n_tests": 1
+ }
+]

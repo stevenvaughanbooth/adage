@@ -1,0 +1,2951 @@
+[
+ {
+  "id": "read-cat-1",
+  "cmd": "cat src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/src/a.ts",
+   "effect": "observe",
+   "mutating": false
+  }
+ },
+ {
+  "id": "read-cat-2",
+  "cmd": "cat README.md",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/README.md",
+   "effect": "observe",
+   "mutating": false
+  }
+ },
+ {
+  "id": "read-nl-1",
+  "cmd": "nl -ba src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/src/a.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "read-sed-range",
+  "cmd": "sed -n '10,40p' src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/src/a.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "read-head-range",
+  "cmd": "head -n 40 src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/src/a.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "read-tail-plus",
+  "cmd": "tail -n +10 src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/src/a.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "read-head-noflag",
+  "cmd": "head src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/src/a.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "read-tail-noflag",
+  "cmd": "tail src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/src/a.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "search-rg-value-flag",
+  "cmd": "rg -n \"TODO\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "TODO",
+   "effect": "observe",
+   "mutating": false
+  }
+ },
+ {
+  "id": "search-rg-plain",
+  "cmd": "rg \"FIXME\"",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "FIXME",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "search-grep-basic",
+  "cmd": "grep \"hello\" src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "hello",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "search-grep-context",
+  "cmd": "grep -C 3 \"hello\" src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "hello",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "search-rg-files",
+  "cmd": "rg --files src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "search-find-name",
+  "cmd": "find . -name '*.ts'",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "*.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "search-fd-basic",
+  "cmd": "fd '*.rs'",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "list-ls-basic",
+  "cmd": "ls src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/src",
+   "effect": "observe",
+   "mutating": false
+  }
+ },
+ {
+  "id": "list-ls-dot",
+  "cmd": "ls",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "list-tree-basic",
+  "cmd": "tree src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/src",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "fetch-curl-get",
+  "cmd": "curl -sL https://example.com/a",
+  "cwd": "/repo",
+  "expect": {
+   "op": "fetch",
+   "url": "https://example.com/a",
+   "effect": "observe",
+   "mutating": false
+  }
+ },
+ {
+  "id": "fetch-wget-get",
+  "cmd": "wget https://example.com/file.tar.gz",
+  "cwd": "/repo",
+  "expect": {
+   "op": "fetch",
+   "url": "https://example.com/file.tar.gz",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "fetch-curl-var-prefix",
+  "cmd": "UA=Mozilla curl -sL https://example.com",
+  "cwd": "/repo",
+  "expect": {
+   "op": "fetch",
+   "url": "https://example.com",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "fetch-curl-post-publish",
+  "cmd": "curl -X POST https://api.example.com/x",
+  "cwd": "/repo",
+  "expect": {
+   "op": "fetch",
+   "url": "https://api.example.com/x",
+   "effect": "publish",
+   "mutating": true
+  }
+ },
+ {
+  "id": "fetch-curl-data-publish",
+  "cmd": "curl -d 'a=1' https://api.example.com/x",
+  "cwd": "/repo",
+  "expect": {
+   "op": "fetch",
+   "url": "https://api.example.com/x",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "cd-then-cat",
+  "cmd": "cd pkg/core && cat a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/pkg/core/a.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "cd-nested",
+  "cmd": "cd a && cd b && cat c.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/a/b/c.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "cd-dotdot",
+  "cmd": "cd a && cd .. && cat c.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/c.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "cd-absolute",
+  "cmd": "cd /tmp && cat x.txt",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/tmp/x.txt",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "seq-two-reads",
+  "cmd": "cat a.ts && cat b.ts",
+  "cwd": "/repo",
+  "expect": {
+   "count": 2
+  }
+ },
+ {
+  "id": "seq-semicolon",
+  "cmd": "cat a.ts; cat b.ts",
+  "cwd": "/repo",
+  "expect": {
+   "count": 2
+  }
+ },
+ {
+  "id": "seq-or",
+  "cmd": "cat a.ts || cat b.ts",
+  "cwd": "/repo",
+  "expect": {
+   "count": 2
+  }
+ },
+ {
+  "id": "seq-three",
+  "cmd": "cat a.ts && cat b.ts && cat c.ts",
+  "cwd": "/repo",
+  "expect": {
+   "count": 3
+  }
+ },
+ {
+  "id": "bash-lc-unwrap",
+  "cmd": "bash -lc \"cat src/a.ts\"",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/src/a.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "sh-c-unwrap",
+  "cmd": "sh -c \"cat src/a.ts\"",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/src/a.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bash-lc-cd",
+  "cmd": "bash -lc \"cd pkg && cat a.ts\"",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/pkg/a.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "var-assign-prefix",
+  "cmd": "FOO=bar cat a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/a.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "pipe-pure-tail",
+  "cmd": "git log --oneline | head -20",
+  "cwd": "/repo",
+  "expect": {
+   "mutating": false,
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "pipe-pure-grep",
+  "cmd": "cat a.ts | grep foo",
+  "cwd": "/repo",
+  "expect": {
+   "mutating": false
+  }
+ },
+ {
+  "id": "pipe-impure-tee",
+  "cmd": "cat a.ts | tee out.txt",
+  "cwd": "/repo",
+  "expect": {
+   "mutating": true
+  }
+ },
+ {
+  "id": "pipe-impure-xargs-rm",
+  "cmd": "find . -name '*.tmp' | xargs rm",
+  "cwd": "/repo",
+  "expect": {
+   "mutating": true
+  }
+ },
+ {
+  "id": "redirect-echo-write",
+  "cmd": "echo hi > out.txt",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "author",
+   "mutating": true
+  }
+ },
+ {
+  "id": "redirect-append",
+  "cmd": "echo hi >> out.txt",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "author",
+   "mutating": true
+  }
+ },
+ {
+  "id": "redirect-stderr-dup-not-mutating",
+  "cmd": "cat a.ts 2>&1",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "mutating": false
+  }
+ },
+ {
+  "id": "redirect-to-devnull-not-mutating",
+  "cmd": "some-check > /dev/null",
+  "cwd": "/repo",
+  "expect": {
+   "mutating": false
+  }
+ },
+ {
+  "id": "sed-inplace",
+  "cmd": "sed -i 's/a/b/' src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "edit",
+   "path": "/repo/src/a.ts",
+   "effect": "author",
+   "mutating": true
+  }
+ },
+ {
+  "id": "sed-inplace-suffix",
+  "cmd": "sed -i.bak 's/a/b/' src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "edit",
+   "path": "/repo/src/a.ts",
+   "effect": "author",
+   "mutating": true
+  }
+ },
+ {
+  "id": "sed-no-i-not-edit",
+  "cmd": "sed 's/a/b/' src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "effect": "observe",
+   "mutating": false
+  }
+ },
+ {
+  "id": "heredoc-cat",
+  "cmd": "cat <<EOF\nhello\nEOF",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "mutating": false
+  }
+ },
+ {
+  "id": "tee-write",
+  "cmd": "echo x | tee f.txt",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "mutating": true
+  }
+ },
+ {
+  "id": "git-status",
+  "cmd": "git status",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe",
+   "mutating": false
+  }
+ },
+ {
+  "id": "git-log",
+  "cmd": "git log --oneline",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "git-diff",
+  "cmd": "git diff HEAD~1",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "git-show",
+  "cmd": "git show HEAD",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "git-blame",
+  "cmd": "git blame src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "git-rev-parse",
+  "cmd": "git rev-parse HEAD",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "git-ls-files",
+  "cmd": "git ls-files",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "git-remote",
+  "cmd": "git remote -v",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "git-add",
+  "cmd": "git add src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "author"
+  }
+ },
+ {
+  "id": "git-commit",
+  "cmd": "git commit -m x",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish",
+   "mutating": true
+  }
+ },
+ {
+  "id": "git-push",
+  "cmd": "git push origin main",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish",
+   "mutating": true
+  }
+ },
+ {
+  "id": "git-pull",
+  "cmd": "git pull",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "git-fetch",
+  "cmd": "git fetch origin",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "git-checkout",
+  "cmd": "git checkout main",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "git-switch",
+  "cmd": "git switch feature",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "git-reset-soft",
+  "cmd": "git reset HEAD~1",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "git-reset-hard",
+  "cmd": "git reset --hard HEAD~1",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish",
+   "mutating": true
+  }
+ },
+ {
+  "id": "git-merge",
+  "cmd": "git merge feature",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "git-rebase",
+  "cmd": "git rebase main",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "git-cherry-pick",
+  "cmd": "git cherry-pick abc123d",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "git-revert",
+  "cmd": "git revert HEAD",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "git-tag",
+  "cmd": "git tag v1.0.0",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "git-clean",
+  "cmd": "git clean -fd",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "git-apply",
+  "cmd": "git apply patch.diff",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "author"
+  }
+ },
+ {
+  "id": "git-am",
+  "cmd": "git am patch.mbox",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "author"
+  }
+ },
+ {
+  "id": "git-clone",
+  "cmd": "git clone https://example.com/repo.git",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "git-init",
+  "cmd": "git init",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "git-stash",
+  "cmd": "git stash",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "git-stash-drop",
+  "cmd": "git stash drop",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "git-branch-list",
+  "cmd": "git branch",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "git-branch-delete",
+  "cmd": "git branch -d old",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "git-config-get",
+  "cmd": "git config user.name",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "git-reflog",
+  "cmd": "git reflog",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "git-unknown-sub",
+  "cmd": "git bisect start",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "npm-test",
+  "cmd": "npm test",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify",
+   "mutating": false
+  }
+ },
+ {
+  "id": "npm-run-test",
+  "cmd": "npm run test",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "npm-run-typecheck",
+  "cmd": "npm run typecheck",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "npm-run-build",
+  "cmd": "npm run build",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "npm-run-lint",
+  "cmd": "npm run lint",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "npm-run-format",
+  "cmd": "npm run format",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "npm-run-generate",
+  "cmd": "npm run generate",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "npm-run-other",
+  "cmd": "npm run dev",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "npm-install",
+  "cmd": "npm install",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment",
+   "mutating": false
+  }
+ },
+ {
+  "id": "npm-install-pkg",
+  "cmd": "npm install lodash",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "npm-ci",
+  "cmd": "npm ci",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "npm-ls",
+  "cmd": "npm ls",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "npm-outdated",
+  "cmd": "npm outdated",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "npm-publish",
+  "cmd": "npm publish",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "pnpm-test",
+  "cmd": "pnpm test",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "pnpm-run-build",
+  "cmd": "pnpm run build",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "pnpm-install",
+  "cmd": "pnpm install",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "pnpm-add",
+  "cmd": "pnpm add lodash",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "yarn-test",
+  "cmd": "yarn test",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "yarn-add",
+  "cmd": "yarn add lodash",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "yarn-install",
+  "cmd": "yarn install",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "npx-tsc",
+  "cmd": "npx tsc --noEmit",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "npx-eslint-fix",
+  "cmd": "npx eslint . --fix",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "npx-unknown",
+  "cmd": "npx some-random-cli",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "cargo-build",
+  "cmd": "cargo build",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "cargo-check",
+  "cmd": "cargo check",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "cargo-test",
+  "cmd": "cargo test",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "cargo-clippy",
+  "cmd": "cargo clippy",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "cargo-fmt",
+  "cmd": "cargo fmt",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "cargo-install",
+  "cmd": "cargo install ripgrep",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "cargo-add",
+  "cmd": "cargo add serde",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "cargo-tree",
+  "cmd": "cargo tree",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "cargo-publish",
+  "cmd": "cargo publish",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "go-build",
+  "cmd": "go build ./...",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "go-test",
+  "cmd": "go test ./...",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "go-vet",
+  "cmd": "go vet ./...",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "go-get",
+  "cmd": "go get example.com/pkg",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "go-fmt",
+  "cmd": "go fmt ./...",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "go-env",
+  "cmd": "go env GOPATH",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "make-test",
+  "cmd": "make test",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "make-build",
+  "cmd": "make build",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "make-gen",
+  "cmd": "make gen",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "make-clean",
+  "cmd": "make clean",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "make-bare",
+  "cmd": "make",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "cmake-configure",
+  "cmd": "cmake -S . -B build",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "python-pytest",
+  "cmd": "python -m pytest tests/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "python3-pytest",
+  "cmd": "python3 -m pytest tests/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "python-manage-test",
+  "cmd": "python manage.py test",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "python-generic",
+  "cmd": "python script.py",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "node-test",
+  "cmd": "node --test test/shell.test.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "node-generic",
+  "cmd": "node server.js",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "jest-basic",
+  "cmd": "jest",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "vitest-basic",
+  "cmd": "vitest run",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "pytest-basic",
+  "cmd": "pytest -k foo",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "mocha-basic",
+  "cmd": "mocha test/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "tsc-basic",
+  "cmd": "tsc --noEmit",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "webpack-basic",
+  "cmd": "webpack --mode production",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "eslint-check",
+  "cmd": "eslint .",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "eslint-fix",
+  "cmd": "eslint . --fix",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "prettier-check",
+  "cmd": "prettier --check .",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "prettier-write",
+  "cmd": "prettier --write .",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "ruff-check",
+  "cmd": "ruff check .",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "ruff-fix",
+  "cmd": "ruff check . --fix",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "black-default",
+  "cmd": "black .",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "shellcheck-basic",
+  "cmd": "shellcheck script.sh",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "gofmt-check",
+  "cmd": "gofmt -l .",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "gofmt-write",
+  "cmd": "gofmt -w .",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "mkdir-basic",
+  "cmd": "mkdir -p build",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "touch-basic",
+  "cmd": "touch newfile.txt",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "chmod-basic",
+  "cmd": "chmod +x script.sh",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "chown-basic",
+  "cmd": "chown user file.txt",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "ln-basic",
+  "cmd": "ln -s a b",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "mv-basic",
+  "cmd": "mv a.txt b.txt",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "cp-basic",
+  "cmd": "cp a.txt b.txt",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "rm-basic",
+  "cmd": "rm old.txt",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish",
+   "mutating": true
+  }
+ },
+ {
+  "id": "rm-rf",
+  "cmd": "rm -rf build/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish",
+   "mutating": true
+  }
+ },
+ {
+  "id": "brew-install",
+  "cmd": "brew install jq",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "pip-install",
+  "cmd": "pip install requests",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "pip3-install",
+  "cmd": "pip3 install requests",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "docker-ps",
+  "cmd": "docker ps",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "docker-run",
+  "cmd": "docker run alpine",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "docker-push",
+  "cmd": "docker push myimage",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "source-basic",
+  "cmd": "source venv/bin/activate",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec"
+  }
+ },
+ {
+  "id": "export-basic",
+  "cmd": "export FOO=bar",
+  "cwd": "/repo",
+  "expect": {
+   "count": 0
+  }
+ },
+ {
+  "id": "sleep-basic",
+  "cmd": "sleep 5",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "which-basic",
+  "cmd": "which node",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "wc-basic",
+  "cmd": "wc -l src/a.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "env-basic",
+  "cmd": "env",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "echo-basic",
+  "cmd": "echo hello",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe",
+   "mutating": false
+  }
+ },
+ {
+  "id": "true-basic",
+  "cmd": "true",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "gh-pr-create",
+  "cmd": "gh pr create --title x",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "gh-pr-list",
+  "cmd": "gh pr list",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "gh-issue-list",
+  "cmd": "gh issue list",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "gh-issue-create",
+  "cmd": "gh issue create --title x",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "kubectl-get",
+  "cmd": "kubectl get pods",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "kubectl-apply",
+  "cmd": "kubectl apply -f a.yaml",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "terraform-plan",
+  "cmd": "terraform plan",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "terraform-apply",
+  "cmd": "terraform apply",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "script-repo-local",
+  "cmd": "./scripts/wi-lookup W-1234 --json",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "argv": [
+    "./scripts/wi-lookup",
+    "W-1234",
+    "--json"
+   ]
+  }
+ },
+ {
+  "id": "unrecognised-cmd",
+  "cmd": "some-unrecognised-tool --flag",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment",
+   "max_confidence": 0.6
+  }
+ },
+ {
+  "id": "for-loop-read",
+  "cmd": "for f in a.ts b.ts; do cat $f; done",
+  "cwd": "/repo",
+  "expect": {
+   "op": "compound",
+   "compound_kind": "for",
+   "mutating": false,
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "for-loop-mutating",
+  "cmd": "for f in a.txt b.txt; do rm $f; done",
+  "cwd": "/repo",
+  "expect": {
+   "op": "compound",
+   "compound_kind": "for",
+   "mutating": true,
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "while-loop",
+  "cmd": "while read line; do echo $line; done < input.txt",
+  "cwd": "/repo",
+  "expect": {
+   "op": "compound",
+   "compound_kind": "while"
+  }
+ },
+ {
+  "id": "until-loop",
+  "cmd": "until false; do echo x; done",
+  "cwd": "/repo",
+  "expect": {
+   "op": "compound",
+   "compound_kind": "while"
+  }
+ },
+ {
+  "id": "if-single-branch",
+  "cmd": "if [ -f x.txt ]; then cat x.txt; fi",
+  "cwd": "/repo",
+  "expect": {
+   "op": "compound",
+   "compound_kind": "if",
+   "mutating": false
+  }
+ },
+ {
+  "id": "if-else-mutating",
+  "cmd": "if [ -f x.txt ]; then cat x.txt; else rm y.txt; fi",
+  "cwd": "/repo",
+  "expect": {
+   "op": "compound",
+   "compound_kind": "if",
+   "mutating": true,
+   "effect": "publish"
+  }
+ },
+ {
+  "id": "if-elif-else",
+  "cmd": "if a; then cat a.ts; elif b; then cat b.ts; else cat c.ts; fi",
+  "cwd": "/repo",
+  "expect": {
+   "op": "compound",
+   "compound_kind": "if"
+  }
+ },
+ {
+  "id": "case-branches",
+  "cmd": "case $x in a) cat a.ts;; b) rm b.ts;; esac",
+  "cwd": "/repo",
+  "expect": {
+   "op": "compound",
+   "compound_kind": "case",
+   "mutating": true
+  }
+ },
+ {
+  "id": "subshell-cd",
+  "cmd": "(cd sub && ls)",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/sub"
+  }
+ },
+ {
+  "id": "subshell-cd-does-not-leak",
+  "cmd": "(cd sub && cat a.ts) && cat b.ts",
+  "cwd": "/repo",
+  "expect": {
+   "count": 2
+  }
+ },
+ {
+  "id": "compound-group",
+  "cmd": "{ cat a.ts; cat b.ts; }",
+  "cwd": "/repo",
+  "expect": {
+   "count": 2
+  }
+ },
+ {
+  "id": "function-def-only",
+  "cmd": "probe(){ echo hi; }",
+  "cwd": "/repo",
+  "expect": {
+   "count": 0
+  }
+ },
+ {
+  "id": "function-def-and-call",
+  "cmd": "probe(){ echo hi; }; probe",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "argv": [
+    "probe"
+   ],
+   "max_confidence": 0.6
+  }
+ },
+ {
+  "id": "negated-command",
+  "cmd": "! grep foo bar.txt",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "foo"
+  }
+ },
+ {
+  "id": "command-substitution-assign",
+  "cmd": "d=$(ls -la)",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo"
+  }
+ },
+ {
+  "id": "command-substitution-inline",
+  "cmd": "echo $(cat a.ts)",
+  "cwd": "/repo",
+  "expect": {
+   "count": 2
+  }
+ },
+ {
+  "id": "declaration-local",
+  "cmd": "local x=1",
+  "cwd": "/repo",
+  "expect": {
+   "count": 0
+  }
+ },
+ {
+  "id": "declaration-export-with-subst",
+  "cmd": "export FOO=$(cat a.ts)",
+  "cwd": "/repo",
+  "expect": {
+   "count": 1,
+   "op": "read"
+  }
+ },
+ {
+  "id": "empty-command",
+  "cmd": "",
+  "cwd": "/repo",
+  "expect": {
+   "count": 0
+  }
+ },
+ {
+  "id": "whitespace-only",
+  "cmd": "   ",
+  "cwd": "/repo",
+  "expect": {
+   "count": 0
+  }
+ },
+ {
+  "id": "cd-only",
+  "cmd": "cd pkg/core",
+  "cwd": "/repo",
+  "expect": {
+   "count": 0
+  }
+ },
+ {
+  "id": "comment-only",
+  "cmd": "# just a comment",
+  "cwd": "/repo",
+  "expect": {
+   "count": 0
+  }
+ },
+ {
+  "id": "bulk-read-0",
+  "cmd": "cat src/index.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/src/index.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-0",
+  "cmd": "ls src/index.ts",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/src/index.ts",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-1",
+  "cmd": "cat lib/util.py",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/lib/util.py",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-1",
+  "cmd": "ls lib/util.py",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/lib/util.py",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-2",
+  "cmd": "cat cmd/main.go",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/cmd/main.go",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-2",
+  "cmd": "ls cmd/main.go",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/cmd/main.go",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-3",
+  "cmd": "cat app/models/user.rb",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/app/models/user.rb",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-3",
+  "cmd": "ls app/models/user.rb",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/app/models/user.rb",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-4",
+  "cmd": "cat internal/api/handler.go",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/internal/api/handler.go",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-4",
+  "cmd": "ls internal/api/handler.go",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/internal/api/handler.go",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-5",
+  "cmd": "cat components/Button.tsx",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/components/Button.tsx",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-5",
+  "cmd": "ls components/Button.tsx",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/components/Button.tsx",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-6",
+  "cmd": "cat test/unit/foo_test.py",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/test/unit/foo_test.py",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-6",
+  "cmd": "ls test/unit/foo_test.py",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/test/unit/foo_test.py",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-7",
+  "cmd": "cat docs/guide.md",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/docs/guide.md",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-7",
+  "cmd": "ls docs/guide.md",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/docs/guide.md",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-8",
+  "cmd": "cat config/settings.yaml",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/config/settings.yaml",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-8",
+  "cmd": "ls config/settings.yaml",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/config/settings.yaml",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-9",
+  "cmd": "cat pkg/core/lib.rs",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/pkg/core/lib.rs",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-9",
+  "cmd": "ls pkg/core/lib.rs",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/pkg/core/lib.rs",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-10",
+  "cmd": "cat scripts/build.sh",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/scripts/build.sh",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-10",
+  "cmd": "ls scripts/build.sh",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/scripts/build.sh",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-11",
+  "cmd": "cat server/routes.js",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/server/routes.js",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-11",
+  "cmd": "ls server/routes.js",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/server/routes.js",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-12",
+  "cmd": "cat web/static/app.css",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/web/static/app.css",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-12",
+  "cmd": "ls web/static/app.css",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/web/static/app.css",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-13",
+  "cmd": "cat data/schema.sql",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/data/schema.sql",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-13",
+  "cmd": "ls data/schema.sql",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/data/schema.sql",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-14",
+  "cmd": "cat proto/service.proto",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/proto/service.proto",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-14",
+  "cmd": "ls proto/service.proto",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/proto/service.proto",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-15",
+  "cmd": "cat include/header.h",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/include/header.h",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-15",
+  "cmd": "ls include/header.h",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/include/header.h",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-16",
+  "cmd": "cat src/main.cpp",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/src/main.cpp",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-16",
+  "cmd": "ls src/main.cpp",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/src/main.cpp",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-17",
+  "cmd": "cat tools/gen.py",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/tools/gen.py",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-17",
+  "cmd": "ls tools/gen.py",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/tools/gen.py",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-18",
+  "cmd": "cat migrations/0001_init.sql",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/migrations/0001_init.sql",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-18",
+  "cmd": "ls migrations/0001_init.sql",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/migrations/0001_init.sql",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-read-19",
+  "cmd": "cat charts/values.yaml",
+  "cwd": "/repo",
+  "expect": {
+   "op": "read",
+   "path": "/repo/charts/values.yaml",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-list-19",
+  "cmd": "ls charts/values.yaml",
+  "cwd": "/repo",
+  "expect": {
+   "op": "list",
+   "path": "/repo/charts/values.yaml",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-0",
+  "cmd": "grep \"TODO\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "TODO",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-1",
+  "cmd": "grep \"FIXME\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "FIXME",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-2",
+  "cmd": "grep \"XXX\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "XXX",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-3",
+  "cmd": "grep \"deprecated\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "deprecated",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-4",
+  "cmd": "grep \"class Foo\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "class Foo",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-5",
+  "cmd": "grep \"def bar\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "def bar",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-6",
+  "cmd": "grep \"import os\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "import os",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-7",
+  "cmd": "grep \"func main\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "func main",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-8",
+  "cmd": "grep \"SELECT \\*\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "SELECT \\*",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-9",
+  "cmd": "grep \"error\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "error",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-10",
+  "cmd": "grep \"panic\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "panic",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-11",
+  "cmd": "grep \"unwrap\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "unwrap",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-12",
+  "cmd": "grep \"console\\.log\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "console\\.log",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-13",
+  "cmd": "grep \"print(\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "print(",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-14",
+  "cmd": "grep \"assert\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "assert",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-15",
+  "cmd": "grep \"raise\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "raise",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-16",
+  "cmd": "grep \"throw\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "throw",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-17",
+  "cmd": "grep \"except\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "except",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-18",
+  "cmd": "grep \"catch\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "catch",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-19",
+  "cmd": "grep \"return nil\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "return nil",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-search-20",
+  "cmd": "grep \"== null\" src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "search",
+   "pattern": "== null",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-git-read-0",
+  "cmd": "git status",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-git-read-1",
+  "cmd": "git log",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-git-read-2",
+  "cmd": "git diff",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-git-read-3",
+  "cmd": "git show",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-git-read-4",
+  "cmd": "git blame",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-git-read-5",
+  "cmd": "git describe",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-git-read-6",
+  "cmd": "git rev-parse",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-git-read-7",
+  "cmd": "git ls-files",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-git-read-8",
+  "cmd": "git remote",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-git-read-9",
+  "cmd": "git config",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-git-read-10",
+  "cmd": "git reflog",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-git-read-11",
+  "cmd": "git shortlog",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-exec-0",
+  "cmd": "jest --coverage",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-1",
+  "cmd": "vitest --run",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-2",
+  "cmd": "pytest -x",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-3",
+  "cmd": "mocha --reporter spec",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-4",
+  "cmd": "tsc -p tsconfig.json",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-5",
+  "cmd": "webpack --config webpack.prod.js",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-6",
+  "cmd": "vite build",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-7",
+  "cmd": "esbuild src/index.ts --bundle",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-8",
+  "cmd": "rollup -c",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-9",
+  "cmd": "gradle test",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-10",
+  "cmd": "mvn test",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-11",
+  "cmd": "phpunit",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-12",
+  "cmd": "rspec",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-13",
+  "cmd": "cargo build --release",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-14",
+  "cmd": "cargo test --workspace",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-15",
+  "cmd": "go build -o bin/app",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-16",
+  "cmd": "go test -run TestFoo",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-17",
+  "cmd": "make check",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-18",
+  "cmd": "cmake --build build",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "verify"
+  }
+ },
+ {
+  "id": "bulk-exec-19",
+  "cmd": "npm run lint:fix",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "bulk-exec-20",
+  "cmd": "pnpm run format",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "bulk-exec-21",
+  "cmd": "yarn run generate",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "bulk-exec-22",
+  "cmd": "gofmt -w main.go",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "bulk-exec-23",
+  "cmd": "black src/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "bulk-exec-24",
+  "cmd": "cargo fmt --all",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "regenerate"
+  }
+ },
+ {
+  "id": "bulk-exec-25",
+  "cmd": "brew upgrade",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "bulk-exec-26",
+  "cmd": "apt-get update",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "bulk-exec-27",
+  "cmd": "pip install -r requirements.txt",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "bulk-exec-28",
+  "cmd": "docker compose up",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "bulk-exec-29",
+  "cmd": "docker build -t app .",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "bulk-exec-30",
+  "cmd": "go mod tidy",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "bulk-exec-31",
+  "cmd": "cargo update",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "bulk-exec-32",
+  "cmd": "npm update",
+  "cwd": "/repo",
+  "expect": {
+   "op": "exec",
+   "effect": "environment"
+  }
+ },
+ {
+  "id": "bulk-fetch-0",
+  "cmd": "curl -sL https://api.github.com/repos/foo/bar",
+  "cwd": "/repo",
+  "expect": {
+   "op": "fetch",
+   "url": "https://api.github.com/repos/foo/bar",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-fetch-1",
+  "cmd": "curl -sL https://registry.npmjs.org/lodash",
+  "cwd": "/repo",
+  "expect": {
+   "op": "fetch",
+   "url": "https://registry.npmjs.org/lodash",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-fetch-2",
+  "cmd": "curl -sL https://crates.io/api/v1/crates/serde",
+  "cwd": "/repo",
+  "expect": {
+   "op": "fetch",
+   "url": "https://crates.io/api/v1/crates/serde",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-fetch-3",
+  "cmd": "curl -sL https://pypi.org/simple/requests/",
+  "cwd": "/repo",
+  "expect": {
+   "op": "fetch",
+   "url": "https://pypi.org/simple/requests/",
+   "effect": "observe"
+  }
+ },
+ {
+  "id": "bulk-fetch-4",
+  "cmd": "curl -sL https://raw.githubusercontent.com/foo/bar/main/README.md",
+  "cwd": "/repo",
+  "expect": {
+   "op": "fetch",
+   "url": "https://raw.githubusercontent.com/foo/bar/main/README.md",
+   "effect": "observe"
+  }
+ }
+]

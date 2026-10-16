@@ -1,0 +1,7 @@
+# Check out with LF everywhere, on Windows too: golden files, fixtures, and datasets are compared
+# byte for byte, and scripts must run under sh.
+* text=auto eol=lf
+*.gz binary
+*.zst binary
+*.png binary
+*.safetensors binary

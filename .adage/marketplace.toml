@@ -1,0 +1,76 @@
+format = "adage-marketplace/1"
+
+[marketplace]
+name = "adage"
+repository = "github.com/stevenvaughanbooth/adage"
+description = "Adage's base instincts: defaults that bind from a repository's own files, before it has any history. Each is a pack; a first run turns on the ones whose detectors find what they need."
+
+[[pack]]
+name = "adage/verification-recovery"
+source = "packs/verification-recovery"
+version = "0.1.0"
+digest = "07185d5ffd93d9a829a650b8bb2180f7c482c051af7d6c03ecbbabdf3bdbd9d2"
+default = "off"
+
+[[pack]]
+name = "adage/verification-discovery"
+source = "packs/verification-discovery"
+version = "0.1.0"
+digest = "ff007bc80f3100c1cd1f061fc3c2d76cbbff21a5a2cd0fab901674c0e7628d95"
+default = "off"
+
+[[pack]]
+name = "adage/python-env"
+source = "packs/python-env"
+version = "0.1.0"
+digest = "6ef73b4ca4ae915a60d9aecb133dae32280ae82ecb0f86cbc0d1e7652953ea4a"
+default = "detected"
+
+[[pack]]
+name = "adage/test-wrapper"
+source = "packs/test-wrapper"
+version = "0.1.0"
+digest = "5946e2124be01d8dfa8d532103c7869fee126c2a1a891d618d18b1799c4e9ec1"
+default = "detected"
+
+[[pack]]
+name = "adage/test-command"
+source = "packs/test-command"
+version = "0.1.0"
+digest = "74421a7b66c18d0b96e54c5ae546773ee1a19d99717f523dad557f0f2592ea44"
+default = "detected"
+
+[[pack]]
+name = "adage/pytest-wrapper"
+source = "packs/pytest-wrapper"
+version = "0.1.0"
+digest = "b228a2333c80a9667fe758514467155b4ced67672ab539eaa7e5195553af69bb"
+default = "detected"
+
+[[pack]]
+name = "adage/package-manager"
+source = "packs/package-manager"
+version = "0.1.0"
+digest = "ad7125167a303b4b68b82b35edb1e7d89ee29ca03ff5cb8bce0c78c35481acea"
+default = "detected"
+
+[[pack]]
+name = "adage/regenerate"
+source = "packs/regenerate"
+version = "0.1.0"
+digest = "8048ff96368ebd0a5fc5a95d9de0503266525575557a4d82a1c5614cf7453657"
+default = "detected"
+
+[[pack]]
+name = "adage/generated-files"
+source = "packs/generated-files"
+version = "0.1.0"
+digest = "d554e735fe0988053b80f525f28ecdbf21b2f958eac9228c0f6c592a1648df36"
+default = "detected"
+
+[[pack]]
+name = "adage/lockfiles"
+source = "packs/lockfiles"
+version = "0.1.0"
+digest = "08e1c8a1bfc56f9113136e0113219bc2fb42b5b69ec63fad9dc0fa52e6b5ddd6"
+default = "detected"

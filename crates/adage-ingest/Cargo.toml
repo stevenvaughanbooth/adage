@@ -1,0 +1,21 @@
+[package]
+name = "adage-ingest"
+description = "Ingestion: read traces from a source, decode each harness's history format into the canonical session"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Layer 3 (xtask/src/layers.rs): depends on adage-core and adage-trace only. It knows harness
+# history formats and where traces live; it knows nothing of learning, the runtime or the store.
+[dependencies]
+adage-core = { path = "../adage-core" }
+adage-trace = { path = "../adage-trace" }
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+once_cell.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

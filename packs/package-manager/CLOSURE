@@ -1,0 +1,14 @@
+detector N1 -
+edge:detector route:install-with-declared-manager->detector:N1 -
+edge:detector route:test-with-declared-manager->detector:N1 -
+edge:detector route:uses-declared-manager->detector:N1 -
+edge:template route:install-with-declared-manager->template:after@1 -
+edge:template route:test-with-declared-manager->template:after@1 -
+edge:template route:uses-declared-manager->template:advise:package-manager@1 -
+edge:template route:uses-declared-manager->template:advise@1 -
+route install-with-declared-manager db448b40e7ed436184f4cd123ee5ef292ca1fba9359ebf7e7501c02af2c9c918
+route test-with-declared-manager 5470cd59224f46390f3083c51c8d03a5badb0d94fde38f76aad8838729f6bfbc
+route uses-declared-manager e15fcf129286a4e66d4fe55fc4e306b5f6c09426febd80a55d65842da0156523
+template advise:package-manager@1 -
+template advise@1 -
+template after@1 -

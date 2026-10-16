@@ -1,0 +1,21 @@
+[package]
+name = "adage-sign"
+description = "Native sshsig signing of track digests (ssh-agent first, key file fallback) and allowed_signers verification"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+# Pinned to match ssh-agent-client-rs's own ssh-key 0.6 dependency (spike S6): the two crates'
+# key and signature types are not interchangeable across the 0.6/0.7 boundary.
+# `encryption`: decrypt passphrase-protected OpenSSH key files (bcrypt-pbkdf + AES), in memory.
+ssh-key = { version = "=0.6.7", features = ["std", "crypto", "encryption"] }
+ssh-agent-client-rs = "1.1.3"
+zeroize = "1"
+anyhow.workspace = true
+
+[dev-dependencies]
+ssh-key = { version = "=0.6.7", features = ["std", "crypto", "rand_core"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+tempfile = "3"

@@ -1,0 +1,724 @@
+{
+  "round": 1,
+  "runs": {
+    "adage": 6,
+    "control": 6
+  },
+  "unfinished": {
+    "adage": 0,
+    "control": 0
+  },
+  "status_counts": {
+    "adage": {
+      "ok": 6,
+      "censored": 0,
+      "infra_error": 0,
+      "scorer_error": 0
+    },
+    "control": {
+      "ok": 6,
+      "censored": 0,
+      "infra_error": 0,
+      "scorer_error": 0
+    }
+  },
+  "excluded": {
+    "adage": 0,
+    "control": 0
+  },
+  "n_censored": {
+    "adage": 0,
+    "control": 0
+  },
+  "leaky": false,
+  "seed": 20260929,
+  "harness_version": "2.1.285 (Claude Code)",
+  "isolated": true,
+  "metrics": {
+    "turns_to_first_edit": {
+      "aggregate": "med",
+      "adage": 5.5,
+      "control": 6.5,
+      "n": {
+        "adage": 6,
+        "control": 6
+      },
+      "n_missing": {
+        "adage": 0,
+        "control": 0
+      },
+      "n_imputed": {
+        "adage": 0,
+        "control": 0
+      },
+      "diff": -1.0,
+      "ci95": [
+        -2.0,
+        2.0
+      ],
+      "n_tasks": 6,
+      "task_mean_diff": -0.3333333333333333,
+      "p_value": 0.8167183281671833,
+      "p_tasks": 0.8125,
+      "p_holm": 1.0
+    },
+    "time_to_first_edit_s": {
+      "aggregate": "med",
+      "adage": 17.665,
+      "control": 18.585,
+      "n": {
+        "adage": 6,
+        "control": 6
+      },
+      "n_missing": {
+        "adage": 0,
+        "control": 0
+      },
+      "n_imputed": {
+        "adage": 0,
+        "control": 0
+      },
+      "diff": -0.9200000000000017,
+      "ci95": [
+        -4.439999999999998,
+        8.02
+      ],
+      "n_tasks": 6,
+      "task_mean_diff": 1.6466666666666674,
+      "p_value": 0.5671432856714329,
+      "p_tasks": 0.5625,
+      "p_holm": 1.0
+    },
+    "total_turns": {
+      "aggregate": "med",
+      "adage": 15.0,
+      "control": 14.0,
+      "n": {
+        "adage": 6,
+        "control": 6
+      },
+      "n_missing": {
+        "adage": 0,
+        "control": 0
+      },
+      "n_imputed": {
+        "adage": 0,
+        "control": 0
+      },
+      "diff": 1.0,
+      "ci95": [
+        -3.5,
+        3.0
+      ],
+      "n_tasks": 6,
+      "task_mean_diff": -0.5,
+      "p_value": 0.7798220177982201,
+      "p_tasks": 0.78125,
+      "p_holm": 1.0
+    },
+    "elapsed_s": {
+      "aggregate": "med",
+      "adage": 117.315,
+      "control": 124.46000000000001,
+      "n": {
+        "adage": 6,
+        "control": 6
+      },
+      "n_missing": {
+        "adage": 0,
+        "control": 0
+      },
+      "n_imputed": {
+        "adage": 0,
+        "control": 0
+      },
+      "diff": -7.14500000000001,
+      "ci95": [
+        -17.374999999999986,
+        39.245000000000005
+      ],
+      "n_tasks": 6,
+      "task_mean_diff": 6.103333333333339,
+      "p_value": 0.6855314468553144,
+      "p_tasks": 0.6875,
+      "p_holm": 1.0
+    },
+    "explore_calls_before_edit": {
+      "aggregate": "med",
+      "adage": 5.5,
+      "control": 6.5,
+      "n": {
+        "adage": 6,
+        "control": 6
+      },
+      "n_missing": {
+        "adage": 0,
+        "control": 0
+      },
+      "n_imputed": {
+        "adage": 0,
+        "control": 0
+      },
+      "diff": -1.0,
+      "ci95": [
+        -2.0,
+        2.0
+      ],
+      "n_tasks": 6,
+      "task_mean_diff": -0.3333333333333333,
+      "p_value": 0.8167183281671833,
+      "p_tasks": 0.8125,
+      "p_holm": 1.0
+    },
+    "dead_end_hits": {
+      "aggregate": "avg",
+      "adage": 0.16666666666666666,
+      "control": 0.0,
+      "n": {
+        "adage": 6,
+        "control": 6
+      },
+      "n_missing": {
+        "adage": 0,
+        "control": 0
+      },
+      "n_imputed": {
+        "adage": 0,
+        "control": 0
+      },
+      "diff": 0.16666666666666666,
+      "ci95": [
+        0.0,
+        0.5
+      ],
+      "n_tasks": 6,
+      "task_mean_diff": 0.16666666666666666,
+      "p_value": 1.0,
+      "p_tasks": 1.0,
+      "p_holm": 1.0
+    },
+    "pass_rate": {
+      "aggregate": "avg",
+      "adage": 1.0,
+      "control": 1.0,
+      "n": {
+        "adage": 6,
+        "control": 6
+      },
+      "n_missing": {
+        "adage": 0,
+        "control": 0
+      },
+      "n_imputed": {
+        "adage": 0,
+        "control": 0
+      },
+      "diff": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "n_tasks": 6,
+      "task_mean_diff": 0.0,
+      "p_value": 1.0,
+      "p_tasks": 1.0,
+      "p_holm": 1.0
+    },
+    "hidden_pass_rate": {
+      "aggregate": "avg",
+      "adage": 1.0,
+      "control": 1.0,
+      "n": {
+        "adage": 6,
+        "control": 6
+      },
+      "n_missing": {
+        "adage": 0,
+        "control": 0
+      },
+      "n_imputed": {
+        "adage": 0,
+        "control": 0
+      },
+      "diff": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "n_tasks": 6,
+      "task_mean_diff": 0.0,
+      "p_value": 1.0,
+      "p_tasks": 1.0,
+      "p_holm": 1.0
+    },
+    "obligation_met_rate": {
+      "aggregate": "avg",
+      "adage": null,
+      "control": null,
+      "n": {
+        "adage": 0,
+        "control": 0
+      },
+      "n_missing": {
+        "adage": 6,
+        "control": 6
+      },
+      "n_imputed": {
+        "adage": 0,
+        "control": 0
+      },
+      "diff": null,
+      "ci95": null,
+      "n_tasks": 0,
+      "task_mean_diff": null,
+      "p_value": null,
+      "p_tasks": null,
+      "p_holm": null
+    },
+    "follow_rate": {
+      "aggregate": "avg",
+      "adage": 0.0,
+      "control": 0.0,
+      "n": {
+        "adage": 6,
+        "control": 6
+      },
+      "n_missing": {
+        "adage": 0,
+        "control": 0
+      },
+      "n_imputed": {
+        "adage": 0,
+        "control": 0
+      },
+      "diff": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "n_tasks": 6,
+      "task_mean_diff": 0.0,
+      "p_value": 1.0,
+      "p_tasks": 1.0,
+      "p_holm": 1.0
+    },
+    "stale_generated_rate": {
+      "aggregate": "avg",
+      "adage": 0.0,
+      "control": 0.0,
+      "n": {
+        "adage": 6,
+        "control": 6
+      },
+      "n_missing": {
+        "adage": 0,
+        "control": 0
+      },
+      "n_imputed": {
+        "adage": 0,
+        "control": 0
+      },
+      "diff": 0.0,
+      "ci95": [
+        0.0,
+        0.0
+      ],
+      "n_tasks": 6,
+      "task_mean_diff": 0.0,
+      "p_value": 1.0,
+      "p_tasks": 1.0,
+      "p_holm": 1.0
+    },
+    "cost_usd": {
+      "aggregate": "avg",
+      "adage": 0.15815753333333335,
+      "control": 0.16971486666666666,
+      "n": {
+        "adage": 6,
+        "control": 6
+      },
+      "n_missing": {
+        "adage": 0,
+        "control": 0
+      },
+      "n_imputed": {
+        "adage": 0,
+        "control": 0
+      },
+      "diff": -0.011557333333333308,
+      "ci95": [
+        -0.03760213333333329,
+        0.013970099999999985
+      ],
+      "n_tasks": 6,
+      "task_mean_diff": -0.01155733333333333,
+      "p_value": 0.47095290470952905,
+      "p_tasks": 0.46875,
+      "p_holm": 1.0
+    }
+  },
+  "config": "showcase-chi-middleware-sonnet",
+  "model": "claude-sonnet-5",
+  "rounds": {
+    "1": {
+      "round": 1,
+      "runs": {
+        "adage": 6,
+        "control": 6
+      },
+      "unfinished": {
+        "adage": 0,
+        "control": 0
+      },
+      "status_counts": {
+        "adage": {
+          "ok": 6,
+          "censored": 0,
+          "infra_error": 0,
+          "scorer_error": 0
+        },
+        "control": {
+          "ok": 6,
+          "censored": 0,
+          "infra_error": 0,
+          "scorer_error": 0
+        }
+      },
+      "excluded": {
+        "adage": 0,
+        "control": 0
+      },
+      "n_censored": {
+        "adage": 0,
+        "control": 0
+      },
+      "leaky": false,
+      "seed": 20260929,
+      "harness_version": "2.1.285 (Claude Code)",
+      "isolated": true,
+      "metrics": {
+        "turns_to_first_edit": {
+          "aggregate": "med",
+          "adage": 5.5,
+          "control": 6.5,
+          "n": {
+            "adage": 6,
+            "control": 6
+          },
+          "n_missing": {
+            "adage": 0,
+            "control": 0
+          },
+          "n_imputed": {
+            "adage": 0,
+            "control": 0
+          },
+          "diff": -1.0,
+          "ci95": [
+            -2.0,
+            2.0
+          ],
+          "n_tasks": 6,
+          "task_mean_diff": -0.3333333333333333,
+          "p_value": 0.8167183281671833,
+          "p_tasks": 0.8125,
+          "p_holm": 1.0
+        },
+        "time_to_first_edit_s": {
+          "aggregate": "med",
+          "adage": 17.665,
+          "control": 18.585,
+          "n": {
+            "adage": 6,
+            "control": 6
+          },
+          "n_missing": {
+            "adage": 0,
+            "control": 0
+          },
+          "n_imputed": {
+            "adage": 0,
+            "control": 0
+          },
+          "diff": -0.9200000000000017,
+          "ci95": [
+            -4.439999999999998,
+            8.02
+          ],
+          "n_tasks": 6,
+          "task_mean_diff": 1.6466666666666674,
+          "p_value": 0.5671432856714329,
+          "p_tasks": 0.5625,
+          "p_holm": 1.0
+        },
+        "total_turns": {
+          "aggregate": "med",
+          "adage": 15.0,
+          "control": 14.0,
+          "n": {
+            "adage": 6,
+            "control": 6
+          },
+          "n_missing": {
+            "adage": 0,
+            "control": 0
+          },
+          "n_imputed": {
+            "adage": 0,
+            "control": 0
+          },
+          "diff": 1.0,
+          "ci95": [
+            -3.5,
+            3.0
+          ],
+          "n_tasks": 6,
+          "task_mean_diff": -0.5,
+          "p_value": 0.7798220177982201,
+          "p_tasks": 0.78125,
+          "p_holm": 1.0
+        },
+        "elapsed_s": {
+          "aggregate": "med",
+          "adage": 117.315,
+          "control": 124.46000000000001,
+          "n": {
+            "adage": 6,
+            "control": 6
+          },
+          "n_missing": {
+            "adage": 0,
+            "control": 0
+          },
+          "n_imputed": {
+            "adage": 0,
+            "control": 0
+          },
+          "diff": -7.14500000000001,
+          "ci95": [
+            -17.374999999999986,
+            39.245000000000005
+          ],
+          "n_tasks": 6,
+          "task_mean_diff": 6.103333333333339,
+          "p_value": 0.6855314468553144,
+          "p_tasks": 0.6875,
+          "p_holm": 1.0
+        },
+        "explore_calls_before_edit": {
+          "aggregate": "med",
+          "adage": 5.5,
+          "control": 6.5,
+          "n": {
+            "adage": 6,
+            "control": 6
+          },
+          "n_missing": {
+            "adage": 0,
+            "control": 0
+          },
+          "n_imputed": {
+            "adage": 0,
+            "control": 0
+          },
+          "diff": -1.0,
+          "ci95": [
+            -2.0,
+            2.0
+          ],
+          "n_tasks": 6,
+          "task_mean_diff": -0.3333333333333333,
+          "p_value": 0.8167183281671833,
+          "p_tasks": 0.8125,
+          "p_holm": 1.0
+        },
+        "dead_end_hits": {
+          "aggregate": "avg",
+          "adage": 0.16666666666666666,
+          "control": 0.0,
+          "n": {
+            "adage": 6,
+            "control": 6
+          },
+          "n_missing": {
+            "adage": 0,
+            "control": 0
+          },
+          "n_imputed": {
+            "adage": 0,
+            "control": 0
+          },
+          "diff": 0.16666666666666666,
+          "ci95": [
+            0.0,
+            0.5
+          ],
+          "n_tasks": 6,
+          "task_mean_diff": 0.16666666666666666,
+          "p_value": 1.0,
+          "p_tasks": 1.0,
+          "p_holm": 1.0
+        },
+        "pass_rate": {
+          "aggregate": "avg",
+          "adage": 1.0,
+          "control": 1.0,
+          "n": {
+            "adage": 6,
+            "control": 6
+          },
+          "n_missing": {
+            "adage": 0,
+            "control": 0
+          },
+          "n_imputed": {
+            "adage": 0,
+            "control": 0
+          },
+          "diff": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "n_tasks": 6,
+          "task_mean_diff": 0.0,
+          "p_value": 1.0,
+          "p_tasks": 1.0,
+          "p_holm": 1.0
+        },
+        "hidden_pass_rate": {
+          "aggregate": "avg",
+          "adage": 1.0,
+          "control": 1.0,
+          "n": {
+            "adage": 6,
+            "control": 6
+          },
+          "n_missing": {
+            "adage": 0,
+            "control": 0
+          },
+          "n_imputed": {
+            "adage": 0,
+            "control": 0
+          },
+          "diff": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "n_tasks": 6,
+          "task_mean_diff": 0.0,
+          "p_value": 1.0,
+          "p_tasks": 1.0,
+          "p_holm": 1.0
+        },
+        "obligation_met_rate": {
+          "aggregate": "avg",
+          "adage": null,
+          "control": null,
+          "n": {
+            "adage": 0,
+            "control": 0
+          },
+          "n_missing": {
+            "adage": 6,
+            "control": 6
+          },
+          "n_imputed": {
+            "adage": 0,
+            "control": 0
+          },
+          "diff": null,
+          "ci95": null,
+          "n_tasks": 0,
+          "task_mean_diff": null,
+          "p_value": null,
+          "p_tasks": null,
+          "p_holm": null
+        },
+        "follow_rate": {
+          "aggregate": "avg",
+          "adage": 0.0,
+          "control": 0.0,
+          "n": {
+            "adage": 6,
+            "control": 6
+          },
+          "n_missing": {
+            "adage": 0,
+            "control": 0
+          },
+          "n_imputed": {
+            "adage": 0,
+            "control": 0
+          },
+          "diff": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "n_tasks": 6,
+          "task_mean_diff": 0.0,
+          "p_value": 1.0,
+          "p_tasks": 1.0,
+          "p_holm": 1.0
+        },
+        "stale_generated_rate": {
+          "aggregate": "avg",
+          "adage": 0.0,
+          "control": 0.0,
+          "n": {
+            "adage": 6,
+            "control": 6
+          },
+          "n_missing": {
+            "adage": 0,
+            "control": 0
+          },
+          "n_imputed": {
+            "adage": 0,
+            "control": 0
+          },
+          "diff": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
+          "n_tasks": 6,
+          "task_mean_diff": 0.0,
+          "p_value": 1.0,
+          "p_tasks": 1.0,
+          "p_holm": 1.0
+        },
+        "cost_usd": {
+          "aggregate": "avg",
+          "adage": 0.15815753333333335,
+          "control": 0.16971486666666666,
+          "n": {
+            "adage": 6,
+            "control": 6
+          },
+          "n_missing": {
+            "adage": 0,
+            "control": 0
+          },
+          "n_imputed": {
+            "adage": 0,
+            "control": 0
+          },
+          "diff": -0.011557333333333308,
+          "ci95": [
+            -0.03760213333333329,
+            0.013970099999999985
+          ],
+          "n_tasks": 6,
+          "task_mean_diff": -0.01155733333333333,
+          "p_value": 0.47095290470952905,
+          "p_tasks": 0.46875,
+          "p_holm": 1.0
+        }
+      }
+    }
+  }
+}

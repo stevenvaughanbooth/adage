@@ -1,0 +1,21 @@
+{
+  "plan": {
+    "receipt": {
+      "covering": ".venv/bin/python -m pytest tests -q",
+      "fresh": true,
+      "note": "<adage-receipt operation=\"op-1a2b3c4d\">\nAdage's run of .venv/bin/python -m pytest tests -q passed on files identical to the current ones.\n</adage-receipt>",
+      "operation": "op-1a2b3c4d",
+      "result": "Adage answered this test run from its own run 4 min ago (op-1a2b3c4d): 3 passed."
+    },
+    "rewrite": {
+      "command": ".venv/bin/python -m pytest tests -q",
+      "kind": "test"
+    },
+    "substitute": {
+      "command": "make test",
+      "context": "adage ran make test for you; python3 -m pytest tests was replaced because that command fails in this repository (\"No module named pytest\"). The output above is from make test.",
+      "route": "dead-end-pytest",
+      "track": "acme/dead-ends"
+    }
+  }
+}

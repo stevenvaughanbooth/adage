@@ -1,0 +1,475 @@
+{
+  "conventions": "conventions.json",
+  "default_split": "hash:0.5",
+  "description": "Generated sessions with known behaviour on the acme-billing sandbox (adage eval generate synthetic)",
+  "learn": "demo",
+  "name": "synthetic",
+  "repo": "acme-billing",
+  "sandbox": "sandbox.txt",
+  "sessions": [
+    {
+      "file": "sessions/syn-00.jsonl",
+      "id": "syn-00",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-00",
+      "stale_generated": false,
+      "task": "W-1100"
+    },
+    {
+      "file": "sessions/syn-01.jsonl",
+      "id": "syn-01",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-01",
+      "stale_generated": false,
+      "task": "W-1101"
+    },
+    {
+      "file": "sessions/syn-02.jsonl",
+      "id": "syn-02",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-02",
+      "stale_generated": false,
+      "task": "W-1102"
+    },
+    {
+      "file": "sessions/syn-03.jsonl",
+      "id": "syn-03",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-03",
+      "stale_generated": false,
+      "task": "W-1103"
+    },
+    {
+      "file": "sessions/syn-04.jsonl",
+      "id": "syn-04",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-04",
+      "stale_generated": false,
+      "task": "W-1104"
+    },
+    {
+      "file": "sessions/syn-05.jsonl",
+      "id": "syn-05",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-05",
+      "stale_generated": false,
+      "task": "W-1105"
+    },
+    {
+      "file": "sessions/syn-06.jsonl",
+      "id": "syn-06",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-06",
+      "stale_generated": false,
+      "task": "W-1106"
+    },
+    {
+      "file": "sessions/syn-07.jsonl",
+      "id": "syn-07",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-07",
+      "stale_generated": false,
+      "task": "W-1107"
+    },
+    {
+      "file": "sessions/syn-08.jsonl",
+      "id": "syn-08",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-08",
+      "stale_generated": false,
+      "task": "W-1108"
+    },
+    {
+      "file": "sessions/syn-09.jsonl",
+      "id": "syn-09",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-09",
+      "stale_generated": false,
+      "task": "W-1109"
+    },
+    {
+      "file": "sessions/syn-10.jsonl",
+      "id": "syn-10",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-10",
+      "stale_generated": false,
+      "task": "W-1110"
+    },
+    {
+      "file": "sessions/syn-11.jsonl",
+      "id": "syn-11",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-11",
+      "stale_generated": false,
+      "task": "W-1111"
+    },
+    {
+      "file": "sessions/syn-12.jsonl",
+      "id": "syn-12",
+      "passed": false,
+      "phase": "synthetic",
+      "run": "syn-12",
+      "stale_generated": true,
+      "task": "W-1112"
+    },
+    {
+      "file": "sessions/syn-13.jsonl",
+      "id": "syn-13",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-13",
+      "stale_generated": false,
+      "task": "W-1113"
+    },
+    {
+      "file": "sessions/syn-14.jsonl",
+      "id": "syn-14",
+      "passed": false,
+      "phase": "synthetic",
+      "run": "syn-14",
+      "stale_generated": true,
+      "task": "W-1114"
+    },
+    {
+      "file": "sessions/syn-15.jsonl",
+      "id": "syn-15",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-15",
+      "stale_generated": false,
+      "task": "W-1115"
+    },
+    {
+      "file": "sessions/syn-16.jsonl",
+      "id": "syn-16",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-16",
+      "stale_generated": false,
+      "task": "W-1116"
+    },
+    {
+      "file": "sessions/syn-17.jsonl",
+      "id": "syn-17",
+      "passed": false,
+      "phase": "synthetic",
+      "run": "syn-17",
+      "stale_generated": true,
+      "task": "W-1117"
+    },
+    {
+      "file": "sessions/syn-18.jsonl",
+      "id": "syn-18",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-18",
+      "stale_generated": false,
+      "task": "W-1118"
+    },
+    {
+      "file": "sessions/syn-19.jsonl",
+      "id": "syn-19",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-19",
+      "stale_generated": false,
+      "task": "W-1119"
+    },
+    {
+      "file": "sessions/syn-20.jsonl",
+      "id": "syn-20",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-20",
+      "stale_generated": false,
+      "task": "W-1120"
+    },
+    {
+      "file": "sessions/syn-21.jsonl",
+      "id": "syn-21",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-21",
+      "stale_generated": false,
+      "task": "W-1121"
+    },
+    {
+      "file": "sessions/syn-22.jsonl",
+      "id": "syn-22",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-22",
+      "stale_generated": false,
+      "task": "W-1122"
+    },
+    {
+      "file": "sessions/syn-23.jsonl",
+      "id": "syn-23",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-23",
+      "stale_generated": false,
+      "task": "W-1123"
+    },
+    {
+      "file": "sessions/syn-24.jsonl",
+      "id": "syn-24",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-24",
+      "stale_generated": false,
+      "task": "W-1124"
+    },
+    {
+      "file": "sessions/syn-25.jsonl",
+      "id": "syn-25",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-25",
+      "stale_generated": false,
+      "task": "W-1125"
+    },
+    {
+      "file": "sessions/syn-26.jsonl",
+      "id": "syn-26",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-26",
+      "stale_generated": false,
+      "task": "W-1126"
+    },
+    {
+      "file": "sessions/syn-27.jsonl",
+      "id": "syn-27",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-27",
+      "stale_generated": false,
+      "task": "W-1127"
+    },
+    {
+      "file": "sessions/syn-28.jsonl",
+      "id": "syn-28",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-28",
+      "stale_generated": false,
+      "task": "W-1128"
+    },
+    {
+      "file": "sessions/syn-29.jsonl",
+      "id": "syn-29",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-29",
+      "stale_generated": false,
+      "task": "W-1129"
+    },
+    {
+      "file": "sessions/syn-30.jsonl",
+      "id": "syn-30",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-30",
+      "stale_generated": false,
+      "task": "W-1130"
+    },
+    {
+      "file": "sessions/syn-31.jsonl",
+      "id": "syn-31",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-31",
+      "stale_generated": false,
+      "task": "W-1131"
+    },
+    {
+      "file": "sessions/syn-32.jsonl",
+      "id": "syn-32",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-32",
+      "stale_generated": false,
+      "task": "W-1132"
+    },
+    {
+      "file": "sessions/syn-33.jsonl",
+      "id": "syn-33",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-33",
+      "stale_generated": false,
+      "task": "W-1133"
+    },
+    {
+      "file": "sessions/syn-34.jsonl",
+      "id": "syn-34",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-34",
+      "stale_generated": false,
+      "task": "W-1134"
+    },
+    {
+      "file": "sessions/syn-35.jsonl",
+      "id": "syn-35",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-35",
+      "stale_generated": false,
+      "task": "W-1135"
+    },
+    {
+      "file": "sessions/syn-36.jsonl",
+      "id": "syn-36",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-36",
+      "stale_generated": false,
+      "task": "W-1136"
+    },
+    {
+      "file": "sessions/syn-37.jsonl",
+      "id": "syn-37",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-37",
+      "stale_generated": false,
+      "task": "W-1137"
+    },
+    {
+      "file": "sessions/syn-38.jsonl",
+      "id": "syn-38",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-38",
+      "stale_generated": false,
+      "task": "W-1138"
+    },
+    {
+      "file": "sessions/syn-39.jsonl",
+      "id": "syn-39",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-39",
+      "stale_generated": false,
+      "task": "W-1139"
+    },
+    {
+      "file": "sessions/syn-40.jsonl",
+      "id": "syn-40",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-40",
+      "stale_generated": false,
+      "task": "W-1140"
+    },
+    {
+      "file": "sessions/syn-41.jsonl",
+      "id": "syn-41",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-41",
+      "stale_generated": false,
+      "task": "W-1141"
+    },
+    {
+      "file": "sessions/syn-42.jsonl",
+      "id": "syn-42",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-42",
+      "stale_generated": false,
+      "task": "W-1142"
+    },
+    {
+      "file": "sessions/syn-43.jsonl",
+      "id": "syn-43",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-43",
+      "stale_generated": false,
+      "task": "W-1143"
+    },
+    {
+      "file": "sessions/syn-44.jsonl",
+      "id": "syn-44",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-44",
+      "stale_generated": false,
+      "task": "W-1144"
+    },
+    {
+      "file": "sessions/syn-45.jsonl",
+      "id": "syn-45",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-45",
+      "stale_generated": false,
+      "task": "W-1145"
+    },
+    {
+      "file": "sessions/syn-46.jsonl",
+      "id": "syn-46",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-46",
+      "stale_generated": false,
+      "task": "W-1146"
+    },
+    {
+      "file": "sessions/syn-47.jsonl",
+      "id": "syn-47",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-47",
+      "stale_generated": false,
+      "task": "W-1147"
+    },
+    {
+      "file": "sessions/syn-chore-0.jsonl",
+      "id": "syn-chore-0",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-chore-0",
+      "stale_generated": false
+    },
+    {
+      "file": "sessions/syn-chore-1.jsonl",
+      "id": "syn-chore-1",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-chore-1",
+      "stale_generated": false
+    },
+    {
+      "file": "sessions/syn-chore-2.jsonl",
+      "id": "syn-chore-2",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-chore-2",
+      "stale_generated": false
+    },
+    {
+      "file": "sessions/syn-chore-3.jsonl",
+      "id": "syn-chore-3",
+      "passed": true,
+      "phase": "synthetic",
+      "run": "syn-chore-3",
+      "stale_generated": false
+    }
+  ]
+}

@@ -1,0 +1,399 @@
+{
+  "all_journal_receipts": [],
+  "block": null,
+  "collection_errors": [],
+  "condition": "failed",
+  "contract_emitted": false,
+  "cost_usd": 0.12418950000000001,
+  "dev_arm": "A3",
+  "final_generation": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+  "order": 25,
+  "protocol": "dev-arms-1",
+  "provenance": {
+    "cwd": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/dev-v8b/sessions/25-A3-failed/repo",
+    "destination": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/dev-v8b/sessions/25-A3-failed/native-transcript.jsonl",
+    "session_id": "deb2fe2c-c774-4598-b455-8baffcdc6327",
+    "sha256": "9cdd043a0ef94e2ed988eee7a04cda0f0e2f0c39cc31731b79e03d483f24c349",
+    "source": "/Users/stevenbooth/.claude/projects/-private-tmp-adage-real-repo-gate-v1-cohorts-launch-gate-v5-dev-v8b-sessions-25-A3-failed-repo/deb2fe2c-c774-4598-b455-8baffcdc6327.jsonl",
+    "synthetic": false
+  },
+  "pytest_requests": 4,
+  "quality": {
+    "changed_files": [
+      "CHANGELOG.rst",
+      "src/marshmallow/validate.py",
+      "tests/test_validate.py"
+    ],
+    "checks": {
+      "tests": true
+    },
+    "ci_passed": true,
+    "dependency_mode": "frozen prepared environment; no rescue install",
+    "elapsed_s": 1.63,
+    "exit_code": 0,
+    "hidden_collection_integrity": {
+      "expected_count": 11,
+      "extra": [],
+      "missing": [],
+      "observed_count": 11,
+      "passed": true,
+      "unsuccessful": []
+    },
+    "hidden_failed": [],
+    "hidden_passed": true,
+    "n_tests": 1204,
+    "passed": true,
+    "rescue_error": null,
+    "suite_failed": [],
+    "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n....................................................                     [100%]\n1204 passed in 1.12s",
+    "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+  },
+  "replay": {
+    "arm": "A3",
+    "confirmed_elimination": false,
+    "covered_subsets": 0,
+    "final_source_verified": true,
+    "necessary_work_skipped": false,
+    "opaque": 0,
+    "receipts": 0,
+    "redundant_repeats": 0,
+    "repeat_attempts": 0,
+    "repeat_attempts_not_completed": 0,
+    "requests": [
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_finite_accepts_finite_numbers -v",
+        "completed": true,
+        "covered": false,
+        "digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+        "id": "toolu_01SZx8FwVrABDphtKSPHzPJJ",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py::test_finite_accepts_finite_numbers -v"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_finite_rejects_nan_and_infinities -v",
+        "completed": true,
+        "covered": false,
+        "digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+        "id": "toolu_01JYh6n7M3RYxBcDANiFaUij",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py::test_finite_rejects_nan_and_infinities -v"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_finite_custom_message -v",
+        "completed": true,
+        "covered": false,
+        "digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+        "id": "toolu_011RRXiTgfz9AUxLT3UEQJrT",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py::test_finite_custom_message -v"
+      },
+      {
+        "adage_pre_context": false,
+        "classification": "before_receipt",
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "covered": false,
+        "digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+        "id": "toolu_014ELaW6x8jwgghTrEJNuKx6",
+        "receipt_note": false,
+        "segment": ".venv/bin/python -m pytest tests/test_validate.py -q"
+      },
+      {
+        "classification": "opaque_shell",
+        "command": ".venv/bin/python << 'EOF'\nfrom marshmallow.validate import Finite\nfrom marshmallow import ValidationError\nimport math\n\nv = Finite()\n\n# Test finite numbers\ntest_cases = [\n    (0, True),\n    (42, True),\n    (-1.25, True),\n    (1e300, True),\n    (float('inf'), False),\n    (float('-inf'), False),\n    (float('nan'), False),\n]\n\nfor value, should_pass in test_cases:\n    try:\n        result = v(value)\n        if should_pass:\n            print(f\"\u2713 {value} passed (expected)\")\n        else:\n            print(f\"\u2717 {value} passed (unexpected)\")\n    except ValidationError as e:\n        if not should_pass:\n            print(f\"\u2713 {value} failed with: {e.messages[0]} (expected)\")\n        else:\n            print(f\"\u2717 {value} failed (unexpected): {e.messages[0]}\")\n\n# Test custom error message\nv_custom = Finite(error=\"Value {input} is not finite!\")\ntry:\n    v_custom(float('inf'))\nexcept ValidationError as e:\n    print(f\"\u2713 Custom message: {e.messages[0]}\")\nEOF\n",
+        "digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+        "id": "toolu_01TKcd8ZxdLQr8Hd8dfcfhAh"
+      }
+    ],
+    "successful_receipts": 0,
+    "verification_necessary": false,
+    "version": 2
+  },
+  "requests": 24,
+  "stop_gate_outputs": [],
+  "task": "mm-curve--finite",
+  "timeline": {
+    "arm": "A3",
+    "events": [
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_011LPmRUE7RA2MMr4LhbWMJ6",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01NNVAb3Rro3t35r55qJYwN7",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01HgdQU73hax9ydfDGq325mp",
+        "kind": "tool",
+        "name": "Grep",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": "grep -n \"^class Range\\|^class OneOf\\|^class Length\" /private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/dev-v8b/sessions/25-A3-failed/repo/src/marshmallow/validate.py",
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01U18YcyfM3nmsrtBo7WqZU9",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01NNChaJ9G6dP3KiaRnT1zFQ",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": "grep -n \"^class\" /private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/dev-v8b/sessions/25-A3-failed/repo/src/marshmallow/validate.py | tail -20",
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_011BVbFFzt6Ss8hnfmbYM5Ni",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01WBLp8BS9sMRcZ5qsaneCBk",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": "wc -l /private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/dev-v8b/sessions/25-A3-failed/repo/tests/test_validate.py",
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01YaDjtFKdDAZebr1Uktjygi",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "59288d9ed04c618f1ba677ca2794507cbb256081674eb84d168b9a98eaea7354",
+        "id": "toolu_01MVSWhk11u2ovJqitGH3QXF",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "2a1a99cf21c3cf05fe7fc269fd41ecbcd98d9bd7fa827ed81a389b23e42d1b9e",
+        "id": "toolu_01G2K9ELM4JXpJThdHJCu5WT",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/dev-v8b/sessions/25-A3-failed/repo/tests/test_validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "2a1a99cf21c3cf05fe7fc269fd41ecbcd98d9bd7fa827ed81a389b23e42d1b9e",
+        "id": "toolu_01Pve28S9gqWoKAhxS6cRJMC",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "d51c459a2fd6832f281be02036de97ba167e2f12876a0f7d0a4e934657f381ad",
+        "id": "toolu_016bmb7mSB9fV5DaT5562wxj",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/dev-v8b/sessions/25-A3-failed/repo/CHANGELOG.rst",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": "wc -l /private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/dev-v8b/sessions/25-A3-failed/repo/src/marshmallow/validate.py",
+        "completed": true,
+        "digest": "d51c459a2fd6832f281be02036de97ba167e2f12876a0f7d0a4e934657f381ad",
+        "id": "toolu_01LyrotNTMZBRgu4U6JA1Kr6",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "d51c459a2fd6832f281be02036de97ba167e2f12876a0f7d0a4e934657f381ad",
+        "id": "toolu_019ajZYWsuHS3t8rxTmCzfBg",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "d51c459a2fd6832f281be02036de97ba167e2f12876a0f7d0a4e934657f381ad",
+        "id": "toolu_01Q4Fgt9Dg3BHfZVbR61C3T3",
+        "kind": "tool",
+        "name": "Read",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "5b626b17389a3069c08449280e247d3dfe679c961d9da18d5dd965d7b5c30657",
+        "id": "toolu_01SkHvUkeSYF5xV961tdHBHr",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/dev-v8b/sessions/25-A3-failed/repo/src/marshmallow/validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+        "id": "toolu_017oie4UeGcAdj61HJf9gpEi",
+        "kind": "tool",
+        "name": "Edit",
+        "path": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/dev-v8b/sessions/25-A3-failed/repo/src/marshmallow/validate.py",
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_finite_accepts_finite_numbers -v",
+        "completed": true,
+        "digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+        "id": "toolu_01SZx8FwVrABDphtKSPHzPJJ",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_finite_rejects_nan_and_infinities -v",
+        "completed": true,
+        "digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+        "id": "toolu_01JYh6n7M3RYxBcDANiFaUij",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py::test_finite_custom_message -v",
+        "completed": true,
+        "digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+        "id": "toolu_011RRXiTgfz9AUxLT3UEQJrT",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+        "completed": true,
+        "digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+        "id": "toolu_014ELaW6x8jwgghTrEJNuKx6",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python -c \"from marshmallow.validate import Finite; print('Finite imported successfully'); v = Finite(); print(v(42.0)); print(repr(v))\"",
+        "completed": true,
+        "digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+        "id": "toolu_01KcYQYdWzaZfsqHsAzfgSu2",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": null,
+        "completed": true,
+        "digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+        "id": "toolu_0129JbKpRJCh9qZqGK6RmkB1",
+        "kind": "tool",
+        "name": "Grep",
+        "path": null,
+        "receipt_note": false
+      },
+      {
+        "adage_pre_context": false,
+        "command": ".venv/bin/python << 'EOF'\nfrom marshmallow.validate import Finite\nfrom marshmallow import ValidationError\nimport math\n\nv = Finite()\n\n# Test finite numbers\ntest_cases = [\n    (0, True),\n    (42, True),\n    (-1.25, True),\n    (1e300, True),\n    (float('inf'), False),\n    (float('-inf'), False),\n    (float('nan'), False),\n]\n\nfor value, should_pass in test_cases:\n    try:\n        result = v(value)\n        if should_pass:\n            print(f\"\u2713 {value} passed (expected)\")\n        else:\n            print(f\"\u2717 {value} passed (unexpected)\")\n    except ValidationError as e:\n        if not should_pass:\n            print(f\"\u2713 {value} failed with: {e.messages[0]} (expected)\")\n        else:\n            print(f\"\u2717 {value} failed (unexpected): {e.messages[0]}\")\n\n# Test custom error message\nv_custom = Finite(error=\"Value {input} is not finite!\")\ntry:\n    v_custom(float('inf'))\nexcept ValidationError as e:\n    print(f\"\u2713 Custom message: {e.messages[0]}\")\nEOF\n",
+        "completed": true,
+        "digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+        "id": "toolu_01TKcd8ZxdLQr8Hd8dfcfhAh",
+        "kind": "tool",
+        "name": "Bash",
+        "path": null,
+        "receipt_note": false
+      }
+    ],
+    "final_digest": "0f432288fb225a5e7ad109f0392246e96e0f6b81a5a1ecf12f3f3a5f39bc00ca",
+    "root": "/private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v5/dev-v8b/sessions/25-A3-failed/repo"
+  },
+  "tokens": {
+    "cache_read": 517925,
+    "cache_write": 19277,
+    "input": 193,
+    "output": 6730
+  },
+  "wall_seconds": 77.51872
+}

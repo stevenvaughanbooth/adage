@@ -1,0 +1,122 @@
+# Offline evals (docs/evals.md): regression gates on the committed datasets, property tests at the
+# slow case counts, replay fidelity, per-dataset reports, and the live runner's dry-run smoke
+# test. Nothing here runs an agent or spends tokens. ci.yml excludes adage-eval, so this workflow
+# is the only place its suites run.
+name: Evals
+
+# Weekly and on manual dispatch only: `gh workflow run Evals --ref <branch>`.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  evals:
+    name: evals (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x64, os: ubuntu-24.04 }
+          - { name: macos-arm64, os: macos-14 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: gates
+        run: cargo test --locked -p adage-eval --test gates
+
+      - name: L0 bench (the default parameters reproduce evals/baselines/l0-core.jsonl)
+        run: cargo test --locked -p adage-eval --test bench
+
+      - name: parity (every dataset keeps the conventions floor; no false route beyond it)
+        run: cargo test --locked -p adage-eval --test parity
+
+      # Context triggers at hook time over the generated newkinds suite (skips without python3).
+      - name: G4 context gates
+        run: cargo test --locked -p adage-eval --test g4 -- --nocapture
+
+      # Execution (adage-exec): E1 prefetch and E2 actions end to end. Runs that need a live
+      # sandbox or staging backend (Landlock, user namespaces, bubblewrap) say "skip" where the
+      # runner has none; everything else runs everywhere.
+      - name: sandbox backend on this runner
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap && cargo run --locked -q -p adage-exec -- doctor || true
+      - name: execution (E1, E2 actions, staging, the no-spawn guarantee)
+        run: cargo test --locked -p adage-exec -- --nocapture 2>&1 | tee exec-tests.log; test "${PIPESTATUS[0]}" = 0
+        shell: bash
+      - name: adage-train (the training pipeline, with the fake harness)
+        run: cargo test --locked -p adage-train
+
+      - name: property tests (slow case counts)
+        env:
+          ADAGE_PROP_TRACE: ${{ runner.temp }}/prop_shell_last.json
+        run: cargo test --locked -p adage-eval --features slow
+      - name: last property-test input (if the process crashed)
+        if: failure()
+        shell: bash
+        run: |
+          f="${{ runner.temp }}/prop_shell_last.json"
+          if [ -f "$f" ]; then echo "bytes: $(wc -c < "$f")"; head -c 4000 "$f"; echo; fi
+
+      - name: regression tests for eval findings
+        run: cargo test --locked -p adage-core --test deep && cargo test --locked -p adage-tracks --test hostile && cargo test --locked -p adage-learn --test hostile
+
+      - name: reports and replay fidelity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --locked -p adage-cli
+          adage=target/debug/adage
+          mkdir -p eval-reports
+          $adage eval evals/datasets/demo-haiku45 --split round2 --json > eval-reports/demo-round2.json
+          $adage eval evals/datasets/demo-haiku45 --split round1 --json > eval-reports/demo-round1.json
+          $adage eval evals/datasets/synthetic --json > eval-reports/synthetic.json
+          $adage eval evals/datasets/adversarial --json > eval-reports/adversarial.json
+          $adage eval fidelity evals/datasets/demo-haiku45 --round round2 --json > eval-reports/fidelity-round2.json
+          # Against today's learned index: every recorded directive arrives at its event or earlier.
+          $adage eval fidelity evals/datasets/demo-haiku45 --round round1 --learned --json > eval-reports/fidelity-learned-round1.json
+          $adage eval fidelity evals/datasets/demo-haiku45 --round round2 --learned --json > eval-reports/fidelity-learned-round2.json
+          # Leak-free splits (held out by task) and learned routes scored against ground truth.
+          $adage eval evals/datasets/demo-haiku45 --split temporal --json > eval-reports/demo-temporal.json
+          for f in 0 1 2; do
+            $adage eval evals/datasets/demo-haiku45 --split group:task:3:$f --json > eval-reports/demo-group-$f.json
+          done
+          $adage eval routes evals/datasets/demo-haiku45 --split temporal --json > eval-reports/routes-demo-temporal.json
+          $adage eval routes evals/datasets/synthetic --json > eval-reports/routes-synthetic.json
+          for d in demo-haiku45:round2 synthetic adversarial; do
+            name=${d%%:*}; split=${d#*:}; [ "$split" = "$d" ] && split=""
+            $adage eval evals/datasets/$name ${split:+--split $split}
+          done
+          $adage eval bench run --suite core --deterministic --out eval-reports/bench-l0-core.jsonl
+          # Same dataset, same bytes.
+          $adage eval evals/datasets/demo-haiku45 --split round2 --json | cmp - eval-reports/demo-round2.json
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: eval-reports-${{ matrix.name }}
+          path: eval-reports/
+
+      # Every Python suite under evals/, each from its own import root (xtask/src/suites.rs): the
+      # live runner's dry run (no agents), the procedural sandbox generator (determinism, schema,
+      # the smoke suite's self-check and the scripted rehearsal, using target/debug/adage built
+      # above), the external benchmark protocol (no Harbor, no agents), the replay savings helpers,
+      # the reflex-proof harness and the lab's offline studies.
+      - name: Python suites
+        run: cargo xtask test python

@@ -1,0 +1,29 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 230
+expression: text
+---
+ adage watch  harbor-dispatch · gen 8216e29f          last call 12:33:10   LIVE
+ ◠ 3 fired · ✓ 2 followed ━━━━── · ■ 1 finish line · 21 calls      █████▁██████
+
+  ┊ ↑ earlier: 1 session · 2 turns · 9 steps
+  Claude Code  session started 12:08 ───────────────────────────────────────────
+  ├ Run  npm run check                                   ✓ followed adage  12:20
+  ├ ◆ adage ■ finish line: asked the agent to go on before it stops        12:21
+  ├ Run  npm run codegen                                                   12:22
+  │  ◆ adage ✓ finish line met: npm run codegen
+  ╰ ◇ done                                                                 12:23
+  ◇ turn 12:25–12:28 · 2 steps, nothing to say   Read ×3
+  ❯ PROMPT · 2 steps, 3 calls · Run ×2 · Read                              12:29
+  ├ ◆ adage ↪ pointed the test run at .venv/bin/python                     12:30
+  ├ Run  pytest tests/                                                     12:32
+  ├ Run · Read                                                             12:33
+
+
+────────────────────────────────────────────────────────────────────────────────
+ ◆ conditioned 12:34 · 24 traces · 1 change · 2 patterns forming    l  all runs
+ ○ 1 needs you · 2 to look over · adage review
+ + hooks claude    + 4 reflexes    + auto-condition
+ ! no model · adage models fetch
+────────────────────────────────────────────────────────────────────────────────
+  :  palette   p  pause   f  scope   /  filter   enter  inspect         q  quit

@@ -1,0 +1,70 @@
+[package]
+name = "adage-cli"
+description = "The adage binary: hook client, learner, and tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[[bin]]
+name = "adage"
+path = "src/main.rs"
+
+# Released by dist (dist-workspace.toml) although not published to crates.io yet.
+[package.metadata.dist]
+dist = true
+
+[dependencies]
+adage-core = { path = "../adage-core" }
+adage-trace = { path = "../adage-trace" }
+adage-store = { path = "../adage-store" }
+adage-tracks = { path = "../adage-tracks" }
+adage-intent = { path = "../adage-intent", features = ["bundled"] }
+adage-runtime = { path = "../adage-runtime" }
+adage-learn = { path = "../adage-learn" }
+adage-graph = { path = "../adage-graph" }
+adage-instincts = { path = "../adage-instincts" }
+adage-sign = { path = "../adage-sign" }
+adage-pack = { path = "../adage-pack" }
+adage-eval = { path = "../adage-eval" }
+adage-hook = { path = "../adage-hook" }
+# Approvals are written through adage-exec's API (the library only: `adage` never runs a route).
+adage-exec = { path = "../adage-exec" }
+# The operations front ends share: the review queue and decisions (`adage_app`).
+adage-app = { path = "../adage-app" }
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+regex.workspace = true
+sha2.workspace = true
+toml.workspace = true
+# The terminal UI (`adage watch`, `adage ui`, interactive `adage init`); never used by hooks.
+ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
+# The command-line grammar, help and completions (never used by hooks: `adage hook` is
+# dispatched before clap runs).
+clap = { version = "4.6", features = ["derive", "wrap_help"] }
+clap_complete = "4.6"
+# The design system: tokens, theme, and the output grammar every command prints through.
+adage-term = { path = "../adage-term", features = ["ratatui"] }
+
+# The local UTC offset for clock times in the terminal UI, from the C library (Unix) or the
+# system (Windows); both crates are already in the dependency graph. Not chrono: its time-zone
+# lookup links CoreFoundation on macOS, which costs every hook process ~2 ms at startup.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["timezoneapi"] }
+
+[dev-dependencies]
+tempfile = "3"
+insta = "1"
+adage-sim = { path = "../adage-sim" }
+# `adage train accept` installs what `adage train` (adage-train) stages.
+adage-train = { path = "../adage-train" }
+ssh-key = { version = "=0.6.7", features = ["std", "crypto", "rand_core"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+# The workspace test kit (route, track and index builders, a learned home): tests and examples only.
+adage-tracks = { path = "../adage-tracks", features = ["testkit"] }

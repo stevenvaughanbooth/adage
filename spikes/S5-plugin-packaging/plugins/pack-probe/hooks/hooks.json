@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/log-event.sh",
+              "SessionStart",
+              "/Users/stevenbooth/Documents/skill-compile/spikes/S5-plugin-packaging/logs/pack-probe.log"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

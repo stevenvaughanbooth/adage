@@ -1,0 +1,194 @@
+{
+ "repo": "jq",
+ "url": "https://github.com/jqlang/jq",
+ "repo_key": "github.com/jqlang/jq",
+ "tasks": [
+  {
+   "id": "jq-16945732",
+   "sha": "169457328db1c2788b01b79e7739851647a78274",
+   "base": "c8017bf079668be4caa42edfc12e7f2304c2b999",
+   "date": "2025-09-29T17:15:43+02:00",
+   "subject": "Fix `rtrimstr(\"\")` always output `\"\"` (#3415)",
+   "src_files": [
+    "src/builtin.jq"
+   ],
+   "test_files": [
+    "tests/jq.test"
+   ],
+   "gold_files": [
+    "src/builtin.jq"
+   ],
+   "hidden_command": "make -s -j2 >/dev/null && ./tests/jqtest",
+   "base_exit": 1,
+   "base_tail": "line number 2409\nTest #505: '[range(10)] | .[1.7:4294967295]' at line number 2413\nTest #506: '[range(10)] | .[1.7:-4294967296]' at line number 2417\nTest #507: '[[range(10)] | .[1.1,1.5,1.7]]' at line number 2421\nTest #508: '[range(5)] | .[1.1] = 5' at line number 2425\nTest #509: '[range(3)] | .[nan:1]' at line number 2429\nTest #510: '[range(3)] | .[1:nan]' at line number 2433\nTest #511: '[range(3)] | .[nan]' at line number 2437\nTest #512: 'try ([range(3)] | .[nan] = 9) catch .' at line number 2441\nTest #513: 'try (\"foobar\" | .[1.5:3.5] = \"xyz\") catch .' at line number 2445\nTest #514: 'try ([range(10)] | .[1.5:3.5] = [\"xyz\"]) catch .' at line number 2449\nTest #515: 'try (\"foobar\" | .[1.5]) catch .' at line number 2453\nTest #516: 'try [\"ok\", setpath([1]; 1)] catch [\"ko\", .]' at line number 2460\nTest #517: 'try fromjson catch .' at line number 2464\nTest #518: 'try ltrimstr(1) catch \"x\", try rtrimstr(1) catch \"x\" | \"ok\"' at line number 2470\nTest #519: 'try ltrimstr(\"x\") catch \"x\", try rtrimstr(\"x\") catch \"x\" | \"ok\"' at line number 2475\nTest #520: '.[] as [$x, $y] | try [\"ok\", ($x | ltrimstr($y))] catch [\"ko\", .]' at line number 2482\nTest #521: '.[] as [$x, $y] | try [\"ok\", ($x | rtrimstr($y))] catch [\"ko\", .]' at line number 2489\nTest #522: 'try [\"OK\", setpath([[1]]; 1)] catch [\"KO\", .]' at line number 2499\nTest #523: 'foreach .[] as $x (0, 1; . + $x)' at line number 2504\nTest #524: 'strflocaltime(\"\" | ., @uri)' at line number 2514\n522 of 524 tests passed (0 malformed, 0 skipped)",
+   "fixed_seconds": 4.28,
+   "n_tests": 524,
+   "prompt": "`rtrimstr(\"\")` (and its siblings) are broken: when the argument is the empty string, the whole input gets replaced with an empty string instead of being left untouched. For example:\n```\n$ jq -n '\"foo\"|rtrimstr(\"\")'\n\"\"\n```\nThis should return `\"foo\"` unchanged, since trimming an empty suffix/prefix should be a no-op. The same issue likely affects `ltrimstr(\"\")` and `trimstr(\"\")`. Please fix this so trimming with an empty string argument leaves the input untouched.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "jq-b29504b4",
+   "sha": "b29504b4e191a4b1028bd1c252aaab0c62fbdbfa",
+   "base": "589a6947fa5e6f6f1d3f340053a8c92fa8b9f445",
+   "date": "2025-10-14T14:12:57+09:00",
+   "subject": "Increase the maximum printing depth from 256 to 10000 (fixes #3413) (#3414)",
+   "src_files": [
+    "src/jv_print.c"
+   ],
+   "test_files": [
+    "tests/jq.test"
+   ],
+   "gold_files": [
+    ".github/workflows/ci.yml",
+    "src/jv_print.c"
+   ],
+   "hidden_command": "make -s -j2 >/dev/null && ./tests/jqtest",
+   "base_exit": 1,
+   "base_tail": "y [\"ok\", setpath([1]; 1)] catch [\"ko\", .]' at line number 2460\nTest #517: 'try fromjson catch .' at line number 2464\nTest #518: 'try ltrimstr(1) catch \"x\", try rtrimstr(1) catch \"x\" | \"ok\"' at line number 2470\nTest #519: 'try ltrimstr(\"x\") catch \"x\", try rtrimstr(\"x\") catch \"x\" | \"ok\"' at line number 2475\nTest #520: '.[] as [$x, $y] | try [\"ok\", ($x | ltrimstr($y))] catch [\"ko\", .]' at line number 2482\nTest #521: '.[] as [$x, $y] | try [\"ok\", ($x | rtrimstr($y))] catch [\"ko\", .]' at line number 2489\nTest #522: 'try [\"OK\", setpath([[1]]; 1)] catch [\"KO\", .]' at line number 2499\nTest #523: 'foreach .[] as $x (0, 1; . + $x)' at line number 2504\nTest #524: 'strflocaltime(\"\" | ., @uri)' at line number 2514\nTest #525: 'reduce range(9999) as $_ ([];[.]) | tojson | fromjson | flatten' at line number 2524\n*** Insufficient results for test at line number 2526: reduce range(9999) as $_ ([];[.]) | tojson | fromjson | flatten\nTest #526: 'reduce range(10000) as $_ ([];[.]) | tojson | try (fromjson) catch . | (contains(\"<skipped: too deep>\") | not) and contains(\"Exceeds depth limit for parsing\")' at line number 2529\n*** Expected true, but got false for test at line number 2531: reduce range(10000) as $_ ([];[.]) | tojson | try (fromjson) catch . | (contains(\"<skipped: too deep>\") | not) and contains(\"Exceeds depth limit for parsing\")\nTest #527: 'reduce range(10001) as $_ ([];[.]) | tojson | contains(\"<skipped: too deep>\")' at line number 2534\n525 of 527 tests passed (0 malformed, 0 skipped)",
+   "fixed_seconds": 2.94,
+   "n_tests": 527,
+   "prompt": "When printing deeply nested arrays/objects, jq gives up and prints `<skipped: too deep>` far too early, even for structures that are well within jq's own parsing depth limit. For example, a value nested about 300 levels deep already triggers this truncation on output, even though such a structure round-trips fine through `tojson`/`fromjson`. The printing depth limit should be raised so it stays in sync with the (much higher) parsing depth limit, allowing correctly nested structures to print in full instead of being needlessly truncated. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "jq-0df54c88",
+   "sha": "0df54c888ab731fbac059f8523c6c5fb3a901c99",
+   "base": "262f0b81c1d7f44cf85144b65dc584a4f520a934",
+   "date": "2026-03-02T21:58:28+09:00",
+   "subject": "Fix infinite loop and undefined behavior in `del(.[nan])` (#3490)",
+   "src_files": [
+    "src/jv_aux.c"
+   ],
+   "test_files": [
+    "tests/jq.test"
+   ],
+   "gold_files": [
+    "src/jv_aux.c"
+   ],
+   "hidden_command": "make -s -j2 >/dev/null && ./tests/jqtest",
+   "base_exit": 137,
+   "base_tail": "] as $i (0; . + $i)]' at line number 906\nTest #185: 'reduce .[] as $x (0; . + $x) as $x | $x' at line number 910\nTest #186: 'reduce . as $n (.; .)' at line number 915\nTest #187: '. as {$a, b: [$c, {$d}]} | [$a, $c, $d]' at line number 920\nTest #188: '. as {$a, $b:[$c, $d]}| [$a, $b, $c, $d]' at line number 924\nTest #189: '.[] | . as {$a, b: [$c, {$d}]} ?// [$a, {$b}, $e] ?// $f | [$a, $b, $c, $d, $e, $f]' at line number 929\nTest #190: '.[] | . as {a:$a} ?// {a:$a} ?// {a:$a} | $a' at line number 936\nTest #191: '.[] as {a:$a} ?// {a:$a} ?// {a:$a} | $a' at line number 940\nTest #192: '[[3],[4],[5],6][] | . as {a:$a} ?// {a:$a} ?// {a:$a} | $a' at line number 944\nTest #193: '[[3],[4],[5],6] | .[] as {a:$a} ?// {a:$a} ?// {a:$a} | $a' at line number 948\nTest #194: '.[] | . as {a:$a} ?// {a:$a} ?// $a | $a' at line number 952\nTest #195: '.[] as {a:$a} ?// {a:$a} ?// $a | $a' at line number 959\nTest #196: '[[3],[4],[5],6][] | . as {a:$a} ?// {a:$a} ?// $a | $a' at line number 966\nTest #197: '[[3],[4],[5],6] | .[] as {a:$a} ?// {a:$a} ?// $a | $a' at line number 973\nTest #198: '.[] | . as {a:$a} ?// $a ?// {a:$a} | $a' at line number 980\nTest #199: '.[] as {a:$a} ?// $a ?// {a:$a} | $a' at line number 987\nTest #200: '[[3],[4],[5],6][] | . as {a:$a} ?// $a ?// {a:$a} | $a' at line number 994\nTest #201: '[[3],[4],[5],6] | .[] as {a:$a} ?// $a ?// {a:$a} | $a' at line number 1001\nTest #202: '.[] | . as $a ?// {a:$a} ?// {a:$a} | $a' at line number 1008\nTest #203: '.[] as $a ?// \nKilled",
+   "fixed_seconds": 3.64,
+   "n_tests": 531,
+   "prompt": "`del(.[nan])` hangs or exhibits undefined behavior instead of doing something sane. For example:\n```\n$ echo '[1,2,3]' | jq 'del(.[nan])'\n```\nThis should either be a no-op (leaving the array unchanged) or error cleanly, but it currently misbehaves badly, and the same happens with multiple nan indices like `del(.[nan,nan])`. Please fix this so `nan` indices in `del` paths are handled safely.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "jq-ed3c7f21",
+   "sha": "ed3c7f214b192024ade9b5c501f32800a87984b5",
+   "base": "bfcf82fde14d54d83838ce91333991ab247fe4ad",
+   "date": "2026-03-05T08:28:43+09:00",
+   "subject": "Fix tonumber and toboolean to reject strings with embedded null bytes (#3496)",
+   "src_files": [
+    "src/builtin.c"
+   ],
+   "test_files": [
+    "tests/jq.test"
+   ],
+   "gold_files": [
+    "src/builtin.c"
+   ],
+   "hidden_command": "make -s -j2 >/dev/null && ./tests/jqtest",
+   "base_exit": 1,
+   "base_tail": "] | .[nan]' at line number 2462\nTest #518: 'try ([range(3)] | .[nan] = 9) catch .' at line number 2466\nTest #519: 'try (\"foobar\" | .[1.5:3.5] = \"xyz\") catch .' at line number 2470\nTest #520: 'try ([range(10)] | .[1.5:3.5] = [\"xyz\"]) catch .' at line number 2474\nTest #521: 'try (\"foobar\" | .[1.5]) catch .' at line number 2478\nTest #522: 'try [\"ok\", setpath([1]; 1)] catch [\"ko\", .]' at line number 2485\nTest #523: 'try fromjson catch .' at line number 2489\nTest #524: 'try ltrimstr(1) catch \"x\", try rtrimstr(1) catch \"x\" | \"ok\"' at line number 2495\nTest #525: 'try ltrimstr(\"x\") catch \"x\", try rtrimstr(\"x\") catch \"x\" | \"ok\"' at line number 2500\nTest #526: '.[] as [$x, $y] | try [\"ok\", ($x | ltrimstr($y))] catch [\"ko\", .]' at line number 2507\nTest #527: '.[] as [$x, $y] | try [\"ok\", ($x | rtrimstr($y))] catch [\"ko\", .]' at line number 2514\nTest #528: 'try [\"OK\", setpath([[1]]; 1)] catch [\"KO\", .]' at line number 2524\nTest #529: 'foreach .[] as $x (0, 1; . + $x)' at line number 2529\nTest #530: 'strflocaltime(\"\" | ., @uri)' at line number 2539\nTest #531: 'reduce range(9999) as $_ ([];[.]) | tojson | fromjson | flatten' at line number 2549\nTest #532: 'reduce range(10000) as $_ ([];[.]) | tojson | try (fromjson) catch . | (contains(\"<skipped: too deep>\") | not) and contains(\"Exceeds depth limit for parsing\")' at line number 2554\nTest #533: 'reduce range(10001) as $_ ([];[.]) | tojson | contains(\"<skipped: too deep>\")' at line number 2559\n531 of 533 tests passed (0 malformed, 0 skipped)",
+   "fixed_seconds": 4.35,
+   "n_tests": 533,
+   "prompt": "`tonumber` and `toboolean` don't properly validate strings that contain an embedded null byte \u2014 instead of rejecting them, they appear to parse only up to the null byte and succeed. For example:\n```\n$ jq -n '\"123\\u0000456\" | tonumber'\n```\nand similarly `\"true\\u0000x\" | toboolean`. These should fail with a clear error saying the string cannot be parsed as a number/boolean, since the string as a whole isn't a valid number/boolean literal. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "jq-fdf8ef0f",
+   "sha": "fdf8ef0f0810e3d365cdd5160de43db46f57ed03",
+   "base": "e47e56d226519635768e6aab2f38f0ab037c09e5",
+   "date": "2026-04-08T21:43:46+02:00",
+   "subject": "Add runtime type checks to f_string_indexes",
+   "src_files": [
+    "src/builtin.c"
+   ],
+   "test_files": [
+    "tests/jq.test"
+   ],
+   "gold_files": [
+    "src/builtin.c"
+   ],
+   "hidden_command": "make -s -j2 >/dev/null && ./tests/jqtest",
+   "base_exit": 134,
+   "base_tail": "Test #248: '.foo = .bar' at line number 1225\nTest #249: '.foo |= .+1' at line number 1229\nTest #250: '.[] += 2, .[] *= 2, .[] -= 2, .[] /= 2, .[] %=2' at line number 1233\nTest #251: '[.[] % 7]' at line number 1241\nTest #252: '.foo += .foo' at line number 1245\nTest #253: '.[0].a |= {\"old\":., \"new\":(.+1)}' at line number 1249\nTest #254: 'def inc(x): x |= .+1; inc(.[].a)' at line number 1253\nTest #255: '.[] | try (getpath([\"a\",0,\"b\"]) |= 5) catch .' at line number 1258\nTest #256: '(.[] | select(. >= 2)) |= empty' at line number 1270\nTest #257: '.[] |= select(. % 2 == 0)' at line number 1274\nTest #258: '.foo[1,4,2,3] |= empty' at line number 1278\nTest #259: '.[2][3] = 1' at line number 1282\nTest #260: '.foo[2].bar = 1' at line number 1286\nTest #261: 'try ((map(select(.a == 1))[].b) = 10) catch .' at line number 1290\nTest #262: 'try ((map(select(.a == 1))[].a) |= .+1) catch .' at line number 1294\nTest #263: 'def x: .[1,2]; x=10' at line number 1298\nTest #264: 'try (def x: reverse; x=10) catch .' at line number 1302\nTest #265: '.[] = 1' at line number 1306\nTest #266: '[.[] | if .foo then \"yep\" else \"nope\" end]' at line number 1314\nTest #267: '[.[] | if .baz then \"strange\" elif .foo then \"yep\" else \"nope\" end]' at line number 1318\nTest #268: '[if 1,null,2 then 3 else 4 end]' at line number 1322\nTest #269: '[if empty then 3 else 4 end]' at line number 1326\nTest #270:\njq: src/jv.c:1321: jv_string_indexes: Assertion `JVP_HAS_KIND(j, JV_KIND_STRING)' failed.\nAborted",
+   "fixed_seconds": 4.61,
+   "n_tests": 535,
+   "prompt": "The internal `_strindices` builtin (used to implement `indices`) doesn't validate the types of its arguments before operating on them, and it's directly callable from jq programs. Passing a non-string as either the haystack or the needle, e.g. `123 | _strindices(\"abc\")` or `\"abc\" | _strindices(123)`, leads to a crash instead of a clean jq error. It should instead raise a descriptive type error (like other string functions do) when given non-string input. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "jq-fb59f149",
+   "sha": "fb59f1491058d58bdc3e8dd28f1773d1ac690a1f",
+   "base": "2f09060afab23fe9390cce7cb860b10416e1bf5f",
+   "date": "2026-04-13T11:23:40+09:00",
+   "subject": "Limit path depth to prevent stack overflow",
+   "src_files": [
+    "src/jv_aux.c"
+   ],
+   "test_files": [
+    "tests/jq.test"
+   ],
+   "gold_files": [
+    "src/jv_aux.c"
+   ],
+   "hidden_command": "make -s -j2 >/dev/null && ./tests/jqtest",
+   "base_exit": 1,
+   "base_tail": "]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]] for test at line number 2579: try setpath([range(10001) | 0]; 0) catch .\nTest #538: 'getpath([range(10000) | 0])' at line number 2581\nTest #539: 'try getpath([range(10001) | 0]) catch .' at line number 2585\n*** Expected \"Path too deep\", but got null for test at line number 2587: try getpath([range(10001) | 0]) catch .\nTest #540: 'delpaths([[range(10000) | 0]])' at line number 2589\nTest #541: 'try delpaths([[range(10001) | 0]]) catch .' at line number 2593\n*** Expected \"Path too deep\", but got null for test at line number 2595: try delpaths([[range(10001) | 0]]) catch .\n538 of 541 tests passed (0 malformed, 0 skipped)",
+   "fixed_seconds": 3.81,
+   "n_tests": 541,
+   "prompt": "Passing a very deeply nested path array to `setpath`, `getpath`, or `delpaths` causes jq to crash with a stack overflow instead of failing gracefully. For example, building a path array nested many thousands of levels deep and calling `setpath` (or `getpath`/`delpaths`) on it crashes the process. These functions should instead raise a normal jq error such as \"Path too deep\" once the path nesting exceeds a reasonable limit, while still working correctly for paths within that limit. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "jq-d1a12569",
+   "sha": "d1a12569d91641135976a8536776a4a329c02cc2",
+   "base": "870207323d178f5aaf926995b72fe50dc2043447",
+   "date": "2026-04-24T22:02:24+09:00",
+   "subject": "Limit the containment check depth",
+   "src_files": [
+    "src/builtin.c",
+    "src/jv.c"
+   ],
+   "test_files": [
+    "tests/jq.test"
+   ],
+   "gold_files": [
+    "src/builtin.c",
+    "src/jv.c"
+   ],
+   "hidden_command": "make -s -j2 >/dev/null && ./tests/jqtest",
+   "base_exit": 1,
+   "base_tail": "[\"ok\", ($x | rtrimstr($y))] catch [\"ko\", .]' at line number 2523\nTest #530: 'try [\"OK\", setpath([[1]]; 1)] catch [\"KO\", .]' at line number 2533\nTest #531: 'foreach .[] as $x (0, 1; . + $x)' at line number 2538\nTest #532: 'strflocaltime(\"\" | ., @uri)' at line number 2548\nTest #533: 'reduce range(9999) as $_ ([];[.]) | tojson | fromjson | flatten' at line number 2558\nTest #534: 'reduce range(10000) as $_ ([];[.]) | tojson | try (fromjson) catch . | (contains(\"<skipped: too deep>\") | not) and contains(\"Exceeds depth limit for parsing\")' at line number 2563\nTest #535: 'reduce range(10001) as $_ ([];[.]) | tojson | contains(\"<skipped: too deep>\")' at line number 2568\nTest #536: 'setpath([range(10000) | 0]; 0) | flatten' at line number 2573\nTest #537: 'try setpath([range(10001) | 0]; 0) catch .' at line number 2577\nTest #538: 'getpath([range(10000) | 0])' at line number 2581\nTest #539: 'try getpath([range(10001) | 0]) catch .' at line number 2585\nTest #540: 'delpaths([[range(10000) | 0]])' at line number 2589\nTest #541: 'try delpaths([[range(10001) | 0]]) catch .' at line number 2593\nTest #542: 'reduce range(10000) as $_ ([]; [.]) | contains([[]])' at line number 2598\nTest #543: 'try (reduce range(10001) as $_ ([]; [.]) as $x | $x | contains($x)) catch .' at line number 2602\n*** Expected \"Containment check too deep\", but got true for test at line number 2604: try (reduce range(10001) as $_ ([]; [.]) as $x | $x | contains($x)) catch .\n542 of 543 tests passed (0 malformed, 0 skipped)",
+   "fixed_seconds": 7.92,
+   "n_tests": 543,
+   "prompt": "Calling `contains` with deeply nested array/object values causes jq to crash with a stack overflow instead of returning a result or a clean error. For example, building a value nested tens of thousands of levels deep and then checking `$x | contains($x)` crashes the process, even though shallower nestings (e.g. depth ~10000) work fine. The containment check should raise a normal jq error such as \"Containment check too deep\" once nesting exceeds a reasonable limit, instead of overflowing the stack. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "jq-532ccea6",
+   "sha": "532ccea6080ed6758f39fe9f6208a44b665023d2",
+   "base": "33d7bce3218ec718139342e5b48b475c4dea715f",
+   "date": "2026-05-05T22:44:02+09:00",
+   "subject": "Limit recursive object merge depth to prevent stack overflow",
+   "src_files": [
+    "src/jv.c"
+   ],
+   "test_files": [
+    "tests/jq.test"
+   ],
+   "gold_files": [
+    "src/jv.c"
+   ],
+   "hidden_command": "make -s -j2 >/dev/null && ./tests/jqtest",
+   "base_exit": 1,
+   "base_tail": "}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}} for test at line number 2613: try (reduce range(10001) as $_ ({}; {a: .}) as $x | $x * $x) catch .\n544 of 545 tests passed (0 malformed, 0 skipped)",
+   "fixed_seconds": 8.0,
+   "n_tests": 545,
+   "prompt": "The object merge operator `*` crashes with a stack overflow when merging deeply nested objects, instead of failing gracefully. For example, building an object nested tens of thousands of levels deep via `{a: .}` and then doing `$x * $x` crashes the process, even though shallower nestings (e.g. depth ~10000) merge correctly. Object merging should raise a normal jq error such as \"Object merge too deep\" once nesting exceeds a reasonable limit, instead of overflowing the stack. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  }
+ ]
+}

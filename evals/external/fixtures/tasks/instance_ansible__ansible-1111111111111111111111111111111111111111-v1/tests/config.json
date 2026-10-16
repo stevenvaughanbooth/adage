@@ -1,0 +1,8 @@
+{
+ "repo": "ansible/ansible",
+ "base_commit": "1111111111111111111111111111111111111111",
+ "patch": "diff --git a/lib/ansible/modules/secret_mod.py b/lib/ansible/modules/secret_mod.py\n--- a/lib/ansible/modules/secret_mod.py\n+++ b/lib/ansible/modules/secret_mod.py\n@@ -1 +1 @@\n-a\n+b\n",
+ "test_patch": "diff --git a/test/units/modules/test_secret_mod.py b/test/units/modules/test_secret_mod.py\n--- a/test/units/modules/test_secret_mod.py\n+++ b/test/units/modules/test_secret_mod.py\n@@ -1 +1 @@\n-a\n+b\n",
+ "fail_to_pass": "[\"test/units/modules/test_secret_mod.py::test_rotates\"]",
+ "pass_to_pass": "[]"
+}

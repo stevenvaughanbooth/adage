@@ -1,0 +1,1306 @@
+[
+  {
+    "model": "potion-8m",
+    "model_label": "static:potion-base-8m",
+    "dim": 256,
+    "condition": "raw",
+    "family_top1_loo": 0.7158671586715867,
+    "per_family_top1": {
+      "add_feature": 0.7428571428571429,
+      "check_ticket_status": 0.6,
+      "close_ticket": 0.75,
+      "deploy_question": 0.825,
+      "explain_code": 0.7105263157894737,
+      "fix_failing_test": 0.875,
+      "investigate_ci_failure": 0.7567567567567568,
+      "refactor_code": 0.775,
+      "review_pr": 0.6,
+      "setup_environment": 0.5405405405405406,
+      "start_ticket": 0.625,
+      "triage_tickets": 0.8648648648648649,
+      "update_dependencies": 0.7948717948717948,
+      "write_docs": 0.5641025641025641
+    },
+    "verb_contrast_accuracy": 0.9733333333333334,
+    "per_group_verb_contrast": {
+      "00:start_ticket-vs-close_ticket": 1.0,
+      "01:start_ticket-vs-check_ticket_status": 1.0,
+      "02:check_ticket_status-vs-close_ticket": 1.0,
+      "03:close_ticket-vs-triage_tickets": 0.9285714285714286,
+      "04:fix_failing_test-vs-investigate_ci_failure": 0.9285714285714286,
+      "05:add_feature-vs-refactor_code": 1.0,
+      "06:refactor_code-vs-explain_code": 0.8823529411764706,
+      "07:review_pr-vs-add_feature": 1.0,
+      "08:update_dependencies-vs-investigate_ci_failure": 1.0,
+      "09:deploy_question-vs-setup_environment": 1.0
+    },
+    "hard_subset_top1_full_multiclass": 0.9266666666666666,
+    "open_set_precision_at_90recall": 0.9648854961832061,
+    "open_set_recall_achieved": 0.9132947976878613,
+    "per_family_open_set": {
+      "add_feature": {
+        "threshold": 0.4686768054962158,
+        "recall": 0.9069767441860465,
+        "precision": 1.0,
+        "tp": 39,
+        "fp": 0,
+        "n_pos": 43
+      },
+      "check_ticket_status": {
+        "threshold": 0.41623377799987793,
+        "recall": 0.9137931034482759,
+        "precision": 0.9464285714285714,
+        "tp": 53,
+        "fp": 3,
+        "n_pos": 58
+      },
+      "close_ticket": {
+        "threshold": 0.4782045781612396,
+        "recall": 0.9104477611940298,
+        "precision": 1.0,
+        "tp": 61,
+        "fp": 0,
+        "n_pos": 67
+      },
+      "deploy_question": {
+        "threshold": 0.49537861347198486,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "explain_code": {
+        "threshold": 0.36776065826416016,
+        "recall": 0.9148936170212766,
+        "precision": 0.6935483870967742,
+        "tp": 43,
+        "fp": 19,
+        "n_pos": 47
+      },
+      "fix_failing_test": {
+        "threshold": 0.5867395401000977,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "investigate_ci_failure": {
+        "threshold": 0.4132320284843445,
+        "recall": 0.9166666666666666,
+        "precision": 1.0,
+        "tp": 44,
+        "fp": 0,
+        "n_pos": 48
+      },
+      "refactor_code": {
+        "threshold": 0.4127427041530609,
+        "recall": 0.9107142857142857,
+        "precision": 1.0,
+        "tp": 51,
+        "fp": 0,
+        "n_pos": 56
+      },
+      "review_pr": {
+        "threshold": 0.4731735587120056,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "setup_environment": {
+        "threshold": 0.4323174059391022,
+        "recall": 0.9024390243902439,
+        "precision": 1.0,
+        "tp": 37,
+        "fp": 0,
+        "n_pos": 41
+      },
+      "start_ticket": {
+        "threshold": 0.4083194136619568,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "triage_tickets": {
+        "threshold": 0.3101813495159149,
+        "recall": 0.9069767441860465,
+        "precision": 0.975,
+        "tp": 39,
+        "fp": 1,
+        "n_pos": 43
+      },
+      "update_dependencies": {
+        "threshold": 0.38149839639663696,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "write_docs": {
+        "threshold": 0.44632208347320557,
+        "recall": 0.9230769230769231,
+        "precision": 1.0,
+        "tp": 36,
+        "fp": 0,
+        "n_pos": 39
+      }
+    },
+    "clustering": {
+      "ari": 0.1437007932920478,
+      "purity": 0.4544468546637744,
+      "noise_fraction": 0.4642082429501085,
+      "n_predicted_clusters": 25,
+      "n_true_labels": 15
+    },
+    "n_family_rows": 542,
+    "n_hard_rows": 150,
+    "n_noise_rows": 230
+  },
+  {
+    "model": "potion-8m",
+    "model_label": "static:potion-base-8m",
+    "dim": 256,
+    "condition": "normalized",
+    "family_top1_loo": 0.8523985239852399,
+    "per_family_top1": {
+      "add_feature": 0.8857142857142857,
+      "check_ticket_status": 0.85,
+      "close_ticket": 0.925,
+      "deploy_question": 0.875,
+      "explain_code": 0.868421052631579,
+      "fix_failing_test": 0.95,
+      "investigate_ci_failure": 0.8918918918918919,
+      "refactor_code": 0.8,
+      "review_pr": 0.85,
+      "setup_environment": 0.7567567567567568,
+      "start_ticket": 0.85,
+      "triage_tickets": 0.7837837837837838,
+      "update_dependencies": 0.8717948717948718,
+      "write_docs": 0.7692307692307693
+    },
+    "verb_contrast_accuracy": 0.9933333333333333,
+    "per_group_verb_contrast": {
+      "00:start_ticket-vs-close_ticket": 1.0,
+      "01:start_ticket-vs-check_ticket_status": 1.0,
+      "02:check_ticket_status-vs-close_ticket": 1.0,
+      "03:close_ticket-vs-triage_tickets": 0.9285714285714286,
+      "04:fix_failing_test-vs-investigate_ci_failure": 1.0,
+      "05:add_feature-vs-refactor_code": 1.0,
+      "06:refactor_code-vs-explain_code": 1.0,
+      "07:review_pr-vs-add_feature": 1.0,
+      "08:update_dependencies-vs-investigate_ci_failure": 1.0,
+      "09:deploy_question-vs-setup_environment": 1.0
+    },
+    "hard_subset_top1_full_multiclass": 0.9666666666666667,
+    "open_set_precision_at_90recall": 0.9723926380368099,
+    "open_set_recall_achieved": 0.9161849710982659,
+    "per_family_open_set": {
+      "add_feature": {
+        "threshold": 0.44353342056274414,
+        "recall": 0.9534883720930233,
+        "precision": 1.0,
+        "tp": 41,
+        "fp": 0,
+        "n_pos": 43
+      },
+      "check_ticket_status": {
+        "threshold": 0.49643999338150024,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "close_ticket": {
+        "threshold": 0.570633053779602,
+        "recall": 0.9104477611940298,
+        "precision": 1.0,
+        "tp": 61,
+        "fp": 0,
+        "n_pos": 67
+      },
+      "deploy_question": {
+        "threshold": 0.47799161076545715,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "explain_code": {
+        "threshold": 0.38362956047058105,
+        "recall": 0.9148936170212766,
+        "precision": 0.7049180327868853,
+        "tp": 43,
+        "fp": 18,
+        "n_pos": 47
+      },
+      "fix_failing_test": {
+        "threshold": 0.6092325448989868,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "investigate_ci_failure": {
+        "threshold": 0.501131534576416,
+        "recall": 0.9166666666666666,
+        "precision": 1.0,
+        "tp": 44,
+        "fp": 0,
+        "n_pos": 48
+      },
+      "refactor_code": {
+        "threshold": 0.42160212993621826,
+        "recall": 0.9107142857142857,
+        "precision": 1.0,
+        "tp": 51,
+        "fp": 0,
+        "n_pos": 56
+      },
+      "review_pr": {
+        "threshold": 0.4629487097263336,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "setup_environment": {
+        "threshold": 0.46159687638282776,
+        "recall": 0.9024390243902439,
+        "precision": 1.0,
+        "tp": 37,
+        "fp": 0,
+        "n_pos": 41
+      },
+      "start_ticket": {
+        "threshold": 0.41562384366989136,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "triage_tickets": {
+        "threshold": 0.36077186465263367,
+        "recall": 0.9069767441860465,
+        "precision": 1.0,
+        "tp": 39,
+        "fp": 0,
+        "n_pos": 43
+      },
+      "update_dependencies": {
+        "threshold": 0.38893064856529236,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "write_docs": {
+        "threshold": 0.46314725279808044,
+        "recall": 0.9230769230769231,
+        "precision": 1.0,
+        "tp": 36,
+        "fp": 0,
+        "n_pos": 39
+      }
+    },
+    "clustering": {
+      "ari": 0.14971191322331434,
+      "purity": 0.5032537960954447,
+      "noise_fraction": 0.5032537960954447,
+      "n_predicted_clusters": 25,
+      "n_true_labels": 15
+    },
+    "n_family_rows": 542,
+    "n_hard_rows": 150,
+    "n_noise_rows": 230
+  },
+  {
+    "model": "bge-fp32",
+    "model_label": "bge-small-en-v1.5:fp32",
+    "dim": 384,
+    "condition": "raw",
+    "family_top1_loo": 0.8856088560885609,
+    "per_family_top1": {
+      "add_feature": 0.8571428571428571,
+      "check_ticket_status": 0.85,
+      "close_ticket": 0.925,
+      "deploy_question": 0.975,
+      "explain_code": 0.9210526315789473,
+      "fix_failing_test": 1.0,
+      "investigate_ci_failure": 0.8648648648648649,
+      "refactor_code": 0.925,
+      "review_pr": 0.8,
+      "setup_environment": 0.8918918918918919,
+      "start_ticket": 0.8,
+      "triage_tickets": 0.972972972972973,
+      "update_dependencies": 0.9487179487179487,
+      "write_docs": 0.6666666666666666
+    },
+    "verb_contrast_accuracy": 0.9933333333333333,
+    "per_group_verb_contrast": {
+      "00:start_ticket-vs-close_ticket": 1.0,
+      "01:start_ticket-vs-check_ticket_status": 1.0,
+      "02:check_ticket_status-vs-close_ticket": 1.0,
+      "03:close_ticket-vs-triage_tickets": 1.0,
+      "04:fix_failing_test-vs-investigate_ci_failure": 1.0,
+      "05:add_feature-vs-refactor_code": 1.0,
+      "06:refactor_code-vs-explain_code": 0.9411764705882353,
+      "07:review_pr-vs-add_feature": 1.0,
+      "08:update_dependencies-vs-investigate_ci_failure": 1.0,
+      "09:deploy_question-vs-setup_environment": 1.0
+    },
+    "hard_subset_top1_full_multiclass": 0.9666666666666667,
+    "open_set_precision_at_90recall": 1.0,
+    "open_set_recall_achieved": 0.9132947976878613,
+    "per_family_open_set": {
+      "add_feature": {
+        "threshold": 0.7099509239196777,
+        "recall": 0.9069767441860465,
+        "precision": 1.0,
+        "tp": 39,
+        "fp": 0,
+        "n_pos": 43
+      },
+      "check_ticket_status": {
+        "threshold": 0.7369165420532227,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "close_ticket": {
+        "threshold": 0.7589247226715088,
+        "recall": 0.9104477611940298,
+        "precision": 1.0,
+        "tp": 61,
+        "fp": 0,
+        "n_pos": 67
+      },
+      "deploy_question": {
+        "threshold": 0.7383302450180054,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "explain_code": {
+        "threshold": 0.7147641181945801,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "fix_failing_test": {
+        "threshold": 0.8051035404205322,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "investigate_ci_failure": {
+        "threshold": 0.7307612895965576,
+        "recall": 0.9166666666666666,
+        "precision": 1.0,
+        "tp": 44,
+        "fp": 0,
+        "n_pos": 48
+      },
+      "refactor_code": {
+        "threshold": 0.72725510597229,
+        "recall": 0.9107142857142857,
+        "precision": 1.0,
+        "tp": 51,
+        "fp": 0,
+        "n_pos": 56
+      },
+      "review_pr": {
+        "threshold": 0.7412053942680359,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "setup_environment": {
+        "threshold": 0.7373208999633789,
+        "recall": 0.9024390243902439,
+        "precision": 1.0,
+        "tp": 37,
+        "fp": 0,
+        "n_pos": 41
+      },
+      "start_ticket": {
+        "threshold": 0.7253925800323486,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "triage_tickets": {
+        "threshold": 0.7373412251472473,
+        "recall": 0.9069767441860465,
+        "precision": 1.0,
+        "tp": 39,
+        "fp": 0,
+        "n_pos": 43
+      },
+      "update_dependencies": {
+        "threshold": 0.7568320035934448,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "write_docs": {
+        "threshold": 0.7291098833084106,
+        "recall": 0.9230769230769231,
+        "precision": 1.0,
+        "tp": 36,
+        "fp": 0,
+        "n_pos": 39
+      }
+    },
+    "clustering": {
+      "ari": 0.06315287453710602,
+      "purity": 0.45010845986984815,
+      "noise_fraction": 0.5986984815618221,
+      "n_predicted_clusters": 29,
+      "n_true_labels": 15
+    },
+    "n_family_rows": 542,
+    "n_hard_rows": 150,
+    "n_noise_rows": 230
+  },
+  {
+    "model": "bge-fp32",
+    "model_label": "bge-small-en-v1.5:fp32",
+    "dim": 384,
+    "condition": "normalized",
+    "family_top1_loo": 0.9298892988929889,
+    "per_family_top1": {
+      "add_feature": 0.9428571428571428,
+      "check_ticket_status": 0.975,
+      "close_ticket": 0.975,
+      "deploy_question": 1.0,
+      "explain_code": 0.9210526315789473,
+      "fix_failing_test": 1.0,
+      "investigate_ci_failure": 0.9459459459459459,
+      "refactor_code": 0.95,
+      "review_pr": 0.95,
+      "setup_environment": 0.9459459459459459,
+      "start_ticket": 0.9,
+      "triage_tickets": 0.8378378378378378,
+      "update_dependencies": 0.9743589743589743,
+      "write_docs": 0.6923076923076923
+    },
+    "verb_contrast_accuracy": 0.9933333333333333,
+    "per_group_verb_contrast": {
+      "00:start_ticket-vs-close_ticket": 1.0,
+      "01:start_ticket-vs-check_ticket_status": 1.0,
+      "02:check_ticket_status-vs-close_ticket": 1.0,
+      "03:close_ticket-vs-triage_tickets": 1.0,
+      "04:fix_failing_test-vs-investigate_ci_failure": 1.0,
+      "05:add_feature-vs-refactor_code": 1.0,
+      "06:refactor_code-vs-explain_code": 0.9411764705882353,
+      "07:review_pr-vs-add_feature": 1.0,
+      "08:update_dependencies-vs-investigate_ci_failure": 1.0,
+      "09:deploy_question-vs-setup_environment": 1.0
+    },
+    "hard_subset_top1_full_multiclass": 0.9533333333333334,
+    "open_set_precision_at_90recall": 0.998422712933754,
+    "open_set_recall_achieved": 0.9147398843930635,
+    "per_family_open_set": {
+      "add_feature": {
+        "threshold": 0.7314779758453369,
+        "recall": 0.9069767441860465,
+        "precision": 1.0,
+        "tp": 39,
+        "fp": 0,
+        "n_pos": 43
+      },
+      "check_ticket_status": {
+        "threshold": 0.7537602186203003,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "close_ticket": {
+        "threshold": 0.7806580066680908,
+        "recall": 0.9104477611940298,
+        "precision": 1.0,
+        "tp": 61,
+        "fp": 0,
+        "n_pos": 67
+      },
+      "deploy_question": {
+        "threshold": 0.760185956954956,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "explain_code": {
+        "threshold": 0.7049771547317505,
+        "recall": 0.9148936170212766,
+        "precision": 0.9772727272727273,
+        "tp": 43,
+        "fp": 1,
+        "n_pos": 47
+      },
+      "fix_failing_test": {
+        "threshold": 0.8003591299057007,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "investigate_ci_failure": {
+        "threshold": 0.7515990734100342,
+        "recall": 0.9375,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 48
+      },
+      "refactor_code": {
+        "threshold": 0.734138548374176,
+        "recall": 0.9107142857142857,
+        "precision": 1.0,
+        "tp": 51,
+        "fp": 0,
+        "n_pos": 56
+      },
+      "review_pr": {
+        "threshold": 0.7478184700012207,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "setup_environment": {
+        "threshold": 0.7402041554450989,
+        "recall": 0.9024390243902439,
+        "precision": 1.0,
+        "tp": 37,
+        "fp": 0,
+        "n_pos": 41
+      },
+      "start_ticket": {
+        "threshold": 0.7312769889831543,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "triage_tickets": {
+        "threshold": 0.7666486501693726,
+        "recall": 0.9069767441860465,
+        "precision": 1.0,
+        "tp": 39,
+        "fp": 0,
+        "n_pos": 43
+      },
+      "update_dependencies": {
+        "threshold": 0.7605462074279785,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "write_docs": {
+        "threshold": 0.7392467260360718,
+        "recall": 0.9230769230769231,
+        "precision": 1.0,
+        "tp": 36,
+        "fp": 0,
+        "n_pos": 39
+      }
+    },
+    "clustering": {
+      "ari": 0.14890194041145108,
+      "purity": 0.5726681127982647,
+      "noise_fraction": 0.5010845986984815,
+      "n_predicted_clusters": 29,
+      "n_true_labels": 15
+    },
+    "n_family_rows": 542,
+    "n_hard_rows": 150,
+    "n_noise_rows": 230
+  },
+  {
+    "model": "bge-int8",
+    "model_label": "bge-small-en-v1.5:int8-dynamic",
+    "dim": 384,
+    "condition": "raw",
+    "family_top1_loo": 0.9003690036900369,
+    "per_family_top1": {
+      "add_feature": 0.8285714285714286,
+      "check_ticket_status": 0.875,
+      "close_ticket": 0.95,
+      "deploy_question": 0.975,
+      "explain_code": 0.9473684210526315,
+      "fix_failing_test": 1.0,
+      "investigate_ci_failure": 0.8648648648648649,
+      "refactor_code": 0.925,
+      "review_pr": 0.875,
+      "setup_environment": 0.8648648648648649,
+      "start_ticket": 0.825,
+      "triage_tickets": 1.0,
+      "update_dependencies": 0.9230769230769231,
+      "write_docs": 0.7435897435897436
+    },
+    "verb_contrast_accuracy": 0.9933333333333333,
+    "per_group_verb_contrast": {
+      "00:start_ticket-vs-close_ticket": 1.0,
+      "01:start_ticket-vs-check_ticket_status": 1.0,
+      "02:check_ticket_status-vs-close_ticket": 1.0,
+      "03:close_ticket-vs-triage_tickets": 1.0,
+      "04:fix_failing_test-vs-investigate_ci_failure": 1.0,
+      "05:add_feature-vs-refactor_code": 1.0,
+      "06:refactor_code-vs-explain_code": 0.9411764705882353,
+      "07:review_pr-vs-add_feature": 1.0,
+      "08:update_dependencies-vs-investigate_ci_failure": 1.0,
+      "09:deploy_question-vs-setup_environment": 1.0
+    },
+    "hard_subset_top1_full_multiclass": 0.9733333333333334,
+    "open_set_precision_at_90recall": 1.0,
+    "open_set_recall_achieved": 0.9132947976878613,
+    "per_family_open_set": {
+      "add_feature": {
+        "threshold": 0.7154984474182129,
+        "recall": 0.9069767441860465,
+        "precision": 1.0,
+        "tp": 39,
+        "fp": 0,
+        "n_pos": 43
+      },
+      "check_ticket_status": {
+        "threshold": 0.7266368865966797,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "close_ticket": {
+        "threshold": 0.763869047164917,
+        "recall": 0.9104477611940298,
+        "precision": 1.0,
+        "tp": 61,
+        "fp": 0,
+        "n_pos": 67
+      },
+      "deploy_question": {
+        "threshold": 0.7541211843490601,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "explain_code": {
+        "threshold": 0.714995265007019,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "fix_failing_test": {
+        "threshold": 0.8134744763374329,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "investigate_ci_failure": {
+        "threshold": 0.7243198752403259,
+        "recall": 0.9166666666666666,
+        "precision": 1.0,
+        "tp": 44,
+        "fp": 0,
+        "n_pos": 48
+      },
+      "refactor_code": {
+        "threshold": 0.7396008968353271,
+        "recall": 0.9107142857142857,
+        "precision": 1.0,
+        "tp": 51,
+        "fp": 0,
+        "n_pos": 56
+      },
+      "review_pr": {
+        "threshold": 0.7436655163764954,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "setup_environment": {
+        "threshold": 0.7333402633666992,
+        "recall": 0.9024390243902439,
+        "precision": 1.0,
+        "tp": 37,
+        "fp": 0,
+        "n_pos": 41
+      },
+      "start_ticket": {
+        "threshold": 0.7356308698654175,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "triage_tickets": {
+        "threshold": 0.7449253797531128,
+        "recall": 0.9069767441860465,
+        "precision": 1.0,
+        "tp": 39,
+        "fp": 0,
+        "n_pos": 43
+      },
+      "update_dependencies": {
+        "threshold": 0.7571017146110535,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "write_docs": {
+        "threshold": 0.7382718324661255,
+        "recall": 0.9230769230769231,
+        "precision": 1.0,
+        "tp": 36,
+        "fp": 0,
+        "n_pos": 39
+      }
+    },
+    "clustering": {
+      "ari": 0.04653728301596582,
+      "purity": 0.32212581344902386,
+      "noise_fraction": 0.22559652928416485,
+      "n_predicted_clusters": 7,
+      "n_true_labels": 15
+    },
+    "n_family_rows": 542,
+    "n_hard_rows": 150,
+    "n_noise_rows": 230
+  },
+  {
+    "model": "bge-int8",
+    "model_label": "bge-small-en-v1.5:int8-dynamic",
+    "dim": 384,
+    "condition": "normalized",
+    "family_top1_loo": 0.9280442804428044,
+    "per_family_top1": {
+      "add_feature": 0.9142857142857143,
+      "check_ticket_status": 0.95,
+      "close_ticket": 0.95,
+      "deploy_question": 0.975,
+      "explain_code": 0.9736842105263158,
+      "fix_failing_test": 1.0,
+      "investigate_ci_failure": 0.9459459459459459,
+      "refactor_code": 0.95,
+      "review_pr": 0.925,
+      "setup_environment": 0.9459459459459459,
+      "start_ticket": 0.925,
+      "triage_tickets": 0.918918918918919,
+      "update_dependencies": 0.9487179487179487,
+      "write_docs": 0.6666666666666666
+    },
+    "verb_contrast_accuracy": 0.9933333333333333,
+    "per_group_verb_contrast": {
+      "00:start_ticket-vs-close_ticket": 1.0,
+      "01:start_ticket-vs-check_ticket_status": 1.0,
+      "02:check_ticket_status-vs-close_ticket": 1.0,
+      "03:close_ticket-vs-triage_tickets": 1.0,
+      "04:fix_failing_test-vs-investigate_ci_failure": 1.0,
+      "05:add_feature-vs-refactor_code": 1.0,
+      "06:refactor_code-vs-explain_code": 0.9411764705882353,
+      "07:review_pr-vs-add_feature": 1.0,
+      "08:update_dependencies-vs-investigate_ci_failure": 1.0,
+      "09:deploy_question-vs-setup_environment": 1.0
+    },
+    "hard_subset_top1_full_multiclass": 0.96,
+    "open_set_precision_at_90recall": 1.0,
+    "open_set_recall_achieved": 0.9132947976878613,
+    "per_family_open_set": {
+      "add_feature": {
+        "threshold": 0.7379295825958252,
+        "recall": 0.9069767441860465,
+        "precision": 1.0,
+        "tp": 39,
+        "fp": 0,
+        "n_pos": 43
+      },
+      "check_ticket_status": {
+        "threshold": 0.7368284463882446,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "close_ticket": {
+        "threshold": 0.7823711633682251,
+        "recall": 0.9104477611940298,
+        "precision": 1.0,
+        "tp": 61,
+        "fp": 0,
+        "n_pos": 67
+      },
+      "deploy_question": {
+        "threshold": 0.7638549208641052,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "explain_code": {
+        "threshold": 0.7149921655654907,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "fix_failing_test": {
+        "threshold": 0.8133949041366577,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "investigate_ci_failure": {
+        "threshold": 0.7504713535308838,
+        "recall": 0.9166666666666666,
+        "precision": 1.0,
+        "tp": 44,
+        "fp": 0,
+        "n_pos": 48
+      },
+      "refactor_code": {
+        "threshold": 0.7397544384002686,
+        "recall": 0.9107142857142857,
+        "precision": 1.0,
+        "tp": 51,
+        "fp": 0,
+        "n_pos": 56
+      },
+      "review_pr": {
+        "threshold": 0.7626761198043823,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "setup_environment": {
+        "threshold": 0.761216938495636,
+        "recall": 0.9024390243902439,
+        "precision": 1.0,
+        "tp": 37,
+        "fp": 0,
+        "n_pos": 41
+      },
+      "start_ticket": {
+        "threshold": 0.7283937931060791,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "triage_tickets": {
+        "threshold": 0.7636154890060425,
+        "recall": 0.9069767441860465,
+        "precision": 1.0,
+        "tp": 39,
+        "fp": 0,
+        "n_pos": 43
+      },
+      "update_dependencies": {
+        "threshold": 0.7567719221115112,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "write_docs": {
+        "threshold": 0.7422609329223633,
+        "recall": 0.9230769230769231,
+        "precision": 1.0,
+        "tp": 36,
+        "fp": 0,
+        "n_pos": 39
+      }
+    },
+    "clustering": {
+      "ari": 0.12054562804741718,
+      "purity": 0.5488069414316703,
+      "noise_fraction": 0.5477223427331888,
+      "n_predicted_clusters": 32,
+      "n_true_labels": 15
+    },
+    "n_family_rows": 542,
+    "n_hard_rows": 150,
+    "n_noise_rows": 230
+  },
+  {
+    "model": "minilm-int8",
+    "model_label": "all-MiniLM-L6-v2:int8-arm64",
+    "dim": 384,
+    "condition": "raw",
+    "family_top1_loo": 0.8118081180811808,
+    "per_family_top1": {
+      "add_feature": 0.7714285714285715,
+      "check_ticket_status": 0.725,
+      "close_ticket": 0.875,
+      "deploy_question": 0.975,
+      "explain_code": 0.8421052631578947,
+      "fix_failing_test": 0.95,
+      "investigate_ci_failure": 0.7837837837837838,
+      "refactor_code": 0.8,
+      "review_pr": 0.75,
+      "setup_environment": 0.7027027027027027,
+      "start_ticket": 0.75,
+      "triage_tickets": 0.8918918918918919,
+      "update_dependencies": 0.9487179487179487,
+      "write_docs": 0.5897435897435898
+    },
+    "verb_contrast_accuracy": 0.9733333333333334,
+    "per_group_verb_contrast": {
+      "00:start_ticket-vs-close_ticket": 0.9473684210526315,
+      "01:start_ticket-vs-check_ticket_status": 1.0,
+      "02:check_ticket_status-vs-close_ticket": 1.0,
+      "03:close_ticket-vs-triage_tickets": 0.9285714285714286,
+      "04:fix_failing_test-vs-investigate_ci_failure": 0.9285714285714286,
+      "05:add_feature-vs-refactor_code": 1.0,
+      "06:refactor_code-vs-explain_code": 0.9411764705882353,
+      "07:review_pr-vs-add_feature": 1.0,
+      "08:update_dependencies-vs-investigate_ci_failure": 1.0,
+      "09:deploy_question-vs-setup_environment": 1.0
+    },
+    "hard_subset_top1_full_multiclass": 0.94,
+    "open_set_precision_at_90recall": 0.9890453834115805,
+    "open_set_recall_achieved": 0.9132947976878613,
+    "per_family_open_set": {
+      "add_feature": {
+        "threshold": 0.23974227905273438,
+        "recall": 0.9069767441860465,
+        "precision": 0.9285714285714286,
+        "tp": 39,
+        "fp": 3,
+        "n_pos": 43
+      },
+      "check_ticket_status": {
+        "threshold": 0.4043758511543274,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "close_ticket": {
+        "threshold": 0.4807731509208679,
+        "recall": 0.9104477611940298,
+        "precision": 1.0,
+        "tp": 61,
+        "fp": 0,
+        "n_pos": 67
+      },
+      "deploy_question": {
+        "threshold": 0.4270986020565033,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "explain_code": {
+        "threshold": 0.326633483171463,
+        "recall": 0.9148936170212766,
+        "precision": 0.9772727272727273,
+        "tp": 43,
+        "fp": 1,
+        "n_pos": 47
+      },
+      "fix_failing_test": {
+        "threshold": 0.5360447764396667,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "investigate_ci_failure": {
+        "threshold": 0.40782514214515686,
+        "recall": 0.9166666666666666,
+        "precision": 1.0,
+        "tp": 44,
+        "fp": 0,
+        "n_pos": 48
+      },
+      "refactor_code": {
+        "threshold": 0.30376604199409485,
+        "recall": 0.9107142857142857,
+        "precision": 1.0,
+        "tp": 51,
+        "fp": 0,
+        "n_pos": 56
+      },
+      "review_pr": {
+        "threshold": 0.42394495010375977,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "setup_environment": {
+        "threshold": 0.32532671093940735,
+        "recall": 0.9024390243902439,
+        "precision": 0.9487179487179487,
+        "tp": 37,
+        "fp": 2,
+        "n_pos": 41
+      },
+      "start_ticket": {
+        "threshold": 0.3960925042629242,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "triage_tickets": {
+        "threshold": 0.42703521251678467,
+        "recall": 0.9069767441860465,
+        "precision": 1.0,
+        "tp": 39,
+        "fp": 0,
+        "n_pos": 43
+      },
+      "update_dependencies": {
+        "threshold": 0.4099247455596924,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "write_docs": {
+        "threshold": 0.28371506929397583,
+        "recall": 0.9230769230769231,
+        "precision": 0.972972972972973,
+        "tp": 36,
+        "fp": 1,
+        "n_pos": 39
+      }
+    },
+    "clustering": {
+      "ari": 0.02078135329312596,
+      "purity": 0.3156182212581345,
+      "noise_fraction": 0.17462039045553146,
+      "n_predicted_clusters": 6,
+      "n_true_labels": 15
+    },
+    "n_family_rows": 542,
+    "n_hard_rows": 150,
+    "n_noise_rows": 230
+  },
+  {
+    "model": "minilm-int8",
+    "model_label": "all-MiniLM-L6-v2:int8-arm64",
+    "dim": 384,
+    "condition": "normalized",
+    "family_top1_loo": 0.8800738007380073,
+    "per_family_top1": {
+      "add_feature": 0.7428571428571429,
+      "check_ticket_status": 0.925,
+      "close_ticket": 0.975,
+      "deploy_question": 0.95,
+      "explain_code": 0.9473684210526315,
+      "fix_failing_test": 0.95,
+      "investigate_ci_failure": 1.0,
+      "refactor_code": 0.85,
+      "review_pr": 0.925,
+      "setup_environment": 0.8378378378378378,
+      "start_ticket": 0.85,
+      "triage_tickets": 0.8378378378378378,
+      "update_dependencies": 0.9487179487179487,
+      "write_docs": 0.5641025641025641
+    },
+    "verb_contrast_accuracy": 0.98,
+    "per_group_verb_contrast": {
+      "00:start_ticket-vs-close_ticket": 0.8947368421052632,
+      "01:start_ticket-vs-check_ticket_status": 1.0,
+      "02:check_ticket_status-vs-close_ticket": 1.0,
+      "03:close_ticket-vs-triage_tickets": 1.0,
+      "04:fix_failing_test-vs-investigate_ci_failure": 1.0,
+      "05:add_feature-vs-refactor_code": 1.0,
+      "06:refactor_code-vs-explain_code": 0.9411764705882353,
+      "07:review_pr-vs-add_feature": 1.0,
+      "08:update_dependencies-vs-investigate_ci_failure": 1.0,
+      "09:deploy_question-vs-setup_environment": 1.0
+    },
+    "hard_subset_top1_full_multiclass": 0.92,
+    "open_set_precision_at_90recall": 0.9921507064364207,
+    "open_set_recall_achieved": 0.9132947976878613,
+    "per_family_open_set": {
+      "add_feature": {
+        "threshold": 0.29204127192497253,
+        "recall": 0.9069767441860465,
+        "precision": 0.975,
+        "tp": 39,
+        "fp": 1,
+        "n_pos": 43
+      },
+      "check_ticket_status": {
+        "threshold": 0.4864267110824585,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "close_ticket": {
+        "threshold": 0.5861141681671143,
+        "recall": 0.9104477611940298,
+        "precision": 1.0,
+        "tp": 61,
+        "fp": 0,
+        "n_pos": 67
+      },
+      "deploy_question": {
+        "threshold": 0.5070593357086182,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "explain_code": {
+        "threshold": 0.3128594756126404,
+        "recall": 0.9148936170212766,
+        "precision": 0.9347826086956522,
+        "tp": 43,
+        "fp": 3,
+        "n_pos": 47
+      },
+      "fix_failing_test": {
+        "threshold": 0.5258268713951111,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "investigate_ci_failure": {
+        "threshold": 0.48768725991249084,
+        "recall": 0.9166666666666666,
+        "precision": 1.0,
+        "tp": 44,
+        "fp": 0,
+        "n_pos": 48
+      },
+      "refactor_code": {
+        "threshold": 0.34657007455825806,
+        "recall": 0.9107142857142857,
+        "precision": 1.0,
+        "tp": 51,
+        "fp": 0,
+        "n_pos": 56
+      },
+      "review_pr": {
+        "threshold": 0.5012461543083191,
+        "recall": 0.9148936170212766,
+        "precision": 1.0,
+        "tp": 43,
+        "fp": 0,
+        "n_pos": 47
+      },
+      "setup_environment": {
+        "threshold": 0.36940282583236694,
+        "recall": 0.9024390243902439,
+        "precision": 0.9736842105263158,
+        "tp": 37,
+        "fp": 1,
+        "n_pos": 41
+      },
+      "start_ticket": {
+        "threshold": 0.435294508934021,
+        "recall": 0.9137931034482759,
+        "precision": 1.0,
+        "tp": 53,
+        "fp": 0,
+        "n_pos": 58
+      },
+      "triage_tickets": {
+        "threshold": 0.4876563549041748,
+        "recall": 0.9069767441860465,
+        "precision": 1.0,
+        "tp": 39,
+        "fp": 0,
+        "n_pos": 43
+      },
+      "update_dependencies": {
+        "threshold": 0.4268607497215271,
+        "recall": 0.9183673469387755,
+        "precision": 1.0,
+        "tp": 45,
+        "fp": 0,
+        "n_pos": 49
+      },
+      "write_docs": {
+        "threshold": 0.3059784173965454,
+        "recall": 0.9230769230769231,
+        "precision": 1.0,
+        "tp": 36,
+        "fp": 0,
+        "n_pos": 39
+      }
+    },
+    "clustering": {
+      "ari": 0.15894549143439557,
+      "purity": 0.517353579175705,
+      "noise_fraction": 0.4750542299349241,
+      "n_predicted_clusters": 29,
+      "n_true_labels": 15
+    },
+    "n_family_rows": 542,
+    "n_hard_rows": 150,
+    "n_noise_rows": 230
+  }
+]

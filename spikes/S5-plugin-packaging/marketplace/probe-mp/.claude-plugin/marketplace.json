@@ -1,0 +1,7 @@
+{
+  "name": "probe-mp",
+  "owner": { "name": "S5 spike" },
+  "plugins": [
+    { "name": "adage-probe", "source": "./adage-probe-src", "description": "probe" }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "receipt": {
+    "card": null,
+    "covering": ".venv/bin/python -m pytest tests -q",
+    "note": "<adage-receipt operation=\"op-1a2b3c4d\">\nAdage's run of .venv/bin/python -m pytest tests -q passed on files identical to the current ones.\n</adage-receipt>",
+    "result": "Adage answered this test run from its own run 4 min ago (op-1a2b3c4d): 3 passed."
+  }
+}

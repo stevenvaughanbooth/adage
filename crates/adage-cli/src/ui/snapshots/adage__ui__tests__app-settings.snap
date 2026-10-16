@@ -1,0 +1,39 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home                                                   harbor-dispatch · LIVE
+────────────────────────────────────────────────────────━━━━━━━━━━━━──────────────────────────────────────────────────────────────────────────────────
+ 24 settings · 1 changed · same as adage config · /home/me/.local/share/adage/config.toml
+
+  Learning  7 · 1 changed                                     ─ Learn automatically · learn.auto ─────────────────────────────────────────────────────
+▌   Learn automatically      ○ off  • changed                  Learn from each agent session in the background, when the session stops or ends.
+    Pause between runs       2 min
+    Evidence needed          standard                          accepts  on or off
+    Repositories             all repositories                  default  ● on
+    Reuse parsed sessions    ● on                              now      set in config.toml
+    Procedure cards          ● on
+    Card match strictness    0.811                             enter    turns it on (asks first)
+                                                               same as  adage config set learn.auto true
+  History sources  3
+    Claude Code history      default (~/.claude/projects)
+    Codex history            auto, once Codex hooks are on
+    OpenCode exports         none
+
+  Instincts & packs  3
+    Built-in instincts       ● on
+    Instinct packs           auto, defaults + added packs
+    Always leave out         none
+
+  In Claude Code  4
+    Session-start notice     daily
+    Spinner note             ○ off
+    Turn summary             ○ off
+    Habit hints              ○ off
+
+  In adage ui  1
+    Start screen             ● on
+
+  Advanced  6
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   enter  edit   space  toggle                                                                                          q  quit

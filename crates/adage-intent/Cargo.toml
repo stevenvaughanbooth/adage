@@ -1,0 +1,25 @@
+[package]
+name = "adage-intent"
+description = "Intent families: prompt normalisation, a static embedding model loaded in-process, and deterministic clustering"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+once_cell.workspace = true
+sha2.workspace = true
+anyhow.workspace = true
+# Unpacks npm tarballs for the `adage models fetch` fallback (already a dependency of adage-core).
+miniz_oxide = { version = "0.8", default-features = false, features = ["with-alloc"] }
+
+[features]
+# potion-base-8M, int8, compiled into the binary (src/model.rs, "The bundled model"): 7.9 MB.
+# The adage binary turns it on; library tests build without it unless the workspace unifies it.
+bundled = []
+
+[dev-dependencies]
+tempfile = "3"

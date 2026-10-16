@@ -1,0 +1,470 @@
+{
+ "acme-work-item": {
+  "cost_usd": 0.066829,
+  "graph": {
+   "steps": [
+    {
+     "id": 1,
+     "order": 1,
+     "title": "Read the work item",
+     "role": "lookup",
+     "commands": [
+      {
+       "template": "scripts/wi-lookup {id}"
+      }
+     ],
+     "precondition": {
+      "kind": "always"
+     },
+     "expect": {
+      "text": "prints the title, description, linked files and acceptance criteria"
+     }
+    },
+    {
+     "id": 2,
+     "order": 2,
+     "title": "Edit schema if item adds or changes a record field",
+     "role": "edit",
+     "commands": [
+      {
+       "template": "schema/{record}.json"
+      },
+      {
+       "template": "make gen"
+      }
+     ],
+     "precondition": {
+      "kind": "judgment",
+      "text": "item adds or changes a record field"
+     },
+     "expect": {
+      "text": "schema/{record}.json edited and acme/generated/models.py regenerated"
+     }
+    },
+    {
+     "id": 3,
+     "order": 3,
+     "title": "Make the code change",
+     "role": "edit",
+     "commands": [
+      {
+       "template": "acme/{file}"
+      }
+     ],
+     "precondition": {
+      "kind": "always"
+     },
+     "expect": {
+      "text": "code changes made in linked files under acme/"
+     }
+    },
+    {
+     "id": 4,
+     "order": 4,
+     "title": "Run tests",
+     "role": "run",
+     "commands": [
+      {
+       "template": "make test"
+      }
+     ],
+     "avoid": [
+      {
+       "command": "python3 -m unittest",
+       "instead": "make test",
+       "signature": "ACME_ENV is not set"
+      },
+      {
+       "command": "pytest",
+       "instead": "make test",
+       "signature": "pytest is not installed"
+      }
+     ],
+     "precondition": {
+      "kind": "after_edit"
+     },
+     "expect": {
+      "contains": "OK"
+     }
+    },
+    {
+     "id": 5,
+     "order": 5,
+     "title": "Run CI checks",
+     "role": "run",
+     "commands": [
+      {
+       "template": "make ci"
+      }
+     ],
+     "precondition": {
+      "kind": "before_finish"
+     },
+     "expect": {
+      "text": "generated models are fresh and entire suite passes; fails with 'generated models are stale' if make gen was skipped"
+     }
+    }
+   ]
+  }
+ },
+ "click-bugfix": {
+  "cost_usd": 0.036964,
+  "graph": {
+   "steps": [
+    {
+     "id": "reproduce",
+     "order": 1,
+     "title": "Reproduce the bug",
+     "role": "run",
+     "commands": [
+      {
+       "template": ".venv/bin/python repro.py"
+      }
+     ],
+     "avoid": [],
+     "precondition": {
+      "kind": "always",
+      "text": "Example from bug report saved to repro.py at repository root"
+     },
+     "expect": {
+      "text": "Wrong behaviour is displayed"
+     }
+    },
+    {
+     "id": "search_code",
+     "order": 2,
+     "title": "Search for the relevant code",
+     "role": "search",
+     "commands": [
+      {
+       "template": "grep -rn \"{search_term}\" src/click"
+      }
+     ],
+     "avoid": [],
+     "precondition": {
+      "kind": "judgment",
+      "text": "Identify key function or term from bug report to search for"
+     },
+     "expect": {
+      "text": "Located relevant code in src/click/"
+     }
+    },
+    {
+     "id": "read_code",
+     "order": 3,
+     "title": "Read the relevant module",
+     "role": "read",
+     "commands": [
+      {
+       "template": "cat src/click/{module}.py"
+      }
+     ],
+     "avoid": [],
+     "precondition": {
+      "kind": "judgment",
+      "glob": "src/click/{module}.py",
+      "text": "Module identified from search results"
+     },
+     "expect": {
+      "text": "Understand module implementation and identify bug location"
+     }
+    },
+    {
+     "id": "run_module_tests",
+     "order": 4,
+     "title": "Run tests for the module",
+     "role": "verify",
+     "commands": [
+      {
+       "template": ".venv/bin/python -m pytest tests/test_{module}.py -q"
+      }
+     ],
+     "avoid": [
+      {
+       "command": "python -m pytest",
+       "instead": ".venv/bin/python -m pytest",
+       "signature": "pytest without venv path fails with 'No module named pytest'"
+      },
+      {
+       "command": "python3 -m pytest",
+       "instead": ".venv/bin/python -m pytest",
+       "signature": "pytest without venv path fails with 'No module named pytest'"
+      },
+      {
+       "command": "pytest",
+       "instead": ".venv/bin/python -m pytest",
+       "signature": "bare pytest without venv path fails with 'No module named pytest'"
+      }
+     ],
+     "precondition": {
+      "kind": "judgment",
+      "text": "Module name identified"
+     },
+     "expect": {
+      "exit": 0,
+      "contains": "passed"
+     }
+    },
+    {
+     "id": "fix_code",
+     "order": 5,
+     "title": "Fix the code and add regression test",
+     "role": "edit",
+     "commands": [],
+     "avoid": [],
+     "precondition": {
+      "kind": "judgment",
+      "glob": "src/click/{module}.py",
+      "text": "Root cause identified in module"
+     },
+     "expect": {
+      "text": "Bug fixed in src/click/{module}.py and regression test added to tests/test_{module}.py"
+     }
+    },
+    {
+     "id": "run_full_suite",
+     "order": 6,
+     "title": "Run full test suite",
+     "role": "verify",
+     "commands": [
+      {
+       "template": ".venv/bin/python -m pytest tests -q -x"
+      }
+     ],
+     "avoid": [
+      {
+       "command": "python -m pytest",
+       "instead": ".venv/bin/python -m pytest",
+       "signature": "pytest without venv path fails with 'No module named pytest'"
+      },
+      {
+       "command": "python3 -m pytest",
+       "instead": ".venv/bin/python -m pytest",
+       "signature": "pytest without venv path fails with 'No module named pytest'"
+      },
+      {
+       "command": "pytest",
+       "instead": ".venv/bin/python -m pytest",
+       "signature": "bare pytest without venv path fails with 'No module named pytest'"
+      }
+     ],
+     "precondition": {
+      "kind": "after_edit",
+      "glob": "src/click/*.py"
+     },
+     "expect": {
+      "exit": 0,
+      "contains": "passed"
+     }
+    },
+    {
+     "id": "confirm_fix",
+     "order": 7,
+     "title": "Confirm the fix works",
+     "role": "run",
+     "commands": [
+      {
+       "template": ".venv/bin/python repro.py"
+      }
+     ],
+     "avoid": [],
+     "precondition": {
+      "kind": "before_finish",
+      "glob": "repro.py"
+     },
+     "expect": {
+      "text": "Correct behaviour is now exhibited"
+     }
+    },
+    {
+     "id": "cleanup",
+     "order": 8,
+     "title": "Delete the reproduction script",
+     "role": "remove",
+     "commands": [
+      {
+       "template": "rm repro.py"
+      }
+     ],
+     "avoid": [],
+     "precondition": {
+      "kind": "before_finish",
+      "glob": "repro.py"
+     },
+     "expect": {
+      "exit": 0
+     }
+    }
+   ]
+  }
+ },
+ "webapp-testing": {
+  "cost_usd": 0.07540200000000001,
+  "graph": {
+   "steps": [
+    {
+     "id": "classify_app_type",
+     "order": 1,
+     "title": "Classify application as static HTML or dynamic webapp",
+     "role": "judgment",
+     "precondition": {
+      "kind": "always"
+     }
+    },
+    {
+     "id": "read_static_html",
+     "order": 2,
+     "title": "Read static HTML file to identify selectors",
+     "role": "read",
+     "commands": [
+      {
+       "template": "cat {html_path}"
+      }
+     ],
+     "precondition": {
+      "kind": "judgment",
+      "text": "Static HTML"
+     }
+    },
+    {
+     "id": "verify_dev_server",
+     "order": 3,
+     "title": "Verify if development server is already running",
+     "role": "verify",
+     "precondition": {
+      "kind": "judgment",
+      "text": "Dynamic webapp"
+     }
+    },
+    {
+     "id": "lookup_helper_usage",
+     "order": 4,
+     "title": "Look up usage of with_server.py helper script",
+     "role": "lookup",
+     "commands": [
+      {
+       "template": "python scripts/with_server.py --help"
+      }
+     ],
+     "precondition": {
+      "kind": "judgment",
+      "text": "Server not running"
+     },
+     "avoid": [
+      {
+       "command": "cat scripts/with_server.py",
+       "instead": "python scripts/with_server.py --help",
+       "signature": "Reading helper script source code directly"
+      }
+     ],
+     "expect": {
+      "exit": 0
+     }
+    },
+    {
+     "id": "start_single_server",
+     "order": 5,
+     "title": "Start single development server with automation script",
+     "role": "run",
+     "commands": [
+      {
+       "template": "python scripts/with_server.py --server \"npm run dev\" --port 5173 -- python {automation_script}.py"
+      }
+     ],
+     "precondition": {
+      "kind": "judgment",
+      "text": "Single server, not running"
+     },
+     "expect": {
+      "exit": 0
+     }
+    },
+    {
+     "id": "start_multiple_servers",
+     "order": 5,
+     "title": "Start multiple development servers with automation script",
+     "role": "run",
+     "commands": [
+      {
+       "template": "python scripts/with_server.py --server \"cd backend && python server.py\" --port 3000 --server \"cd frontend && npm run dev\" --port 5173 -- python {automation_script}.py"
+      }
+     ],
+     "precondition": {
+      "kind": "judgment",
+      "text": "Multiple servers, not running"
+     },
+     "expect": {
+      "exit": 0
+     }
+    },
+    {
+     "id": "perform_reconnaissance",
+     "order": 6,
+     "title": "Perform page reconnaissance to discover selectors",
+     "role": "note",
+     "precondition": {
+      "kind": "after_edit",
+      "text": "Server running"
+     },
+     "avoid": [
+      {
+       "command": "page.screenshot() or inspect DOM before page.wait_for_load_state('networkidle')",
+       "instead": "Always call page.wait_for_load_state('networkidle') first",
+       "signature": "Inspecting DOM state before JavaScript execution completes on dynamic apps"
+      }
+     ]
+    },
+    {
+     "id": "examine_examples",
+     "order": 7,
+     "title": "Examine reference example scripts",
+     "role": "read",
+     "commands": [
+      {
+       "template": "cat examples/element_discovery.py"
+      },
+      {
+       "template": "cat examples/static_html_automation.py"
+      },
+      {
+       "template": "cat examples/console_logging.py"
+      }
+     ],
+     "precondition": {
+      "kind": "judgment",
+      "text": "Need guidance on patterns or selectors"
+     }
+    },
+    {
+     "id": "create_test_script",
+     "order": 8,
+     "title": "Write native Python Playwright automation script",
+     "role": "edit",
+     "commands": [
+      {
+       "template": "cat > {script_name}.py << 'EOF'\nfrom playwright.sync_api import sync_playwright\n\nwith sync_playwright() as p:\n    browser = p.chromium.launch(headless=True)\n    page = browser.new_page()\n    page.goto('http://localhost:{port}')\n    page.wait_for_load_state('networkidle')\n    browser.close()\nEOF"
+      }
+     ],
+     "precondition": {
+      "kind": "always"
+     }
+    },
+    {
+     "id": "run_test_script",
+     "order": 9,
+     "title": "Execute Playwright automation script",
+     "role": "run",
+     "commands": [
+      {
+       "template": "python {script_name}.py"
+      }
+     ],
+     "precondition": {
+      "kind": "after_edit",
+      "text": "Script written"
+     }
+    }
+   ]
+  }
+ }
+}

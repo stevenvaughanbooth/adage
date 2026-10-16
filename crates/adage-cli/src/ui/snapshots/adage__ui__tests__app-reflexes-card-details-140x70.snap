@@ -1,0 +1,74 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes   3 Map   4 Health  2   5 Settings   6 Home                    ◆ github.com/stevenvaughanbooth/adage ▾ · LIVE
+──────────────────━━━━━━━━━━━━──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ / filter reflexes, commands, files                                    │ ◠ After editing crates/adage-cli/src/*.rs, run
+ FIRE 2  PRIME 1  INHIBIT 0  all states ▾                              │   cargo build -p adage-cli
+                                                                       │    FIRE    Suggests   ○ nascent ── ● forming ── ● firm
+  ▾ Learned here · v17.0.12 ────────────────────────────── 2 reflexes  │
+  F edit crates/**/*.rs → cargo fmt --all                ▰▰▰▱▱▱ 22/39  │ ╭─ WHEN ────────────────────╮         ╭─ DO ─────────────────────╮
+▌ F edit …/src/*.rs     → cargo build -p adage-cli       ▰▰▰▰▱▱ 22/35  │ │ an edit touches           │─── ◠ ──▶│ cargo build -p adage-cli │
+                                                                       │ │ crates/adage-cli/src/*.rs │         │                          │
+  ▾ Instincts · v3.0.0 ─────────────────────────────────── 1 instinct  │ ╰───────────────────────────╯         ╰──────────────────────────╯
+  P edit Cargo.lock     → let cargo update it…  forming      built in  │
+                                                                       │ Evidence ─────────────────────────────────────────────────────────
+                                                                       │ Learned from     ━━━━━━━━━━━━━━━━╸─────────  22 of 35 traces
+                                                                       │ Confidence       ━━━━━━━━━━━━──────────────  0.46 lower bound
+                                                                       │ Since installed  4 fired  3 followed  1 not observed
+                                                                       │                  2 finish line met
+                                                                       │ Uplift           when told  ━━━━━━━━━━━━━──  0.88
+                                                                       │                  unaided    ━━━━━━━━━──────  0.60
+                                                                       │                  uplift +0.28 · lower bound +0.13
+                                                                       │ Finish line      adage asks for it once if the agent stops without
+                                                                       │                  running it
+                                                                       │
+                                                                       │ What the agent sees · example values ───────────────────  r  clean
+                                                                       │ ▎ <adage-reflex
+                                                                       │ ▎ track="github-com-stevenvaughanbooth-adage/learned@17.0.12"
+                                                                       │ ▎ route="run-137805" strength="fire">
+                                                                       │ ▎ In this repository, changes to files matching
+                                                                       │ ▎ crates/adage-cli/src/*.rs must be followed by running:
+                                                                       │ ▎   cargo build -p adage-cli
+                                                                       │ ▎ Agents in this repository run it after such changes. Ignore this
+                                                                       │ ▎ if the user is asking for something else.
+                                                                       │ ▎ Learned by Adage from this repository's earlier agent sessions;
+                                                                       │ ▎ not requested by the user.
+                                                                       │ ▎ </adage-reflex>
+                                                                       │
+                                                                       │ Review ───────────────────────────────────────────────────────────
+                                                                       │  w  weaken    x  extinguish    a  approve    n  pin    d  delegate
+                                                                       │  t  traces (0)    o  open in map
+                                                                       │
+                                                                       │ ▾ Details ──────────────────────────────────────────  enter  close
+                                                                       │   reflex       run-137805
+                                                                       │   track        github-com-stevenvaughanbooth-adage/learned
+                                                                       │   version      17.0.12
+                                                                       │   repository   github.com/stevenvaughanbooth/adage
+                                                                       │   mode         Suggest · No execution grant
+                                                                       │   trigger      after_edit · an edit touches
+                                                                       │                crates/adage-cli/src/*.rs
+                                                                       │   step         run · cargo build -p adage-cli
+                                                                       │   evidence     22/35 traces · rate 0.63 · lower bound 0.46
+                                                                       │   uplift       +0.28 (lower bound +0.13): followed 0.88 when told,
+                                                                       │                0.60 unaided; 22 of 35 traces did it unaided
+                                                                       │   finish line  after an edit to crates/adage-cli/src/*.rs the agent
+                                                                       │                is told to run `cargo build -p adage-cli`; if it
+                                                                       │                then stops without running it, Adage asks it once to
+                                                                       │                run it before finishing (at most 2 such requests a
+                                                                       │                session)
+                                                                       │   limits       ceiling fire · effect observe
+                                                                       │
+                                                                       │   w weaken is the same as, from any shell:
+                                                                       │   adage review weaken github-com-stevenvaughanbooth-adage/learned
+                                                                       │     run-137805
+                                                                       │
+                                                                       │
+                                                                       │
+                                                                       │
+                                                                       │
+                                                                       │
+                                                                       │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   /  filter   f  repository   j/k  move   enter  expand   tab  next tab                                      q  quit

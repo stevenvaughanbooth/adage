@@ -1,0 +1,187 @@
+#!/bin/sh
+# Adage SessionStart: the one Claude Code plugin ships all three binaries (plan A8, which reverses
+# Track C's D2: the person's consent is the marker a press or a terminal writes, not a second
+# plugin; onboarding plan O1 adds adage-train). It makes four entries in ${CLAUDE_PLUGIN_DATA}/bin,
+# then hands the SessionStart payload to the one that serves hooks:
+#   bin/adage        the CLI binary, always (the mod runs its verbs through it);
+#   bin/adage-exec   the executing binary, when this machine has one;
+#   bin/adage-train  the skill compiler `adage train` hands over to (it looks beside the running
+#                    adage), when this machine has one; no hook ever runs it;
+#   bin/hook         what every other hook runs: adage-exec while $ADAGE_HOME/exec/enabled exists
+#                    (written by `adage delegate on`, or with a first confirmed action grant) and
+#                    adage-exec is here, else adage. Re-made at every start, so a change takes
+#                    effect in the next session; the hooks are registered once, so they never fire
+#                    twice.
+# Each binary comes from, in order:
+#   1. the plugin's bundled dist/<target>/<name>, verified against dist/SHA256SUMS (the release
+#      publishes the plugin with every target bundled; plugin/build.sh stages the host's);
+#   2. on PATH (npm, the release installers, cargo install): `adage`, and each companion on PATH
+#      or beside that adage. When adage is npm's node launcher, it names the platform binary it
+#      runs (the companions sit beside it), and hooks call that directly.
+# Nothing is ever downloaded here. A new bundled binary is run once first (the first execution of a
+# new binary pays a one-time code-signing check, 100-350 ms on macOS — spike S1). On Windows (Git
+# Bash) every entry is a copy, re-copied when it differs, so a marker change re-copies bin/hook.
+#
+# Every path exits 0: fail open. When no adage can serve, bin/hook and bin/adage point at
+# scripts/quiet (so the other hooks answer nothing instead of failing), the reason is written to
+# $DATA/status, and one line goes to the person as a JSON `systemMessage` on stdout (shown in
+# Claude Code's UI, never sent to the model). Nothing else is printed here: the binary's own output
+# follows.
+ROOT="$1"; DATA="$2"
+notice() { # notice <text>: one line for the person (JSON-escaped: backslashes and quotes)
+  t=$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  printf '{"systemMessage":"%s"}\n' "$t"
+}
+quiet() {
+  [ -n "$DATA" ] && mkdir -p "$DATA/bin" 2>/dev/null || return 0
+  for n in adage hook; do ln -sfn "$ROOT/scripts/quiet" "$DATA/bin/$n" 2>/dev/null; done
+  rm -f "$DATA/bin/adage-exec" "$DATA/bin/adage-train" 2>/dev/null
+}
+fail() { # fail <reason>: record it, keep the other hooks quiet, tell the person, exit 0
+  [ -n "$DATA" ] && mkdir -p "$DATA" 2>/dev/null && printf '%s\n' "$1" >"$DATA/status" 2>/dev/null
+  quiet
+  notice "adage: $1"
+  cat >/dev/null; exit 0
+}
+[ -n "$ROOT" ] && [ -n "$DATA" ] || { cat >/dev/null; exit 0; }
+X=""
+OSARCH="$(uname -s)-$(uname -m)"
+case "$OSARCH" in
+  Darwin-arm64) T=aarch64-apple-darwin ;; Darwin-x86_64) T=x86_64-apple-darwin ;;
+  # Releases ship static musl binaries; plugin/build.sh stages the host's (gnu) triple.
+  Linux-x86_64) T=x86_64-unknown-linux-musl ;; Linux-aarch64|Linux-arm64) T=aarch64-unknown-linux-musl ;;
+  # Git Bash. Unverified: whether Claude Code on Windows runs this exec-form hook at all.
+  MINGW*-x86_64|MSYS*-x86_64) T=x86_64-pc-windows-msvc; X=.exe ;;
+  *) T="" ;;
+esac
+case "$(uname -s)" in
+  Darwin) AH="${ADAGE_HOME:-$HOME/Library/Application Support/Adage}" ;;
+  MINGW*|MSYS*) AH="${ADAGE_HOME:-${APPDATA:-$HOME/AppData/Roaming}/Adage}" ;;
+  *) AH="${ADAGE_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/adage}" ;;
+esac
+case "$T" in *-linux-musl) [ -f "$ROOT/dist/$T/adage" ] || T="${T%-musl}-gnu" ;; esac
+# Prefer native digest providers: the Perl helper is noticeably slower for large debug builds.
+# All paths verify the same SHA-256; missing providers fall back without weakening verification.
+sha256() { { sha256sum "$1" || openssl dgst -sha256 -r "$1" || shasum -a 256 "$1"; } 2>/dev/null | cut -d' ' -f1; }
+mkdir -p "$DATA/bin" || fail "cannot create $DATA/bin; hooks are off for this session"
+
+# place <name> <file>: make bin/<name> run <file> (a link; a copy on Windows, re-made only when it
+# differs).
+place() {
+  if [ -n "$X" ]; then
+    cmp -s "$2" "$DATA/bin/$1$X" || cp -f "$2" "$DATA/bin/$1$X"
+  else
+    ln -sfn "$2" "$DATA/bin/$1"
+  fi
+}
+
+# bundled <name>: install dist/<target>/<name> if it matches dist/SHA256SUMS. Returns 0 when
+# installed, 1 when none is bundled for this machine, 2 when it does not match its checksum.
+bundled() {
+  NAME="$1"; SRC="$ROOT/dist/$T/$NAME$X"
+  [ -n "$T" ] && [ -f "$SRC" ] || return 1
+  WANT=$(grep " $T/$NAME$X\$" "$ROOT/dist/SHA256SUMS" 2>/dev/null | cut -d' ' -f1)
+  # A copy named by the wanted digest was verified when it was made: skip hashing again (every
+  # session start after the first stays fast).
+  if [ -n "$WANT" ] && [ -z "$X" ] && [ -x "$DATA/bin/$NAME-$WANT" ]; then GOT="$WANT"; else GOT=$(sha256 "$SRC"); fi
+  [ -n "$WANT" ] && [ "$WANT" = "$GOT" ] || return 2
+  if [ -n "$X" ]; then
+    place "$NAME" "$SRC" || return 2
+  else
+    if [ ! -x "$DATA/bin/$NAME-$GOT" ]; then
+      cp "$SRC" "$DATA/bin/.$NAME-$GOT.tmp" && chmod 755 "$DATA/bin/.$NAME-$GOT.tmp" \
+        && mv "$DATA/bin/.$NAME-$GOT.tmp" "$DATA/bin/$NAME-$GOT" || fail "cannot install the bundled $NAME into $DATA/bin"
+      "$DATA/bin/$NAME-$GOT" version >/dev/null 2>&1
+    fi
+    ln -sfn "$NAME-$GOT" "$DATA/bin/$NAME"
+    superseded "$NAME" "$GOT"
+  fi
+  return 0
+}
+
+# superseded <name> <sha>: remove the copies of <name> an earlier plugin version installed, now
+# that bin/<name> links to <name>-<sha> (onboarding plan O8). Only files named exactly <name>-
+# followed by 64 hex characters (so adage's never touch adage-exec-* or adage-train-*), and none a
+# link in bin/ still names. Registrations name the stable link, never a digest copy (O4); a session
+# still running an old copy keeps it open until it ends.
+superseded() {
+  for OLD in "$DATA/bin/$1"-*; do
+    B=${OLD##*/}; H=${B#"$1"-}
+    [ "$B" != "$1-$2" ] && [ ${#H} -eq 64 ] && [ -f "$OLD" ] && [ ! -L "$OLD" ] || continue
+    case "$H" in *[!0-9a-f]*) continue ;; esac
+    KEEP=
+    for L in "$DATA/bin/"*; do
+      [ -L "$L" ] && [ "$(readlink "$L" 2>/dev/null)" = "$B" ] && KEEP=1
+    done
+    [ -n "$KEEP" ] || rm -f "$OLD" 2>/dev/null || true
+  done
+}
+
+# 1. adage: bundled and verified, else on PATH. The binary answers `version` with "adage
+# <version>"; npm's launcher, asked with ADAGE_NPM_WHICH=1, prints the path of the platform binary.
+FROM=""
+bundled adage; RC=$?
+if [ "$RC" = 0 ]; then
+  FROM="$ROOT/dist/$T"
+elif P=$(command -v adage 2>/dev/null) && [ -n "$P" ]; then
+  OUT=$(ADAGE_NPM_WHICH=1 "$P" version 2>/dev/null)
+  case "$OUT" in
+    "adage "*|"") ;;
+    *) [ -f "$OUT" ] && P="$OUT" ;;
+  esac
+  [ -f "$P" ] && place adage "$P" && FROM=$(dirname "$P")
+fi
+if [ -z "$FROM" ]; then
+  [ "$RC" = 2 ] && fail "the bundled binary for $OSARCH does not match its checksum; reinstall with /plugin install adage@adage, or npm i -g @adage-sh/cli"
+  fail "no binary for $OSARCH; reinstall with /plugin install adage@adage, or npm i -g @adage-sh/cli"
+fi
+
+# 2. adage-exec: bundled and verified, else on PATH, else beside the adage that serves.
+EXEC=""
+EXEC_WHY="no adage-exec binary was found for this machine"
+bundled adage-exec; RCX=$?
+if [ "$RCX" = 0 ]; then
+  EXEC=1
+elif [ "$RCX" = 2 ]; then
+  EXEC_WHY="the bundled adage-exec does not match its checksum (reinstall the plugin)"
+else
+  Q=$(command -v "adage-exec$X" 2>/dev/null)
+  [ -n "$Q" ] && [ -f "$Q" ] || Q="$FROM/adage-exec$X"
+  [ -f "$Q" ] && [ -x "$Q" ] && place adage-exec "$Q" && EXEC=1
+fi
+[ -n "$EXEC" ] || rm -f "$DATA/bin/adage-exec$X" 2>/dev/null
+
+# 3. adage-train: bundled and verified, else on PATH, else beside the adage that serves. No hook
+# runs it, so a missing or mismatched one only removes bin/adage-train: adage keeps serving, and
+# `adage train` says how to get it.
+TRAIN=""
+bundled adage-train; RCT=$?
+if [ "$RCT" = 0 ]; then
+  TRAIN=1
+elif [ "$RCT" = 1 ]; then
+  Q=$(command -v "adage-train$X" 2>/dev/null)
+  [ -n "$Q" ] && [ -f "$Q" ] || Q="$FROM/adage-train$X"
+  [ -f "$Q" ] && [ -x "$Q" ] && place adage-train "$Q" && TRAIN=1
+fi
+[ -n "$TRAIN" ] || rm -f "$DATA/bin/adage-train$X" 2>/dev/null
+
+# 4. bin/hook: the binary the marker asks for. Without adage-exec the session still gets adage's
+# directives, and the person is told why execution is not serving.
+EXEC_MSG=""
+SERVE=adage
+if [ -f "$AH/exec/enabled" ]; then
+  if [ -n "$EXEC" ]; then SERVE=adage-exec; else EXEC_MSG="adage: execution is on, but $EXEC_WHY; serving without execution (adage delegate off turns it off)."; fi
+fi
+if [ -n "$X" ]; then
+  cmp -s "$DATA/bin/$SERVE$X" "$DATA/bin/hook$X" || cp -f "$DATA/bin/$SERVE$X" "$DATA/bin/hook$X"
+else
+  ln -sfn "$SERVE" "$DATA/bin/hook"
+fi
+rm -f "$DATA/status" 2>/dev/null
+if [ -n "$EXEC_MSG" ]; then
+  # The binary's own notice (if any) is replaced by this one: one line per session start.
+  "$DATA/bin/hook$X" hook claude SessionStart >/dev/null
+  notice "$EXEC_MSG"
+  exit 0
+fi
+exec "$DATA/bin/hook$X" hook claude SessionStart

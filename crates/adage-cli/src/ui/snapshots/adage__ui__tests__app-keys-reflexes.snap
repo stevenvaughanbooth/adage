@@ -1,0 +1,44 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes   2   3 Map   4 Health  2   5 Settings   6 Home                                              ◆ harbor-dispatch ▾ · LIVE
+──────────────────━━━━━━━━━━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ / filter reflexes, commands, files                                         │ ◠ The gist of lookup-incident
+ FIRE 2  PRIME 3  INHIBIT 1  all states ▾                                   │    FIRE    Suggests   ○ nascent ── ● forming ── ● firm
+                                                                            │   ○ waits for review: new · conditioned and never reviewed
+  ▾ incidents · v0.3.0 ────────────╭ keys ───────────────────────────────────────────────────────────────────────╮
+▌ F a prompt names a tic… → the gis│ EVERYWHERE                                                                  │╭─ DO ──────────────────────╮
+  F bin/fetch-incident {… → the gis│           ?  this list                                                      ││ bin/fetch-incident {item} │
+  I npm test fails: HARB… → the gis│           :  command palette (also ctrl-k): every action and reflex         │╰───────────────────────────╯
+                                   │         tab  next tab (shift-tab: previous)                                 │
+  ▾ intents · v0.3.0 ──────────────│         1-6  Live, Reflexes, Map, Health, Settings, Home                    │───────────────────────────────────
+  P a prompt means: run … → the gis│           q  quit                                                           │━━━━━━─  24 of 25 traces
+                                   │                                                                             │━━─────  0.80 lower bound
+  ▾ Waiting for review ────────────│ REFLEXES                                                                    │
+  ○ edit api/*.yaml       → the gis│           /  fuzzy filter reflexes by id, trigger, command or track         │  1 not observed  0 finish line met
+                                   │           f  choose the repository whose reflexes are shown, or all of them │━━━━╸──  10/12
+  ▾ Instincts · v0.1.0 ────────────│         j/k  move through the tree                                          │───────  1/5
+  P edit registry/*.csv   → the gis│       enter  open or close a group, or a reflex's details                   │
+                                   │         tab  next tab                                                       │ ──────────────────────────  r  raw
+  ▸ Extinguished ──────────────────│           s  strengthen: prime → fire (adage review strengthen)             │a script. A known next step here is:
+                                   │           w  weaken: fire → prime (adage review weaken)                     │ore this if the user is asking for
+                                   │           x  extinguish the reflex (adage review extinguish)                │
+                                   │           a  approve it as it is (adage review approve)                     │ory's earlier agent sessions; not
+                                   │           n  pin it: conditioning proposes instead of overwriting           │
+                                   │           m  dismiss a pinned reflex's proposed change                      │
+                                   │           d  review execution authority in a guided form                    │───────────────────────────────────
+                                   │           t  the traces it fired in                                         │prove    n  pin    d  delegate
+                                   │           o  the same reflex in the web map (adage map --focus)             │
+                                   │           r  what the agent sees, exactly as delivered (tags and all)       │
+                                   │       F P I  show or hide fire, prime, inhibit                              │──────────────────────  enter  open
+                                   │           S  cycle the lifecycle filter                                     │
+                                   │         esc  reset the search, strength and lifecycle filters               │
+                                   │   PgUp PgDn  scroll the card                                                │
+                                   │           R  reload the reflexes                                            │
+                                   ╰─────────────────────────────────────────────────────────────────────────────╯
+                                                                            │
+                                                                            │
+                                                                            │
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   /  filter   f  repository   j/k  move   enter  expand   tab  next tab                                                q  quit

@@ -1,0 +1,25 @@
+{
+  "arms": [
+    "baseline",
+    "generic",
+    "typed",
+    "ownership"
+  ],
+  "authority": "/private/tmp/adage-real-repo-gate-v1",
+  "expected": "diagnostic only; count all agent Bash requests and actual successful CPU receipts",
+  "kind": "receipt-consumption ablation",
+  "limitation": "read-triggered authored fixture, not learned production reflex or real-code transfer",
+  "maximum_new_reservations_usd": 2.0,
+  "no_outcome_retries": true,
+  "per_assignment_cap_usd": 0.25,
+  "production_execution": false,
+  "repetitions": 2,
+  "savings_evidence": false,
+  "sources": {
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/live/budget.py": "de4f9c2376204ac2e6ffff71ec43bcbf9318366c7f8a1eb5d1aed186279c27d2",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/delivery_canary.py": "713e3dda0f2e5567eaad7ca257f3231f4871506d09dcd64dc291535579c178ef",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/probe.py": "0c7bd1e043428200c97e3c80c79ada22c8c1473ba2ce9640c861a2dcfb6660e4",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/real_repo_gate.py": "e4b819a851e1e5325983259b4946abe4e6b050801d33fce08e85311a7cb9d76e",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/receipt_ablation.py": "f1d25bb990dcd67d7d4ddf719427f1e54dd0856816fd7ab769c65212dde4a67a"
+  }
+}

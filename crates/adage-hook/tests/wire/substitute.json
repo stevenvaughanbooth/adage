@@ -1,0 +1,8 @@
+{
+  "substitute": {
+    "command": "make test",
+    "context": "adage ran make test for you; python3 -m pytest tests was replaced because that command fails in this repository (\"No module named pytest\"). The output above is from make test.",
+    "route": "dead-end-pytest",
+    "track": "acme/dead-ends"
+  }
+}

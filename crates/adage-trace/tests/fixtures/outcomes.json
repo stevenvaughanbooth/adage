@@ -1,0 +1,20 @@
+[
+  {"name":"no check", "steps":["edit"], "expect":null, "basis":"unknown"},
+  {"name":"fresh pass", "steps":["edit","pass"], "expect":true, "basis":"final_check"},
+  {"name":"empty suite cannot establish completion", "steps":["edit","empty"], "expect":null, "basis":"unknown"},
+  {"name":"incomplete check cannot establish completion", "steps":["edit","unknown"], "expect":null, "basis":"unknown"},
+  {"name":"fresh failure", "steps":["edit","fail"], "expect":false, "basis":"final_check"},
+  {"name":"passed before final edit", "steps":["pass","edit"], "expect":null, "basis":"unknown"},
+  {"name":"failure before corrective edit", "steps":["fail","edit"], "expect":null, "basis":"unknown"},
+  {"name":"environment changed", "steps":["pass","environment"], "expect":null, "basis":"unknown"},
+  {"name":"generated output changed", "steps":["pass","regenerate"], "expect":null, "basis":"unknown"},
+  {"name":"inspection preserves check", "steps":["edit","pass","read"], "expect":true, "basis":"final_check"},
+  {"name":"same turn is not ordered evidence", "steps":["edit","pass"], "same_turn":true, "expect":null, "basis":"unknown"},
+  {"name":"new prompt after check", "steps":["edit","pass"], "new_prompt":true, "expect":null, "basis":"unknown"},
+  {"name":"cut off", "steps":["edit","pass"], "cut_off":true, "expect":false, "basis":"incomplete_ending"},
+  {"name":"help requested", "steps":["pass"], "asked_for_help":true, "expect":false, "basis":"incomplete_ending"},
+  {"name":"recorded outcome is separate", "steps":["pass"], "recorded":false, "expect":false, "basis":"recorded"},
+  {"name":"structured handback is not a successful task", "steps":["pass"], "structured_handback":true, "expect":null, "basis":"unknown"},
+  {"name":"structured handback is not a failed task", "steps":["fail"], "structured_handback":true, "expect":null, "basis":"unknown"},
+  {"name":"recorded outcome takes precedence over handback", "steps":["fail"], "structured_handback":true, "recorded":true, "expect":true, "basis":"recorded"}
+]

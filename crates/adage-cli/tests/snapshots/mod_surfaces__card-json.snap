@@ -1,0 +1,46 @@
+---
+source: crates/adage-cli/tests/mod_surfaces.rs
+expression: "redact(&serde_json::to_string_pretty(&v).unwrap())"
+---
+{
+  "connected": true,
+  "header": "adage {VERSION} · {REPO} · ● healthy",
+  "health": {
+    "check": null,
+    "lamp": "fire",
+    "word": "healthy"
+  },
+  "next": [
+    {
+      "command": "adage ui",
+      "why": "review, health and settings"
+    }
+  ],
+  "off": false,
+  "recovery": null,
+  "repo": "{REPO}",
+  "rows": [
+    {
+      "key": "reflexes",
+      "text": "none active yet"
+    },
+    {
+      "key": "learning",
+      "text": "off (env ADAGE_AUTO_LEARN) → adage config set learn.auto true"
+    },
+    {
+      "key": "embeddings",
+      "text": "potion-base-8m-i8 (bundled)"
+    }
+  ],
+  "runtime": {
+    "routine_model": ""
+  },
+  "ui": {
+    "noticed": false,
+    "spinner": false,
+    "turn_line": false
+  },
+  "update": null,
+  "version": "{VERSION}"
+}

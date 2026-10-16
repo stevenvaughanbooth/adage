@@ -1,0 +1,219 @@
+{
+ "home": "/tmp/gv-dry-q5jwkjuj/adage-home",
+ "adage": "/home/user/adage/.claude/worktrees/agent-ae7d626216059442c/target/debug/adage",
+ "cards": [
+  {
+   "id": "card-11e594f481",
+   "bytes": 9001
+  }
+ ],
+ "held_out": [
+  {
+   "task": "ufo-util--without-auth",
+   "session": "9ca86990-0b44-4442-9140-41093ea1ba2d",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--same-origin",
+   "session": "3d791a99-7cec-4861-9a32-d6c8cfec3ae8",
+   "at_prompt": false,
+   "at_edit": "src/utils.ts",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--sort-query",
+   "session": "1d730706-1af4-4be5-b208-a8cb579ab2c5",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--lowercase-host",
+   "session": "624fba1e-5db4-4824-9763-8d84fd7fa7aa",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--get-extension",
+   "session": "7dbeb38e-6452-49a7-b3e4-0b31f9dcbaec",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--dot-segments",
+   "session": "636316d5-6de6-43f9-a81e-12874e5bd510",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--query-param",
+   "session": "b3f5be07-71fb-4b07-b3f8-45acd3847ac1",
+   "at_prompt": false,
+   "at_edit": "src/utils.ts",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--is-http",
+   "session": "9010040b-09d7-4337-b10d-0e0bc79be907",
+   "at_prompt": false,
+   "at_edit": "src/utils.ts",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  }
+ ],
+ "negatives": [
+  {
+   "id": "ufo-0e060c7f",
+   "source": "repobench",
+   "session": "613dc1f3-2de5-4578-8463-81a4510544c8",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "ufo-f437a3b4",
+   "source": "repobench",
+   "session": "573be954-8860-4869-a473-5543d489256d",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "ufo-f4c0400d",
+   "source": "repobench",
+   "session": "1fb43e64-cdfa-4d93-8a7f-f2b05639def6",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "ufo-62199a0c",
+   "source": "repobench",
+   "session": "85ab037e-b742-4acf-b7e2-7312aaa0d0df",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "ufo-eb299454",
+   "source": "repobench",
+   "session": "2fdd4fb9-fa59-42ab-9f11-70faac523ce1",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-docs-parse-filename",
+   "source": "handwritten",
+   "session": "f777eac5-8f42-4b05-9f92-f69fc7cdfd81",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-bug-clean-double-slashes",
+   "source": "handwritten",
+   "session": "bd0afc0c-9638-44ba-a13a-8b6197c53892",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-option-with-query",
+   "source": "handwritten",
+   "session": "bfb5e867-89ee-4947-bb9d-81b512bb9dae",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  }
+ ],
+ "hook_events": [
+  "PostToolBatch",
+  "PostToolUseFailure",
+  "PreToolUse",
+  "SessionEnd",
+  "SessionStart",
+  "Stop",
+  "UserPromptSubmit"
+ ],
+ "file_signal_probed_via": "PostToolBatch",
+ "summary": {
+  "cards": 1,
+  "held_out_delivered": [
+   8,
+   8
+  ],
+  "held_out_at_prompt": 5,
+  "held_out_at_edit": 3,
+  "delivered_tasks": [
+   "ufo-util--without-auth",
+   "ufo-util--same-origin",
+   "ufo-util--sort-query",
+   "ufo-util--lowercase-host",
+   "ufo-util--get-extension",
+   "ufo-util--dot-segments",
+   "ufo-util--query-param",
+   "ufo-util--is-http"
+  ],
+  "false_fires": [
+   0,
+   8
+  ],
+  "false_fire_rate_wilson90_upper": 0.2527,
+  "gate_R2_card_formed": true,
+  "gate_R3_detection": true,
+  "proceed_to_eval": true
+ }
+}

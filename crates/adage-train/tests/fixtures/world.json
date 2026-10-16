@@ -1,0 +1,16 @@
+{
+  "commands": [
+    { "run": "python3 -m unittest", "exit": 1, "output": "Traceback (most recent call last):\n  File \"tests/test_billing.py\", line 3, in <module>\nRuntimeError: ACME_ENV is not set" },
+    { "run": "pytest", "exit": 127, "output": "bash: pytest: command not found" },
+    { "run": "make test", "exit": 0, "output": "ACME_ENV=test python3 -m unittest discover -s tests\n........\nOK" },
+    { "run": "make gen", "exit": 0, "output": "python3 tools/gen.py\nwrote acme/generated/models.py" },
+    { "run": "python3 scripts/wi-lookup", "exit": 0, "output": "{\"id\": \"W-2042\", \"title\": \"Add a field\", \"linked_files\": [\"acme/billing.py\", \"schema/invoice.json\"]}" },
+    { "run": "ls", "exit": 0, "output": "Makefile\nREADME.md\nacme\nschema\nscripts\ntests\ntools" }
+  ],
+  "naive_verify": "pytest",
+  "working_verify": "make test",
+  "regenerate": [["schema/*.json", "make gen"]],
+  "lookup": "python3 scripts/wi-lookup {id}",
+  "baseline_regen_percent": 30,
+  "usd_per_turn": 0.01
+}

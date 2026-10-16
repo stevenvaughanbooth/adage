@@ -1,0 +1,51 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 230
+expression: text
+---
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home                                     ◆ harbor-dispatch ▾ · LIVE
+─────────━━━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ LIVE   harbor-dispatch
+ ╭─ ▁▃▅ Activity ───────────────────── quiet ─╮ ╭─ ▪ Tool calls ─────╮ ╭─ ◠ Fired ──────────╮ ╭─ ✓ Followed ───────╮ ╭─ ■ Finish lines ───╮
+ │                                            │ │ █▀█                │ │ █▀█                │ │                    │ │ █▀█                │
+ │                                            │ │ █ █                │ │ █ █                │ │ ▀▀▀                │ │ █ █                │
+ │ ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ │ │ ▀▀▀                │ │ ▀▀▀                │ │                    │ │ ▀▀▀                │
+ │ ────────────────────────────────────────── │ │ in 0 steps         │ │ none yet           │ │ ────────────       │ │ met                │
+ │ 42 min ago                             now │ │ no session yet     │ │ reflexes delivered │ │ none to follow yet │ │ no reminder needed │
+ ╰────────────────────────────────────────────╯ ╰────────────────────╯ ╰────────────────────╯ ╰────────────────────╯ ╰────────────────────╯
+
+ ╭─ ⠋ watching harbor-dispatch ─────────────────────────────────────────────╮                    │ Reflexes in play ───────────────────────
+ │ No traces yet: waiting for your agent.                                   │                    │ None fired yet. Each reflex Adage
+ │ ━─────────────────────────────────────────────────────────────────────── │                    │ delivers shows here, with how often the
+ │                                                                          │                    │ agent took it.
+ │ Start Claude Code, Codex or OpenCode in this repository. Each turn and   │                    │
+ │ tool step grows here as a graph, and every reflex Adage fires branches   │                    │ Learning ───────────────────────────────
+ │ off the step it came after, lit green once the agent follows it.         │                    │ ╭─ Conditioning ────────────────────────╮
+ │                                                                          │                    │ │ Nothing conditioned yet.              │
+ │ No hooks yet?  adage init                                                │                    │ │ Runs show here as they finish.        │
+ ╰──────────────────────────────────────────────────────────────────────────╯                    │ │ adage condition                       │
+                                                                                                 │ ╰───────────────────────────────────────╯
+                                                                                                 │
+                                                                                                 │ Health ─────────────────────────────────
+                                                                                                 │ + hooks claude    + 4 reflexes
+                                                                                                 │ + auto-condition
+                                                                                                 │ ! no model · adage models fetch
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+                                                                                                 │
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   p  pause   f  repository   /  filter   enter  inspect                                                      q  quit

@@ -1,0 +1,29 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 230
+expression: text
+---
+ adage watch  harbor-dispatch · gen 8216e29f          last call 12:04:08   LIVE
+ ◠ 3 fired · ✓ 1 followed ━━──── · ■ 1 finish line · 5 calls       ▁▁▁▁▁▁▁▁▁▁▁█
+
+  ┊ ↑ earlier: 1 session · 1 turn · 4 steps
+  Claude Code  session, since 12:04 ────────────────────────────────────────────
+  ├ ◆ adage ■ finish line: asked the agent to go on before it stops        12:04
+
+  Claude Code  session, since 12:04 ────────────────────────────────────────────
+  ❯ PROMPT · 2 steps · Run ×2 · adage fired 2 · 1 followed                 12:04
+  │  ◆ adage · FIRE · a reflex learned here
+  │    ──▶ bin/fetch-incident INC-2045  ✓ followed
+  ├ Run  ls                                              ✓ followed adage  12:04
+  │  ◆ adage · PRIME · a reflex learned here
+  │    ──▶ That result lists these files: read them together
+  ├ Run  ls                                                                12:04
+  │  ◆ adage ✓ finish line met: codegen-after-registry
+
+────────────────────────────────────────────────────────────────────────────────
+ ◆ conditioned 12:04 · 24 traces · 2 changes · ✗ conditioning failed (io): trac…
+ ○ 1 to look over · adage review
+ + hooks claude    + 4 reflexes    + auto-condition
+ ! no model · adage models fetch
+────────────────────────────────────────────────────────────────────────────────
+  :  palette   p  pause   f  scope   /  filter   enter  inspect         q  quit

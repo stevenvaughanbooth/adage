@@ -1,0 +1,6 @@
+{
+  "min_groups": 2,
+  "max_quality_loss": 0.02,
+  "min_savings": 0.20,
+  "min_baseline_success": 0.80
+}

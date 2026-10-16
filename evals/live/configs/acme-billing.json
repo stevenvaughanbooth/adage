@@ -1,0 +1,16 @@
+{
+  "name": "acme-billing",
+  "description": "The Adage demo: the acme-billing sandbox, 6 training and 6 held-out work items, hidden checks",
+  "repo_key": "acme-billing",
+  "workdir": "acme-billing",
+  "sandbox": ["python3", "{repo}/demo/sandbox/generate.py", "{dir}"],
+  "score": ["python3", "{repo}/demo/sandbox/score.py", "{dir}", "{task}"],
+  "prompts": ["Pick up {id} and get it done.", "Please work on {id}.", "Can you take care of {id}?"],
+  "train": { "tasks": ["W-1041", "W-1042", "W-1043", "W-1044", "W-1045", "W-1046"], "repeats": 3 },
+  "eval": { "tasks": ["W-2041", "W-2042", "W-2043", "W-2044", "W-2045", "W-2046"], "repeats": 3, "arms": ["control", "adage"] },
+  "model": "claude-haiku-4-5-20251001",
+  "max_turns": 30,
+  "concurrency": 3,
+  "learn_args": ["--demo"],
+  "budget_usd": 12.0
+}

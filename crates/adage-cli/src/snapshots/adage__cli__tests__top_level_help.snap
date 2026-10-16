@@ -1,0 +1,60 @@
+---
+source: crates/adage-cli/src/cli.rs
+expression: help
+---
+Agent traces become reflexes.
+
+Usage: adage [OPTIONS] [COMMAND]
+
+Every day:
+  watch        what Adage sees and says, live (a pane for a split terminal)
+  review       the reflexes Adage formed: look them over, approve, extinguish
+  map          explore reflexes and their evidence in your browser
+
+When something is off:
+  doctor       what is wrong, and the fix for each problem
+  update       update Adage, its hooks and the plugin together
+  off          turn Adage off in this repository (`adage on` turns it back on)
+
+Set up:
+  init         set Adage up: harnesses, hooks, past traces
+  install      register Adage's hooks with one agent
+  packs        base instincts and added packs: list, turn on, turn off
+  config       settings
+
+Conditioning:
+  sense        what your agents actually do (read-only)
+  condition    condition reflexes from traces now
+  corpus       import, inspect and learn canonical trace collections
+  report       what Adage said, and what agents did
+  graph        Adage's state as a graph
+  train        compile a skill into reflexes
+
+Sharing:
+  marketplace  where packs come from
+  share        build and sign a pack
+  add          verify and install a pack
+
+More:
+  ui           the full-screen app: live, reflexes, map, health, settings
+  status       reflexes and instincts in effect, with evidence
+  savings      what Adage saves here
+  ledger       record what a session cost, as its harness reported it
+  delegate     let hooks run delegated reflexes, and rewrites
+  models       the optional embedding model
+  completions  shell completions
+  eval         offline replay evaluation
+
+
+Options:
+      --plain    Plain output for screen readers and logs: no colour, no glyphs beyond ASCII
+      --json     The status card as JSON (bare `adage` only)
+  -h, --help     Print help
+  -V, --version  Print version
+
+
+Bare adage answers "is it working here?": the status card.
+New here? Start with adage init. `adage <command> --help` explains each command.
+Environment: ADAGE_HOME (data directory), ADAGE_DISABLE=1 (kill switch),
+ADAGE_ARM=treated|control, ADAGE_CONTROL (control share), ADAGE_AUTO_LEARN=0|1,
+ADAGE_ALLOW_NONINTERACTIVE=1 (share and add in CI).

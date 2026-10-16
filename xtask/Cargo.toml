@@ -1,0 +1,11 @@
+[package]
+name = "xtask"
+description = "Repository tasks and guards: design tokens, affected packages, Python suites, release versions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+serde_json.workspace = true
+anyhow.workspace = true

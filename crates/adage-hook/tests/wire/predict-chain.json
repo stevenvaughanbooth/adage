@@ -1,0 +1,21 @@
+{
+  "predict": {
+    "calls": [
+      {
+        "input": {
+          "file_path": "/r/acme/billing.py"
+        },
+        "tool": "Read"
+      },
+      {
+        "input": {
+          "file_path": "/r/acme/rounding.py"
+        },
+        "tool": "Read"
+      }
+    ],
+    "kind": "chain",
+    "route": "read-touched-files",
+    "track": "acme/reads"
+  }
+}

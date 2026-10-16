@@ -1,0 +1,20 @@
+{
+ "pairs": 40,
+ "pass_net": -4,
+ "usd": {
+  "change": -0.2454,
+  "ci90": [
+   -0.2911,
+   -0.1964
+  ],
+  "pairs": 40,
+  "variants": 40,
+  "families": 5,
+  "adage_mean": 0.2009,
+  "control_mean": 0.2663
+ },
+ "stop_for_harm": false,
+ "harm_pass": false,
+ "harm_usd": false,
+ "rule": "interim, after stage B (repeat 1 of all 5 families; `analyze.py --interim`, exit 4 = stop): stop for harm if adage has >= 5 fewer passes than control over the repeat-1 pairs, OR the pooled $/task is > +15% with its 90% CI lower bound > 0. No stopping for efficacy. Calibrated on plasmode data before any session (synthetic.json): false stop 0.01 under a true null and 0.05 at a true -20%; stops 0.485 / 0.74 of the time under a 25 / 35-point pass loss and 0.77 under a +25% cost harm. If R4 stops, stages C and D do not run and the report is the repeat-1 analysis, labelled interim-stopped-for-harm"
+}

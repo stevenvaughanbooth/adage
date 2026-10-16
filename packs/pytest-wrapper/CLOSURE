@@ -1,0 +1,5 @@
+detector P1 -
+edge:detector route:run-pytest-wrapper->detector:P1 -
+edge:template route:run-pytest-wrapper->template:after@1 -
+route run-pytest-wrapper d3829dff2be1e91653843d3bedd126ecd7f1b0fe77df47a5625e95049dc28ea5
+template after@1 -

@@ -1,0 +1,52 @@
+{
+ "id": "11111111-1111-1111-1111-111111111111",
+ "task_name": "instance_ansible__ansible-1111111111111111111111111111111111111111-v1",
+ "trial_name": "instance_ansible__ansible-111__BbBbBb",
+ "trial_uri": "file://x",
+ "task_id": {
+  "path": "datasets/swebenchpro/instance_ansible__ansible-1111111111111111111111111111111111111111-v1"
+ },
+ "source": "swebenchpro",
+ "task_checksum": "abc",
+ "config": {
+  "agent": {
+   "import_path": "adage_harbor:AdageClaudeCode",
+   "model_name": "anthropic/claude-sonnet-4-5",
+   "kwargs": {
+    "arm": "control",
+    "disable_web_search": true
+   }
+  }
+ },
+ "agent_info": {
+  "name": "claude-code",
+  "version": "2.1.0",
+  "model_info": {
+   "name": "claude-sonnet-4-5",
+   "provider": "anthropic"
+  }
+ },
+ "agent_result": {
+  "n_input_tokens": 120000,
+  "n_cache_tokens": 100000,
+  "n_output_tokens": 4000,
+  "cost_usd": 0.9
+ },
+ "verifier_result": {
+  "rewards": {
+   "reward": 0.0
+  }
+ },
+ "exception_info": {
+  "exception_type": "AgentTimeoutError",
+  "exception_message": "m",
+  "exception_traceback": "t",
+  "occurred_at": "2026-09-01T00:10:00"
+ },
+ "started_at": "2026-09-01T00:00:02",
+ "finished_at": "2026-09-01T00:20:00",
+ "agent_execution": {
+  "started_at": "2026-09-01T00:01:00",
+  "finished_at": "2026-09-01T00:11:00"
+ }
+}

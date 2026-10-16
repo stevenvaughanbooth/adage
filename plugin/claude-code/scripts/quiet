@@ -1,0 +1,4 @@
+#!/bin/sh
+# The hook binary while no Adage binary can serve this session: read the payload, say nothing.
+cat >/dev/null
+exit 0

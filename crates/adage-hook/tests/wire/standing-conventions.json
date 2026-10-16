@@ -1,0 +1,6 @@
+{
+  "compact": "Keep the repository procedures this session followed: how tests run here, and what was run after which edits.",
+  "conventions": "In this repository, work item details are looked up with python3 scripts/wi-lookup {item}, where {item} is the work item the request names.",
+  "environment": "",
+  "standing": ""
+}

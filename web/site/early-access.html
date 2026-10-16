@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#050507" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ececef" media="(prefers-color-scheme: light)">
+<title>Get early access · Adage</title>
+<meta name="description" content="Join the Adage early-access list. We'll email you once, when the first release is ready.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="__SITE_URL__/early-access">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Adage">
+<meta property="og:title" content="Get early access to Adage">
+<meta property="og:description" content="We'll email you once, when the first release is ready. Nothing else.">
+<meta property="og:url" content="__SITE_URL__/early-access">
+<meta property="og:image" content="__SITE_URL__/og.jpg?v=13">
+<meta name="twitter:card" content="summary_large_image">
+<noscript><style>.reveal { opacity: 1 !important; transform: none !important; }</style></noscript>
+<script type="module" src="/src/subpage.ts"></script>
+</head>
+<body class="subpage">
+<a class="skiplink" href="#main">Skip to content</a>
+
+<header class="top static">
+  <a class="mark" href="/" aria-label="Adage, home">Adage</a>
+  <nav class="nav" aria-label="Site">
+    <div class="navlinks">
+      <a href="/how">How it works</a>
+      <a href="/packs">Packs</a>
+      <a href="/evidence">Evidence</a>
+      <a href="/get-started">Get started</a>
+    </div>
+    <button class="themebtn" id="theme" type="button">Day</button>
+    <a class="pill" href="/get-started">Try Adage</a>
+  </nav>
+</header>
+
+<main id="main">
+<section class="band access" id="access" aria-labelledby="access-h">
+  <div class="wrap narrow">
+    <h1 class="display reveal" id="access-h">Get early access</h1>
+    <p class="lede reveal">We'll email you once, when the first release is ready. Nothing else.</p>
+    <form class="signup reveal" id="signup" action="/api/waitlist" method="post" novalidate>
+      <fieldset class="signup-fields" id="signup-fields" hidden disabled>
+      <legend class="sr">Join early access</legend>
+      <label class="sr" for="email">Email address</label>
+      <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@company.com" aria-describedby="signup-status">
+      <input class="hp" name="hp_x7" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <button class="btn primary" type="submit">Join the list</button>
+      </fieldset>
+      <p class="status" id="signup-status" role="status" aria-live="polite">Enable JavaScript to check early-access availability.</p>
+      <button class="btn" id="signup-retry" type="button" hidden>Check availability again</button>
+    </form>
+    <p class="reveal">Explore now: <a href="/how">Walk through how Adage works</a>, from traces to hooks and evidence.</p>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap footrow">
+    <span class="mark small">Adage</span>
+    <span>Agent traces become reflexes.</span>
+    <span class="muted">Apache-2.0</span>
+  </div>
+</footer>
+</body>
+</html>

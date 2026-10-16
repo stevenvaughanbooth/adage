@@ -1,0 +1,114 @@
+//! `adage map`, through the binary: the map page, its API and headers, from an
+//! isolated `ADAGE_HOME`, on a free port on 127.0.0.1.
+
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
+use std::process::{Child, Command, Stdio};
+use std::time::Duration;
+
+mod common;
+
+/// The server process, and its stdout kept open for its lifetime (a closed pipe must not matter,
+/// but the test should not depend on that).
+struct Server(Child, #[allow(dead_code)] Option<BufReader<std::process::ChildStdout>>);
+
+impl Drop for Server {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+fn get(addr: &str, path: &str, host: &str) -> (String, String) {
+    let mut s = TcpStream::connect(addr).unwrap();
+    s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    // One write for the whole request, as a browser sends it.
+    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n").as_bytes()).unwrap();
+    let mut out = String::new();
+    s.read_to_string(&mut out).unwrap();
+    let (head, body) = out.split_once("\r\n\r\n").unwrap();
+    (head.to_string(), body.to_string())
+}
+
+#[test]
+fn serves_the_map_and_its_api_from_the_binary() {
+    let d = tempfile::tempdir().unwrap();
+    let mut child = common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
+        .args(["map", "--port", "0", "--no-open"])
+        // This empty-home fixture must not inherit the developer checkout's repository identity.
+        .current_dir(d.path())
+        .env("ADAGE_HOME", d.path().join("data"))
+        .env("HOME", d.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut first = String::new();
+    stdout.read_line(&mut first).unwrap();
+    let _server = Server(child, Some(stdout));
+    let addr = first.split("http://").nth(1).and_then(|s| s.split('/').next()).expect(&first).to_string();
+    assert!(addr.starts_with("127.0.0.1:"), "bound to loopback only: {first}");
+
+    // The page: the web app, readable by a client that asks for no compression.
+    let (head, body) = get(&addr, "/", &addr);
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    assert!(head.contains("text/html") && head.contains("Cache-Control: no-cache"), "{head}");
+    assert!(!head.contains("Content-Encoding"), "no Accept-Encoding, no compression: {head}");
+    assert!(body.starts_with("<!doctype html>") && body.contains("<title>Adage map</title>"), "{body}");
+    // Its own files only: no inline script, no font CDN.
+    let csp = head.lines().find(|l| l.starts_with("Content-Security-Policy:")).expect("a CSP");
+    assert!(
+        csp.contains("script-src 'self'") && !csp.contains("unsafe-inline") && !csp.contains("googleapis"),
+        "{csp}"
+    );
+
+    for path in ["/api/v1/graph", "/graph.json"] {
+        let (head, body) = get(&addr, path, &addr);
+        assert!(head.starts_with("HTTP/1.1 200") && head.contains("application/json"), "{path}: {head}");
+        let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(v["sessions"]["total"], 0);
+        assert!(v["routes"].as_array().unwrap().is_empty());
+        // Nothing to estimate yet, and rewrites to the project's environment are on by default.
+        assert_eq!(v["savings"], serde_json::json!([]));
+        assert_eq!(v["pretool"], serde_json::json!([]));
+        assert_eq!(v["runtime"]["rewrite"]["on"], true);
+    }
+    let (head, body) = get(&addr, "/api/v1/health", &addr);
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+    let h: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(h["checks"].is_array(), "{body}");
+    // Beside the checks: the rewrite switch and what intent reflexes embed with.
+    assert_eq!(h["runtime"]["rewrite"]["on"], true, "{body}");
+    assert!(h["runtime"]["embeddings"]["model"].as_str().is_some_and(|m| !m.is_empty()), "{body}");
+
+    let (head, _) = get(&addr, "/graph.json", "attacker.example");
+    assert!(head.starts_with("HTTP/1.1 403"), "other hosts are refused: {head}");
+    let (head, _) = get(&addr, "/../etc/passwd", &addr);
+    assert!(head.starts_with("HTTP/1.1 404"), "{head}");
+    assert!(!d.path().join("data").exists(), "serving is read-only");
+}
+
+#[test]
+fn keeps_serving_after_its_stdout_is_closed() {
+    let d = tempfile::tempdir().unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_adage"))
+        .args(["map", "--port", "0", "--no-open"])
+        // This empty-home fixture must not inherit the developer checkout's repository identity.
+        .current_dir(d.path())
+        .env("ADAGE_HOME", d.path().join("data"))
+        .env("HOME", d.path())
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut first = String::new();
+    BufReader::new(child.stdout.take().unwrap()).read_line(&mut first).unwrap(); // pipe closed here
+    let _server = Server(child, None);
+    let addr = first.split("http://").nth(1).and_then(|s| s.split('/').next()).expect(&first).to_string();
+    std::thread::sleep(Duration::from_millis(200)); // let the banner's second line hit the closed pipe
+    let (head, _) = get(&addr, "/graph.json", &addr);
+    assert!(head.starts_with("HTTP/1.1 200"), "{head}");
+}

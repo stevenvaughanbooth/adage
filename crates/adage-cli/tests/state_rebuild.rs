@@ -1,0 +1,136 @@
+//! Session state in the hook. A session whose state file is corrupted (both slots fail their CRC)
+//! carries on from its spool: a dead end already announced is not announced again, and a
+//! finish-line obligation made before the corruption is still enforced at Stop. Without a spool,
+//! the state starts over. Events that cannot match stop before the state and the spool.
+
+use adage_tracks::testkit::{self, kinds};
+use serde_json::json;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+
+mod common;
+
+struct World {
+    _w: common::TempWorld,
+    home: PathBuf,
+    repo: PathBuf,
+}
+
+fn world() -> World {
+    let w = common::TempWorld::new(&["acme-state/schema"]);
+    let (home, repo) = (w.home("home"), w.repo("acme-state"));
+    let learned = |r: testkit::RouteBuilder| r.until_intent_changes().support(5, 0);
+    let track = testkit::track("acme-state/t", "acme-state")
+        .route(learned(kinds::dead_end("dead-end-x", "pytest", "make test", "No module named pytest")))
+        .route(learned(kinds::finish_line("finish-line-x", "schema/*.json", "make gen")))
+        .validated();
+    home.compile(&[track]);
+    World { home: home.paths.root.clone(), repo, _w: w }
+}
+
+fn hook(w: &World, event: &str, extra: serde_json::Value) -> String {
+    let mut payload = json!({ "session_id": "s-1", "cwd": w.repo });
+    payload.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+    let mut c = common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
+        .args(["hook", "claude", event])
+        .env("ADAGE_HOME", &w.home)
+        .env("ADAGE_AUTO_LEARN", "0")
+        .env("ADAGE_ARM", "treated")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    c.stdin.take().unwrap().write_all(payload.to_string().as_bytes()).unwrap();
+    let o = c.wait_with_output().unwrap();
+    assert!(o.status.success() && o.stderr.is_empty());
+    String::from_utf8(o.stdout).unwrap()
+}
+
+/// Overwrite both slots' payloads (64 KiB slots, 20-byte headers): neither CRC holds.
+fn corrupt(state: &Path) {
+    let mut bytes = std::fs::read(state).unwrap();
+    for at in [20, 64 * 1024 + 20] {
+        if bytes.len() > at + 4 {
+            bytes[at..at + 4].copy_from_slice(b"XXXX");
+        }
+    }
+    std::fs::write(state, bytes).unwrap();
+}
+
+fn session_up_to_the_edit(w: &World) {
+    assert!(hook(w, "UserPromptSubmit", json!({ "prompt": "Fix the invoice." })).contains("dead-end-x"));
+    let edit = json!({ "tool_calls": [{ "tool_name": "Edit", "tool_input": { "file_path": w.repo.join("schema/invoice.json") }, "tool_response": "ok" }] });
+    assert!(hook(w, "PostToolBatch", edit).contains("finish-line-x"));
+    // Two more writes, so both slots hold a state.
+    hook(
+        w,
+        "PostToolBatch",
+        json!({ "tool_calls": [{ "tool_name": "Bash", "tool_input": { "command": "ls" }, "tool_response": "x" }] }),
+    );
+}
+
+#[test]
+fn a_corrupt_state_is_rebuilt_from_the_spool() {
+    let w = world();
+    session_up_to_the_edit(&w);
+    let state = w.home.join("sessions/s-1.state");
+    corrupt(&state);
+    // The obligation survives: Stop asks for `make gen` ...
+    let stop = hook(&w, "Stop", json!({ "stop_hook_active": false }));
+    assert!(stop.contains("\"block\"") && stop.contains("make gen"), "{stop}");
+    // ... once, as before the corruption ...
+    assert_eq!(hook(&w, "Stop", json!({ "stop_hook_active": false })), "");
+    // ... and the dead end, announced at the first prompt, is not announced again.
+    assert_eq!(hook(&w, "UserPromptSubmit", json!({ "prompt": "Also the totals." })), "");
+    let st: adage_runtime::SessionState = adage_store::state::read(&state).unwrap();
+    // The second prompt could change nothing (its dead end was announced), so the no-match fast
+    // path skipped it without touching the state.
+    assert_eq!((st.prompts, st.batches, st.stop_requests), (1, 2, 1));
+    assert_eq!(st.emitted, vec!["dead-end-x", "finish-line-x"]);
+}
+
+#[test]
+fn events_that_cannot_match_stop_before_the_state_and_the_spool() {
+    let w = world();
+    let sessions = w.home.join("sessions");
+    let ls =
+        json!({ "tool_calls": [{ "tool_name": "Bash", "tool_input": { "command": "ls -la" }, "tool_response": "x" }] });
+    let spool = || adage_store::spool::read_all::<serde_json::Value>(&sessions.join("s-1.spool")).unwrap();
+    // The session start is recorded once (its arm, for the savings estimate: docs/zero-config.md
+    // §3.2) and says nothing; an event nothing could match then touches nothing.
+    assert_eq!(hook(&w, "SessionStart", json!({ "source": "startup" })), "");
+    let start = spool();
+    assert_eq!(start.len(), 1);
+    assert_eq!((start[0]["kind"].as_str(), start[0]["arm"].as_str()), (Some("session_start"), Some("treated")));
+    assert_eq!(start[0]["propensity"], 1.0, "ADAGE_ARM forced it");
+    let before = std::fs::read(sessions.join("s-1.state")).unwrap();
+    assert_eq!(hook(&w, "PostToolBatch", ls.clone()), "");
+    assert_eq!(spool().len(), 1, "skipped before the spool");
+    assert_eq!(std::fs::read(sessions.join("s-1.state")).unwrap(), before, "and before the state");
+    // The first prompt announces the dead end, so it is decided.
+    assert!(hook(&w, "UserPromptSubmit", json!({ "prompt": "Fix it." })).contains("dead-end-x"));
+    assert_eq!(spool().len(), 2);
+    // A run of the avoided command is recorded (for `adage graph`), though it matches no trigger.
+    let pytest = json!({ "tool_name": "Bash", "tool_input": { "command": "pytest -q" }, "tool_response": "No module named pytest" });
+    hook(&w, "PostToolUseFailure", pytest);
+    assert_eq!(spool().len(), 3);
+    hook(&w, "PostToolBatch", ls.clone());
+    assert_eq!(spool().len(), 3, "no match: skipped");
+    // An edit the finish line covers makes an obligation; from then on every batch is decided.
+    let edit = json!({ "tool_calls": [{ "tool_name": "Edit", "tool_input": { "file_path": w.repo.join("schema/a.json") }, "tool_response": "ok" }] });
+    assert!(hook(&w, "PostToolBatch", edit).contains("finish-line-x"));
+    hook(&w, "PostToolBatch", ls);
+    assert_eq!(spool().len(), 5);
+}
+
+#[test]
+fn without_a_spool_a_corrupt_state_starts_over() {
+    let w = world();
+    session_up_to_the_edit(&w);
+    corrupt(&w.home.join("sessions/s-1.state"));
+    std::fs::remove_file(w.home.join("sessions/s-1.spool")).unwrap();
+    assert_eq!(hook(&w, "Stop", json!({ "stop_hook_active": false })), "", "no obligation is known");
+    assert!(hook(&w, "UserPromptSubmit", json!({ "prompt": "Again." })).contains("dead-end-x"), "a new session");
+}

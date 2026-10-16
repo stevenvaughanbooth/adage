@@ -1,0 +1,39 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health   2   5 Settings   6 Home                                                  harbor-dispatch · LIVE
+──────────────────────────────────────────━━━━━━━━━━──────────────────────────────────────────────────────────────────────────────────────────────────
+  ▄███▄   Healthy · 4 checks passed · 2 to look at
+  ██!██   ━━━━━━━━━━━━━━━━━━━━━━━━────────────  4 of 6 pass
+  ▀███▀   The same checks as adag╭─ palette ────────────────────────────────────────────────────────────────────────╮
+                                 │ : str▌                                                                37 matches │
+ Needs a look  2 · fix them here ├──────────────────────────────────────────────────────────────────────────────────┤─────────────────────── passes ─╮
+ ╭─ ! Embedding model ───────────│ ACTIONS                                                                          │                                │
+ │ No embedding model, so the has│ › Strengthen reflex…                   adage review strengthen                 s │                                │
+ │ Intent reflexes cannot fire   │                                                                                  │                                │
+ ╰───────────────────────────────│ REFLEXES                                                                         │ter  read in full   R  recheck ─╯
+ ╭─ ! Codex hooks ───────────────│   PRIME ◠ start-with-npm-check         prime · forming · 6/9                     │
+ │ Codex is installed, but Adage'│                                                                                  │
+ │ next  adage install codex --wr│ GO TO                                                                            │
+ ╰───────────────────────────────│   Settings · runtime.control           adage config set runtime.control          │
+                                 │   Settings · runtime.rewrite           adage config set runtime.rewrite          │
+ Hooks & delivery  2 ────────────│   Settings · runtime.routine_model     adage config set runtime.routine_model    │
+  + Claude Code hooks  set up in │   Settings · runtime.predict_cap       adage config set runtime.predict_cap      │
+  + Hook errors        none in th│   Settings · learn.repos               adage config set learn.repos              │
+                                 │                                                                                  │
+ Learning  1 ────────────────────│ ACTIONS                                                                          │
+  + Reflex index       4 route(s)│   Installed reflexes and evidence      Status report                             │
+                                 ├──────────────────────────────────────────────────────────────────────────────────┤
+ This install  1 ────────────────│  ↑↓  move   enter  run   tab  complete   esc  close                              │
+▌ + Adage              adage 0.1.│ Choose an action here; no terminal command copying needed                        │
+                                 ╰──────────────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   enter  fix   R  recheck                                                                                              q  quit

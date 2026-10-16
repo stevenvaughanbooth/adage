@@ -1,0 +1,29 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 230
+expression: text
+---
+ adage watch  harbor-dispatch · gen 8216e29f · claude                      LIVE
+ ◠ no reflex fired yet · 0 calls                                   ▁▁▁▁▁▁▁▁▁▁▁▁
+
+ ╭─ ⠋ watching harbor-dispatch ─────────────────────────────────────────────╮
+ │ No traces yet: waiting for your agent.                                   │
+ │ ━─────────────────────────────────────────────────────────────────────── │
+ │                                                                          │
+ │ Start Claude Code, Codex or OpenCode in this repository. Each turn and   │
+ │ tool step grows here as a graph, and every reflex Adage fires branches   │
+ │ off the step it came after, lit green once the agent follows it.         │
+ │                                                                          │
+ │ No hooks yet?  adage init                                                │
+ ╰──────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────
+ ◆ Nothing conditioned yet · runs show here as they finish · adage condition
+ + hooks claude    + 4 reflexes    + auto-condition
+ ! no model · adage models fetch
+────────────────────────────────────────────────────────────────────────────────
+  :  palette   p  pause   f  scope   /  filter   enter  inspect         q  quit

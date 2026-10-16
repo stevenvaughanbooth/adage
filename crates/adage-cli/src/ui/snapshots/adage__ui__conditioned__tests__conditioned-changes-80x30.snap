@@ -1,0 +1,30 @@
+---
+source: crates/adage-cli/src/ui/conditioned.rs
+expression: text
+---
+
+
+
+  ╭─ Conditioned adage ──────────────────────────────────────────────────────╮
+  │ Read 125 traces · kept 8 reflexes · 4 changes                     12.3 s │
+  │                                                                          │
+  │   ████████████████████████████████████████████  125 traces read          │
+  │      █████████████████████████████████████      106 used                 │
+  │                  █████████████                   37 patterns found       │
+  │                       ████                       10 compiled             │
+  │                        ██                         6 reflexes learned     │
+  │                                                                          │
+  │ What changed                                                             │
+  │   new FIRE        cargo fmt --all · after editing crates/**/*.rs         │
+  │   ○ to approve    cargo test -p adage-cli · on requests like these       │
+  │   PRIME → FIRE    cargo clippy --workspace --all-targets · after editin… │
+  │   ✗ extinguished  cargo build -p adage-cli · after editing crates/**/*.… │
+  │   2 more reflexes saw new traces                                         │
+  │   1 candidate forming: seen, but not yet in enough traces                │
+  │                                                                          │
+  │ ◠ Learned here · v18.0.0   6 reflexes   reflexes changed                 │
+  │ ◉ Instincts · v3.0.0       2 reflexes   unchanged · 2 in use             │
+  │ ──────────────────────────────────────────────────────────────────────── │
+  │  enter  Review in Reflexes · 1 needs you · 3 to look over                │
+  │  v  details   j/k ↑↓  scroll   esc  close                                │
+  ╰──────────────────────────────────────────────────────────────────────────╯

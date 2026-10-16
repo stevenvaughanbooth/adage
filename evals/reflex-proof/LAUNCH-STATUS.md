@@ -1,0 +1,375 @@
+# Open-source launch evidence
+
+**Current status (2026-10-01): the execution-mode launch gate is NOT met, on quality.** The
+pre-registered held-out Marshmallow study ([record](harness/results/20261001-heldout-marshmallow/RESULT.json),
+[decision record](harness/results/20261001-heldout-marshmallow/report.md)) ran 65 of 65 sessions,
+and its report is valid. Its outcome is **FAIL**.
+- **Primary: passed.** Execution mode (BEST: A4, verification ownership, the orientation card and
+  learned CPU execution) used 0.6741 times the no-Adage arm's model requests. The one-sided 95% upper
+  bound was 0.7265 against a registered limit of 0.90, with fewer requests in 18 of 20 blocks.
+- **Quality: failed.** BEST passed 17 of 20 hidden-test blocks, against 19 of 20 for no Adage. The
+  stricter G5 also fails: 3 failures for BEST, 1 for no Adage, 1 for NOEXEC. One failing block
+  (b05 has-keys) failed in all three arms.
+- **What held.** G1, G2, G6, G7 and G8 passed, and all five safety controls were realized with no
+  necessary verification skipped.
+- **Report only.** NOEXEC (advisory mode: the card and instincts, no execution) against no Adage
+  was 0.7845, with an upper bound of 0.833 and quality 19/20. This was a pre-registered report-only
+  contrast. It is not a registered pass and not a launch statistic.
+- **The four held-out tasks are now spent.** They count as development for any future
+  confirmation.
+
+**Decision.**
+- The developer preview launches leading with advisory mode. Execution mode is opt-in and labelled
+  experimental and unproven.
+- **Next steps:**
+  1. diagnose the quality misses;
+  2. fix and validate in development;
+  3. run a fresh confirmation powered for quality, on new evaluation groups registered before
+     dispatch;
+  4. then the expensive-to-cheap transfer study.
+- **Not GPU.** Model requests are not GPU measurements, and no GPU or general savings claim
+  follows.
+
+Earlier status: **real-repository CPU action-elimination gate failed in the completed pilot**. The
+[eight-session result](harness/results/20260930-live-cpu-transfer/FINDINGS.md) establishes 4/4
+successful learned CPU executions and 4/4 correct automatic outputs versus 3/4 baseline outputs,
+but 0/4 confirmed action eliminations. Every automatic session repeated the test command after
+receiving its result. The frozen scorer also excludes approved cache changes; correcting that
+alone does not resolve the duplicate-work finding. No CPU-driven savings claim is established.
+The [frozen transfer preparation](harness/results/20260930-transfer-preparation/FINDINGS.md)
+retains a zero-spend approval failure and its narrow pytest-cache fix. The replacement eight-session
+comparison was superseded by the completed `transfer-v3` study linked above. Earlier preparation
+records remain historical; the human issued all four grants and every assigned session completed.
+The [launch-experience follow-up](harness/results/20260930-launch-experience/FINDINGS.md) adds the
+first-reflex guide and TUI next steps, covers pytest's hidden cache metadata explicitly, and records
+112 passing Rust/onboarding checks plus a fresh unchanged-history replay. This historical study is
+`transfer-v3`; the [study harness](harness/README.md) documents the reproduction procedure.
+This page is the launch evidence index. Preserve earlier reports, failed attempts and protocols
+when a later experiment supersedes them.
+
+Caveat on that pilot: its four tasks were excluded from training by task id only. They had run
+in the cold-start pilots, and three are near-duplicates of training tasks (odd of multiple-of,
+no-adjacent-duplicates of unique, max-utf8-bytes of max-words). It measured same-repository
+transfer on familiar task shapes. An [offline replay](harness/results/20260930-receipt-replay/FINDINGS.md)
+of its native hook records reproduces the failure: 6 repeats and 9 narrower node runs after the
+receipt, all on unchanged source, the same routine as the no-execution arm.
+
+The next gate is registered before any dispatch: the [launch gate protocol](../../docs/launch-gate-protocol.md)
+fixes task splits (near-duplicates grouped, held-out families never used), a pre-dispatch
+training-isolation audit, three arms in paired blocks across three repositories, budgets, and
+numerical GO thresholds. Its production-contract canary is [frozen, not yet run](harness/results/20260930-launch-canary/FINDINGS.md).
+No statistic from it exists yet.
+An [environment-denial audit](harness/results/20260930-environment-denial-audit/FINDINGS.md) found that
+the tool-environment denial list depended on the preparing shell and was never canary-tested.
+Earlier native-confinement evidence covers the filesystem and network only. The runner now
+launches from an allowlisted environment and tests environment denial.
+
+The first development canary ([canary-v5](harness/results/20260930-launch-canary/canary-v5/FINDINGS.md),
+12 sessions, $2.6962327) showed native delivery of the contract and structured receipts, and that
+failed, stale, broader and explicit-rerun controls kept necessary work. Its report's `passed`
+flag is that integration and safety criterion only. **It produced no elimination evidence:** both
+positives got failing receipts from the agents' own first-draft tests, and agents still repeated
+after successful receipts. A receipt-aware note and a canary-v7 with a fixed test block are
+prepared. No launch statistic follows from this development work.
+
+The second development canary ([canary-v7](harness/results/20260930-launch-canary/canary-v7/FINDINGS.md),
+12 sessions, $1.3425845) realized every positive with a fresh successful receipt. **In all six,
+the model still requested covered verification of its new tests.** The original report's 4
+"eliminations" were bare `python` calls that failed to launch in the sandbox, and a post hoc
+re-score finds 0. The structured receipt and startup contract have not been shown to eliminate
+the model's action. Revision 7 makes the measurement honest: covered attempts count even when
+they fail to launch, sessions use the checkout's own environment, and receipts list tests.
+
+The third development canary ([dev-v8b](harness/results/20261001-dev-arms/FINDINGS.md), 34
+sessions, $4.3539376) targeted fewer model requests than a no-Adage arm. **It is invalid for its
+execution arms from session 09 on, and it is not a valid negative result.**
+
+From session 09 on, every hook-arm session ran with a lapsed grant: a process outside the study
+wrote bytecode into the shared Python runtime, and the approved interpreter identity includes
+it. Only 7 of the 18 hook-arm positives ran the design. The lapse was silent, and the harness kept
+dispatching card-only sessions under execution-arm labels.
+
+The report's mean requests per positive were:
+
+| Arm | Mean requests per positive |
+| --- | --- |
+| No Adage (A0) | 16.8 |
+| Revision-7 integration (A1) | 22.5 |
+| Lever 2 (A2) | 17.8 |
+| Levers 1 and 2 (A3) | 18.7 |
+
+These means mix working sessions with card-only ones, so they test neither lever.
+- No arm qualified, so held-out does not run on this design.
+- No control realized its condition, so dev-v8b makes no safety claim.
+- The Stop gate never ran.
+- Model requests are not GPU measurements, and no savings claim follows.
+
+The harness now fails loudly on any of these. It also protects the shared runtime and checks
+every grant before each dispatch.
+
+The fourth development canary, [dev-v9b](harness/results/20261001-dev-v9b/RESULT.json) (53
+sessions, $5.245021), **ran and is valid, and A4 passed its registered development rule.** Its
+first attempt, [dev-v9](harness/results/20261001-dev-v9/ABORTED.json), stopped after one control:
+the scoring read the finish-line gate's passing run as the context's. Revision 11 fixed this before
+any positive block ran, and the thresholds were not changed.
+
+**This is a development result, not a launch statistic.**
+- It covers one task (`mm-curve--finite`).
+- It used development scaffolding: every prompt carried a supplied test block and a work order.
+- The design was iterated on this same task over four earlier canaries.
+
+It qualifies A4 for the held-out comparison and says nothing about held-out tasks, other
+repositories or prompts without that scaffolding.
+
+dev-v9b compared A0 (no hooks) with two arms that share binaries and grants:
+- A2f: verification ownership, with the earlier card;
+- A4: A2f plus an orientation card. A4's card replaces the exemplar with where the card's files
+  stand in the checkout now.
+
+The arms ran in 16 paired blocks, with five A4 controls first. The rule was registered before
+dispatch. Mean model requests per positive:
+
+| Arm | Mean requests | Ratio to A0 | Blocks with fewer requests than A0 |
+| --- | --- | --- | --- |
+| No Adage (A0) | 18.0 | | |
+| Earlier card (A2f) | 15.06 | 0.837 | 13/16 (reported only: no controls) |
+| Orientation card (A4) | 11.19 | 0.6215 | 15/16 |
+
+- **The rule held for A4.** A4 needed at most 0.80 times A0's requests and fewer requests in at
+  least 10 of 16 blocks. It met both, and D2 to D4.
+- **Quality.** There were no hidden-test failures in any arm.
+- **Controls.** All five A4 controls realized their conditions, and none skipped necessary
+  verification. Three were met by the finish-line gate's passing run on the final sources, two by
+  the agent's own runs.
+- **Reported only** (A0 against A4, per positive):
+  - cost: $0.117 against $0.0825;
+  - pytest requests: 2.8 against 0.19;
+  - cache-read tokens: 445k against 245k;
+  - wall time: 57.7 s against 50.5 s.
+- **Not GPU.** Model requests are not GPU measurements, and CPU runs are never counted as inference
+  saved.
+
+The held-out comparison (Marshmallow, revisions 9 to 12) is the evidence that counts. It ran from its
+own clone (`/private/tmp/adage-heldout-src`, with main merged) under native cohort `launch-gate-v8`,
+with BEST = A4 ([inputs](harness/results/20261001-heldout-inputs/INPUTS.json)). Revision 12 let the
+new cohort's native session be admitted under the person's allocation; the user approved it.
+**Held-out result: FAIL on quality.** The primary request test passed, and the full numbers are at
+the top of this page and in the [decision record](harness/results/20261001-heldout-marshmallow/report.md).
+
+**Ledger.**
+- After dev-v8b: 163 attempts, $24.6504369 admitted ($24.1504369 measured plus $0.50
+  conservative), $35.3495631 remaining of $60.
+- After the `launch-gate-v6` native session ($0.0164897) and dev-v9's one session ($0.0675211): 165
+  attempts, $24.7344477 admitted, $35.2655523 remaining.
+- After dev-v9b: 218 attempts, all settled, $29.9794687 admitted ($29.4794687 measured plus $0.50),
+  $30.0205313 remaining.
+- After held-out: the `launch-gate-v8` native session ($0.0276484) and 65 held-out sessions
+  ($9.884438) bring it to 284 attempts (283 settled, 1 cap-charged), $39.8915551 admitted
+  ($39.3915551 measured plus $0.50), and $20.1084449 remaining of $60.
+
+The subsequent [edit-receipt diagnostic](harness/results/20260930-edit-receipt-ablation/summary.json)
+is an authored fixture, not a launch benchmark. After fixing inherited-stdin contamination,
+two runs per arm observed verifier requests in baseline 2/2, generic receipt 2/2, structured
+receipt 1/2, and structured receipt plus startup responsibility 0/2; all eight fixes passed.
+Pre-fix behavioral comparisons are excluded, with their raw records preserved. The candidate
+production integration is implemented and locally tested, but needs a fresh real-repository
+cohort and negative controls. The [historical study summary](../../docs/launch-handoff.md) records the launch decision and its limits.
+
+The [cold-start pilot and fixed replication](harness/results/20260930-cold-start-replication/FINDINGS.md)
+completed sixteen assignments on four distinct Marshmallow tasks, twice per arm. Shipped instincts
+passed **8/8 outputs versus 6/8**, with **8.8% lower reported cost** ($1.7720458 versus $1.9429724)
+and **10.5% fewer observed model requests** (272 versus 304). Three cost regressions and both
+baseline failures remain in the totals. The reversed-order replication alone saved only 0.6%,
+had equal request counts and passed all four tasks in both arms. The intervention is advisory
+project-Python context; this is not learned automatic execution or a general savings estimate.
+
+The [cross-session learning-curve pilot](harness/LEARNING-CURVE.md) completed 15 distinct native
+training sessions and checkpoints at 0/3/5/10/15 sessions. **Every checkpoint produced zero executable
+candidates.** Training cost $3.7549221; independent hidden checks and full-suite grading passed 12/15
+tasks. All 19 offline base/gold controls pass after correcting one reference implementation.
+The [complete native record](harness/results/20260930-learning-curve-native/report.json) preserves
+every assignment, checkpoint and failure. A development replay with narrow command equivalence also
+produced zero candidates. No held-out automatic arm ran, and there is no real-coding CPU savings
+percentage to publish. The updated harness passes 72 tests; the equivalence change passes 188 focused
+Rust tests. These test counts establish contracts, not product efficacy.
+
+The separate [guided development check](harness/results/20260930-guided-demonstrations/FINDINGS.md)
+then completed five explicitly instructed demonstrations: all eventually ran the prescribed test
+command successfully, 4/5 passed independent grading, and zero executable candidates compiled.
+Mining closure absorbs the test action into longer continuations; advisory contrast rejects many
+of those before execution eligibility. Even after fixing that admission gap, the common last-edit
+trigger has at most three qualifying sessions because intervening edits or verification stop the
+recount. This is a concrete integration blocker, not evidence that more paid runs alone will solve it.
+All 78 current harness tests pass. No grant or automatic held-out arm was created for this check.
+
+The [execution-prefix integration](harness/results/20260930-execution-prefix-integration/FINDINGS.md)
+now clears the mining gap: replaying the frozen guided histories compiles nine candidates instead
+of zero. The best candidates still have only 4/5 qualifying continuations, so none receives an
+execution certificate. The frozen organic replay also remains uncertified. Final validation passes
+120 affected Rust tests and 81 harness tests. All original results remain unchanged.
+
+The [cumulative guided follow-up](harness/results/20260930-cumulative-guided/FINDINGS.md) now
+certifies four triggers for one pytest routine from all ten native demonstrations, with nine
+supporting sessions and 9/10 qualifying continuations. Three triggers are learned sequence contexts.
+New task quality is 5/5, cumulative quality 9/10. This clears real-history learning/certification,
+but does not establish live automatic savings. The subsequent eight-assignment transfer comparison
+is complete, with the failed action-elimination result at the top of this page. The person issued
+all four exact execution grants. Current harness validation passes 84 tests.
+
+| Historical gate | Evidence | Conclusion at that checkpoint |
+| --- | --- | --- |
+| Learn without authored routes or outcome labels | [Default onboarding](traces/results/onboarding.json) | Nine archived generated-repository training sessions produce learned routes using normal thresholds |
+| Remove an agent action through CPU execution | [Paired lookup results](harness/results/20260929-learned-action-gate/FINDINGS.md) | Three held-out triage tasks: all six answers correct; three agent lookups removed; observed model dispatches 6 → 3 |
+| Reliable complete result delivery | [Reliability](harness/results/20260929-learned-action-gate/reliability.json), [failed preflights](harness/results/20260929-learned-action-gate/preflight-failures.json) | 100/100 warm local repetitions after fixing interpreter launch; two earlier timeout failures retained |
+| Preserve routine actions as execution candidates | [Learner and review validation](harness/results/20260929-routine-learning/validation.json) | Production-default synthetic transcript tests retain exact edit-to-command routines, including project Python; no unapproved advice or execution. Real training still pending |
+| Connect cross-session sequence learning to CPU execution | [Native integration and regressions](harness/results/20260930-predictive-execution-integration/validation.json) | Five synthetic prior sessions learn a context that executes in a fresh session with an intervening read. Missing/stale grants remain silent; duplicates are withheld. 464 affected-crate tests and 229 CLI tests passed, with final focused checks recorded separately. Real-history development replay still has zero certificates |
+| Run project Python checks on staged source | [Native Python integration](harness/results/20260929-project-python/validation.json) | Real uv/pytest on macOS arm64 passes through route planning, approval, later test/source edits, and private staged execution; post-merge release staging sample 2.75 s including an 873 ms child ([integrated record](harness/results/20260930-integrated-validation/validation.json)). Initial identity discovery is additional; no live savings claim |
+| Full upstream suites through CPU staging | [Approved profile v3 result](harness/results/20260930-full-source-python-stage-profile3/validation.json), [initial failure](harness/results/20260930-full-source-python-stage/validation.json), [proposal canary](harness/results/20260930-proposed-temp-directory-policy/validation.json) | Marshmallow 1,190 passed; Click 2,240 passed and 26 skipped. Both checkouts unchanged. The approved macOS fix allows temporary-directory names, with child reads/writes still denied and old grants lapsed. Authored fixture routes: compatibility proven, live action elimination still pending |
+| Useful automatic execution on real code | [Prospective protocol](harness/REAL-REPO-GATE.md), [preparation and first attempt](harness/results/20260929-real-repository-preparation/report.json) | Four held-out base/gold scorers validated; first live substrate attempt stalled during CLI startup; the [revised native probe passed](harness/results/20260930-native-probe-v4/validation.json). No real-repository coding savings claim |
+| Faithful real-code pair measurement | [Paired protocol](harness/REAL-REPO-PAIRS.md), [offline validation](harness/results/20260929-real-repository-pairs-preparation/validation.json) | 33 harness tests pass; all four gold controls execute every expected hidden case. Stale receipts, mismatched assignments, alternate pytest reruns, and unknown cost fail the gate. Live pairs still pending |
+| Plugin installation and continued learning | [Release startup and execution-plugin companion checks](harness/results/20260929-release-startup/validation.json) | Latest [integrated macOS arm64 check](harness/results/20260930-integrated-validation/validation.json): first start 828 ms, warm p95 92 ms over ten runs, 12 historical sessions learned; debug semantics and archive integrity also pass |
+| Integrated regression and platform matrix | [Integrated validation](harness/results/20260930-integrated-validation/validation.json) | 894 native Rust tests and 53 map tests passed; all eight target lint/type checks passed using stub C compilers. GitHub Actions cannot start because of account billing/spending limits; native Linux/Windows remain unverified |
+
+## Real-repository experiment eligibility
+
+The next screen uses authored feature requests on pinned upstream Click and Marshmallow code.
+These are full coding tasks with independent hidden tests, not historical upstream bug reports.
+Five fresh unsteered variants per repository will supply training; held-out variants stay separate.
+The original four-variant archive is insufficient for the default five-session support gate.
+Do not mix newer feature
+training traces with older historical fixes whose solutions may already appear in those traces.
+
+The committed showcase archives contain four parsed sessions per family, but only two are
+unsteered. The others received a card naming the test procedure. The production learner's
+anti-feedback exclusion remains active: we do not count prior suggestions as independent evidence
+of a naturally recurring action. The archived caches also lack their original raw transcript paths.
+Fresh unsteered training sessions are needed before claiming a
+learned automatic verification reflex. Current zero-candidate results are readiness findings,
+not failed paid held-out tasks and not an excuse to lower the learning threshold.
+
+Freeze the eligible history, production source/binaries, learned artifact, prompts, task matrix,
+dependency environment and scorer before paid held-out dispatch. Record every attempt, including
+budget cutoffs, infrastructure failures, unknown accounting and negative results. Any protocol
+revision gets a reason and a timestamp before subsequent dispatch. Keep broad harness debug logs,
+credentials and local approval grants out of public exports.
+
+## Training policy correction
+
+The first fresh training cohort stopped after three completed sessions. All three attempted
+`python -m pytest`; the evaluation command allowlist denied those calls before a test process ran.
+Inspection commands such as `find`, `grep`, and `wc` did succeed. The
+[complete policy-friction record](harness/results/20260930-real-repository-training/v4-policy-stop.json)
+retains all ten assignments, three costs and transcripts, and seven undispatched assignments.
+No hidden coding quality was scored, and CLI success is not treated as code correctness.
+
+The entire cohort is excluded from subsequent learning and efficacy analysis regardless of outcome.
+The next prospective cohort repeats the same fixed matrix with generic Bash permission inside the
+mandatory native sandbox. Filesystem, network, credential, and protected-write restrictions remain;
+there is no task-specific command hint or environment activation. The [new native canary passed](harness/results/20260930-native-probe-v5/review.json);
+[ten fresh assignments were frozen](harness/results/20260930-real-repository-training-v5/protocol.json) before dispatch. All ten attempts completed; one hit its turn limit. The [learning checkpoint](harness/results/20260930-real-repository-training-v5/learning-checkpoint.json) produced 25 routes per repository and zero narrow execution certificates. No held-out execution pair ran. This is an explicitly revised feasibility experiment, not
+an unchanged execution of the first protocol.
+
+## Prediction is the intended primitive
+
+The original five-session checkpoints used an immediate edit-command execution certificate.
+The integrated learner now recounts related continuations after compiled multi-event contexts;
+the runtime connects those selections to the existing approved E2 executor. A synthetic native
+integration test learns from five prior sessions and executes the resulting context in a fresh
+session with an intervening read. This proves the connection, not real-repository savings.
+
+The [first predictive development replay](harness/results/20260930-predictive-learning-v1/checkpoint.json)
+reuses the frozen ten-session training cohort and still produces zero executable certificates.
+The [release replay](harness/results/20260930-predictive-learning-v2/checkpoint.json), after
+the integration and accounting fixes at `45b13c4`, confirms the same result with frozen
+source/binary hashes. This snapshot precedes the subsequent merge of main `0c28814`.
+The [post-merge checks](harness/results/20260930-predictive-main-refresh/validation.json) cover
+the combined graph compiler, learner, native executor, review and harness adapters.
+Each repository has only four sessions containing successful pytest observations, below the
+five-session support requirement; activation compounds and command variation also limit the
+current executable evidence. No extra paid calls or held-out pairs were used for this replay.
+This is neither a mature-history evaluation nor a successful action-elimination result. Preserve
+these negative records and the original thresholds. See the [behavior reference](../../docs/how-it-works.md#accumulated-prediction-and-current-execution-limits).
+
+## Layer 4: the Claude Code mod (MOD)
+
+**Status (2026-10-03): no MOD run has happened.** Nothing below is a result; it is the scaffold
+the development gate (plan E2) and the registered confirmation (plan E3) fill in when they run.
+No model was called for any of it.
+
+- **What MOD is.** The A4 hooks (verification ownership, the orientation card) plus the Claude
+  Code mod loaded with `--plugin-dir` (its module only, so no command hook runs twice), with a
+  person's `predict` grant on the frozen predict routes: Adage makes the directed step itself (a
+  lookup and the reads it names, a finish line's command) instead of a model request.
+- **Development gate (E2), not run.** `harness/dev_v9.py --design dev-v9-mod` (protocol
+  dev-arms-3): arms A0, A4 and MOD in 16 paired blocks, MOD's own five controls first, 53
+  sessions within the dev-v9 budget. The person's step (the E2 grant and the `predict` grants in
+  `approve-dev-v9.sh`) comes before any positive block; `dry-run` prints that order and spends
+  nothing. MOD is judged by the registered `dev_thresholds_v9` rule (D1 requests at most 0.80 x
+  A0 and fewer in at least 10 of 16 blocks; D2 no more hidden-test failures than A0; D3 all five
+  controls realized with no necessary verification skipped; D4 repeat attempts in at most 5 of
+  16 positives), read from the frozen manifest. A protocol revision naming `dev-v9-mod` must be
+  registered before the freeze (the harness refuses otherwise); it has not been. It must pass
+  twice on fresh seeds before E3.
+  - Run 1: not run.
+  - Run 2: not run.
+- **Registered confirmation (E3), not run.** After E2 passes twice: new evaluation groups (the
+  four held-out tasks are spent), arms A0, NOEXEC and BEST = MOD (`heldout_cohort.py` selects MOD
+  from a valid dev-arms-3 report and gives its homes the `predict` grants and the mod; NOEXEC gets
+  neither), every applicable G criterion, the censoring rule, `QUALITY_MARGIN = 1` and the
+  one-sided 95% bootstrap upper bound of `sum(MOD)/sum(A0)` at most 0.90.
+  - Outcome: not run.
+- **What stands in until then** (offline, no model): the simulator predicts the lookup, the reads
+  it names and the finish line under `adage-exec` with the grants, and nothing in control
+  (`crates/adage-cli/tests/harness_sim.rs`); the offline prediction gate over the recorded
+  datasets (`crates/adage-eval/tests/predict_gate.rs`). Neither is a launch statistic, and model
+  requests are never GPU savings.
+
+## Claims for launch
+
+The measured claim today is narrow: **a learned, approved CPU lookup replaced one agent lookup
+and one observed model request in each of three generated triage tasks**. The 21.4% lower reported
+cost belongs to that six-session pilot. It is not an estimate of general developer savings.
+GPU energy was not measured. Advisory benchmarks elsewhere in the repository remain advisory
+benchmarks even when they use real repositories.
+
+For real coding, report hidden-test quality and paired agent-action counts first, then model
+dispatches, tokens/cost, wall time, CPU action count/duration and duplicate agent reruns. An
+automatic check that the agent repeats, or one that runs needlessly after intermediate edits,
+does not establish action elimination. Small task counts establish a mechanism, not a reliable
+population savings percentage.
+
+## Paid evaluation ledger
+
+The user authorized **$60 for this task**. Measured spend so far is **$4.3605710**, plus an explicitly approved conservative charge of **$0.50** for an unknown earlier bill:
+
+| Experiment | Paid sessions | Reported USD | Record |
+| --- | ---: | ---: | --- |
+| Hook-boundary substrate | 1 | 0.0152216 | [Summary](harness/results/20260929-claude-2.1.282/summary.json) |
+| Learned lookup pairs | 6 | 0.0413526 | [All attempts and accounting](harness/results/20260929-learned-action-gate/report.json) |
+| First native sandbox probe | 1 attempted | Actual bill unknown; $0.50 charged by human approval | [Original attempt](harness/results/20260929-real-repository-preparation/paid-state.json), [resolution](harness/results/20260930-native-probe-v4/prior-cost-resolution.json) |
+| Revised native sandbox probe | 1 | 0.0133411 | [Passing native confinement](harness/results/20260930-native-probe-v4/validation.json) |
+| Generic-Bash native confinement probe | 1 | 0.0124461 | [Passing native confinement](harness/results/20260930-native-probe-v5/review.json) |
+| Training cohort v4, stopped for test-command permission mismatch | 3 of 10 assigned | 0.4952096 | [Every assignment and observed denial](harness/results/20260930-real-repository-training/v4-policy-stop.json) |
+| Training cohort v5, two repository learning checkpoints | 10 | 3.7830000 | [Every attempt and learning result](harness/results/20260930-real-repository-training-v5/learning-checkpoint.json) |
+
+One startup-censored attempt has no reported terminal cost. The human explicitly approved charging
+its entire $0.50 reservation; its actual bill remains unknown. The ledger records this separately
+from measured provider costs. The earlier planning snapshot reported **$4.8605710**, leaving
+**$55.1394290** under the $60 task cap. The authoritative ledger's corresponding prior admission
+total is $4.8039968, a $0.0565742 reconciliation difference; retain the earlier snapshot as history.
+The [48-attempt accounting snapshot](harness/results/20260930-guided-demonstrations/budget-snapshot.json)
+includes all 48 attempts through the natural, cold-start, diagnostic and guided runs: **$10.7000678
+measured provider cost + $0.50 approved conservative charge = $11.2000678 admission spend**,
+leaving **$48.7999322**. All attempts are settled or explicitly cap-charged; none are outstanding.
+The [62-attempt snapshot](harness/results/20260930-cumulative-guided/budget-snapshot.json), after
+the cold replication and cumulative guided study, records **$13.2920411 measured + $0.50 approved
+conservative charge = $13.7920411 admission spend**, leaving **$46.2079589**. No paid transfer
+sessions had started at this snapshot. This approval does not cover future unknown bills.
+The [70-attempt snapshot](harness/results/20260930-live-cpu-transfer/budget-snapshot.json) includes
+all eight completed transfer assignments: **$15.1229241 measured + $0.50 conservative charge =
+$15.6229241 admission spend**, leaving **$44.3770759**. The transfer itself cost **$1.8308830**;
+all assignments are settled, and no paid transfer process remains active.
+Historical experiments elsewhere in the repository are separate from this task's ledger. Each new
+experiment must reserve full session caps durably before dispatch; a new unknown cost blocks further
+paid work. Human approval of a reflex is separate from evaluation spending authorization and applies
+only to the reviewed command, repository, output contract and scope.

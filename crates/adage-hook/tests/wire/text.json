@@ -1,0 +1,3 @@
+{
+  "text": "Run `make test` before you release.\n\nAdage verified these steps in this repository on 2026-10-03:\n- make test: works\n- make lint: stale (exit 2: no rule)"
+}

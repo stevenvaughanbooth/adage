@@ -1,0 +1,44 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes   3   3 Map   4 Health  2   5 Settings   6 Home                                              ◆ harbor-dispatch ▾ · LIVE
+──────────────────━━━━━━━━━━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ / filter reflexes, commands, files                                         │ ◠ The gist of read-before-edit-9a1c
+ FIRE 3  PRIME 6  INHIBIT 1  ◌ quiet 1  all states ▾                        │    PRIME    Suggests   ○ nascent ── ○ forming ── ○ firm
+                                                                            │   ◌ quiet: uplift +0.04 < 0.10 · approve to deliver
+  ▾ incidents · v0.3.0 ──────────────────────────────────────── 3 reflexes  │
+  F a prompt names a ti… → the gist of lookup-incident     ▰▰▰▰▰▱    24/25  │ ╭─ WHEN ────────────────────╮         ╭─ DO ─────────────────────────╮
+  F bin/fetch-incident … → the gist of read-linked-files   ▰▰▰▰▰▱    13/17  │ │ bin/fetch-incident {item} │─── ◠ ──▶│ read ≤5 listed files at once │
+  I npm test fails: HAR… → the gist of dead-end-npm-test   ▰▰▱▱▱▱    11/43  │ │ succeeds                  │         │                              │
+                                                                            │ ╰───────────────────────────╯         ╰──────────────────────────────╯
+  ▾ intents · v0.3.0 ──────────────────────────────────────────── 1 reflex  │
+  P a prompt means: run… → the gist of start-wi…  forming  ▰▰▰▰▱▱      6/9  │ Evidence ──────────────────────────────────────────────────────────────
+                                                                            │ Learned from     ━━━━━━━━━━━━━━━━━━━━━━━╸──  21 of 23 traces
+  ▾ Learned here · v0.3.0 ───────────────────────────────────── 2 reflexes  │ Confidence       ━━━━━━━━━━━━━━────────────  0.53 lower bound
+  P a prompt means: add… → the gist of card-car…  forming  ▰▰▰▰▰▱ 4 traces  │ Since installed  nothing yet: it has not fired here
+  P edit …/rules_*.ts    → the gist of tests-after-rules…         by value  │ Uplift           when told  ━━━━━━━━━━━━━━╸  0.95
+                                                                            │                  unaided    ━━━━━━━━━━━━━╸─  0.91
+  ▾ From pack · harbor-skills · v0.3.0 ────────────────────────── 1 reflex  │                  uplift +0.04 · lower bound -0.02
+  F edit CHANGELOG.md    → the gist of release-notes-s2-…                –  │
+                                                                            │ What the agent sees · example values ──────────────────────────  r  raw
+  ▾ Waiting for review ────────────────────────────────────────── 1 reflex  │ No preview: the reflex has no directive text.
+  ○ edit api/*.yaml      → the gist of regen-openapi-cli…  ▰▰▰▰▰▱      3/4  │
+                                                                            │ Review ────────────────────────────────────────────────────────────────
+  ▾ Quiet · agents already do this; approve to deliver ────────── 1 reflex  │  x  extinguish    a  approve    n  pin    d  delegate    t  traces (0)
+▌ ◌ bin/fetch-incident … → the gist of read-before-edit-…  ▰▰▰▰▰▱    21/23  │  o  open in map
+                                                                            │
+  ▾ Instincts · v0.1.0 ──────────────────────────────────────── 1 instinct  │ ▸ Details ────────────────────────────────────────────────  enter  open
+  P edit registry/*.csv  → the gist of finish-line/regen…         built in  │
+                                                                            │
+  ▸ Extinguished ──────────────────────────────────────────────── 1 reflex  │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+                                                                            │
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   /  filter   f  repository   j/k  move   enter  expand   tab  next tab                                                q  quit
