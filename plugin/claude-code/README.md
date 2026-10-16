@@ -20,7 +20,7 @@ binary says. The binary decides; the mod never does
   this plugin's data directory by itself (Claude Code reads the plugin from that staged directory,
   not from its `plugins/cache`, so `bridge.ts` `dataDirFromRoot` derives nothing), so it stays inert unless `CLAUDE_PLUGIN_DATA` is exported as
   `<config dir>/plugins/data/adage-adage-local`.
-- **In Claude Code, once v0.1.0 is tagged:** `/plugin marketplace add stevenvaughanbooth/adage`,
+- **In Claude Code:** `/plugin marketplace add stevenvaughanbooth/adage`,
   then `/plugin install adage@adage`, with no terminal. Claude Code updates it from that
   marketplace; `adage update` run from the plugin's own binary asks it to
   (`claude plugin update adage@adage`), or names the steps: `/plugin`, choose adage, then Update.

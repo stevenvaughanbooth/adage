@@ -40,8 +40,8 @@ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adag
 adage init
 ```
 
-The release's Claude Code plugin bundles the same platform binaries. Once its marketplace branch
-is published, install it inside Claude Code with:
+The release's Claude Code plugin bundles the same platform binaries. Install it inside Claude
+Code with:
 
 ```text
 /plugin marketplace add stevenvaughanbooth/adage
@@ -131,7 +131,7 @@ when that is set) in the shell that starts `claude`.
 
 Each step `adage init` takes is also a command of its own.
 
-- **The plugin, typed in Claude Code** (once v0.1.0 is tagged): `/plugin marketplace add
+- **The plugin, typed in Claude Code:** `/plugin marketplace add
   stevenvaughanbooth/adage`, then `/plugin install adage@adage`. `adage init` names these when
   `claude` is not on `PATH`.
 - **Claude Code's settings file instead of the plugin:** `adage install claude-code --write`
