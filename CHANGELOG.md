@@ -14,6 +14,8 @@ The development history is recorded in Git and the design documents under `docs/
 
 - Installation guides link the verified 0.1.0 npm packages and release downloads. The legacy
   early-access page points to installation and describes updates for the next release.
+- Setup guides remove an obsolete plugin-data workaround and distinguish preview integrations
+  from commands that apply hook configuration.
 
 ## 0.1.0 - 2026-10-15
 

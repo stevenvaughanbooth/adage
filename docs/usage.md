@@ -120,12 +120,9 @@ registered a second time (`registered … · nothing to write`); the plugin is s
 binary you ran, and nothing else that is in place is rewritten. In another repository,
 `adage init` adds that one to the repositories Adage learns from.
 
-**Known, until a fix lands** (seen live on 2026-10-07, Claude Code 2.1.292): with the plugin
-`adage init` installs, every command hook runs once and the opening line arrives, but the mod (the
-band, the pane, `/adage` and the questions in the session) does not yet find the plugin's data
-directory by itself, so it stays inert. Until it does, export
-`CLAUDE_PLUGIN_DATA=~/.claude/plugins/data/adage-adage-local` (under `$CLAUDE_CONFIG_DIR` instead
-when that is set) in the shell that starts `claude`.
+The mod finds the plugin's data directory automatically after the session-start shim creates
+its binary links. No `CLAUDE_PLUGIN_DATA` export is normally needed. If the binary is missing
+or does not answer its version check, the mod stays inactive; run `adage doctor` to inspect setup.
 
 ### If you prefer to do it by hand
 
@@ -142,12 +139,8 @@ Each step `adage init` takes is also a command of its own.
 - **The plugin straight from a checkout**, for developing it: `plugin/build.sh` builds the three
   binaries and stages them into `plugin/claude-code/dist/`, and `claude --plugin-dir
   plugin/claude-code` loads the plugin for that session. Disable the installed one first
-  (`claude plugin disable adage@adage-local`), or every hook runs twice. Claude Code substitutes
-  `${CLAUDE_PLUGIN_DATA}` into the plugin's command hooks but does not put it in its own
-  environment, so under `--plugin-dir` the mod (the band, the pane, `/adage`) finds no binary
-  unless `CLAUDE_PLUGIN_DATA` is exported before `claude` starts, set to
-  `<config dir>/plugins/data/adage-inline` ([evaluation results](claude-mod/evaluation-results.md),
-  defect 4), until the mod's own lookup of that directory, in progress on this branch, lands.
+  (`claude plugin disable adage@adage-local`), or every hook runs twice. The mod also discovers
+  the inline plugin's data directory after the session-start shim creates its binary links.
 - **Learning now:** `adage condition` in a repository conditions on its history at once; after
   that the background learner keeps it current.
 
@@ -545,7 +538,7 @@ conditioning can still bind enabled instincts from repository files.
 `adage init` installs the Adage plugin into Claude Code for you ([above](#first-run-adage-init)):
 `claude plugin list` then shows `adage@adage-local` at user scope, enabled, read from
 `$ADAGE_HOME/plugin/adage`. Claude Code reads it in place, so `adage init` again, or `adage update`,
-stages new binaries and modules there and the next session runs them. Once v0.1.0 is tagged,
+stages new binaries and modules there and the next session runs them.
 `/plugin install adage@adage` installs the released plugin, which Claude Code updates. To develop
 the plugin itself, load it from a checkout with `--plugin-dir`
 ([by hand](#if-you-prefer-to-do-it-by-hand)).

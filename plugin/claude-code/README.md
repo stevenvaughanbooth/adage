@@ -16,21 +16,17 @@ binary says. The binary decides; the mod never does
   `dist/SHA256SUMS`, then runs `claude plugin marketplace add <that directory>` and
   `claude plugin install adage@adage-local`. Claude Code reads it in place, so `adage update` (or
   `adage init` again) stages the new binaries and modules there and the next session runs them.
-  Known until a fix lands (live, 2026-10-07): the command hooks run, but the mod does not find
-  this plugin's data directory by itself (Claude Code reads the plugin from that staged directory,
-  not from its `plugins/cache`, so `bridge.ts` `dataDirFromRoot` derives nothing), so it stays inert unless `CLAUDE_PLUGIN_DATA` is exported as
-  `<config dir>/plugins/data/adage-adage-local`.
+  The mod discovers the plugin's data directory automatically after the session-start shim
+  creates its binary links; no `CLAUDE_PLUGIN_DATA` export is normally needed. It stays inactive
+  if the binary is missing or does not answer its version check.
 - **In Claude Code:** `/plugin marketplace add stevenvaughanbooth/adage`,
   then `/plugin install adage@adage`, with no terminal. Claude Code updates it from that
   marketplace; `adage update` run from the plugin's own binary asks it to
   (`claude plugin update adage@adage`), or names the steps: `/plugin`, choose adage, then Update.
 - **To develop it:** `plugin/build.sh` stages this machine's three binaries into `dist/`, and
   `claude --plugin-dir plugin/claude-code` loads this folder for one session (disable an installed
-  `adage@adage-local` first, or every hook runs twice). Under `--plugin-dir` Claude Code passes
-  `CLAUDE_PLUGIN_DATA` to the command hooks only, so until the mod's own lookup of
-  `<config dir>/plugins/data/adage-inline` lands (in progress, `hooks/binary.ts` `dataDir`) it
-  finds its binary only with that variable exported
-  ([evaluation results](../../docs/claude-mod/evaluation-results.md), defect 4).
+  `adage@adage-local` first, or every hook runs twice). The mod discovers the inline plugin's
+  data directory after the session-start shim creates its binary links.
 - **To remove it:** `claude plugin uninstall adage@adage-local` (or `adage@adage`), which removes
   its data directory too, then `claude plugin marketplace remove adage-local`.
 
