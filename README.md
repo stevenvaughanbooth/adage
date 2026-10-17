@@ -74,8 +74,13 @@ The [installation guide](docs/usage.md#install) also covers the Claude Code plug
 adage doctor                   # check the connection
 adage condition --repo-root .  # learn from this repository's existing sessions
 adage review                   # inspect reflexes and their evidence
+adage ui                       # review decisions and explore recorded sessions
 adage                         # see status and recent activity
 ```
+
+In the terminal app, select a reflex and press `Enter` to review it. The list keeps a brief
+summary and graph; the dialog shows the evidence, available decisions and saved result.
+Approval is shown separately from yellow Prime or green Fire, which describe advice strength.
 
 Continue your normal work. After sessions end, background learning can update the repository's
 reflexes. `adage update` installs a newer published version. The [first-session guide](docs/first-reflex.md)

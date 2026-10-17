@@ -18,10 +18,12 @@ pub const ROUTES_EVERY: Duration = Duration::from_secs(10);
 pub enum Loaded {
     Health(Box<Health>),
     Routes(Result<Routes, String>),
+    Traces(Result<serde_json::Value, String>),
 }
 
 #[derive(Clone, Copy)]
 pub enum Want {
+    Traces,
     Health,
     Routes,
 }
@@ -33,6 +35,7 @@ pub struct Loader {
     pub rx: Receiver<Loaded>,
     health: Sender<()>,
     routes: Sender<()>,
+    traces: Sender<()>,
 }
 
 /// Run `load` at once, then every `every` (once `periodic`, or once asked), and whenever asked;
@@ -67,20 +70,31 @@ impl Loader {
         let (out, rx) = mpsc::channel();
         let (health, health_asks) = mpsc::channel();
         let (routes, routes_asks) = mpsc::channel();
+        let (traces, traces_asks) = mpsc::channel();
         {
             let (out, paths, root) = (out.clone(), paths.clone(), root.clone());
             worker(health_asks, true, HEALTH_EVERY, move || {
                 out.send(Loaded::Health(Box::new(health::gather(&paths, root.as_deref())))).is_ok()
             });
         }
+        {
+            let (out, paths, root) = (out.clone(), paths.clone(), root.clone());
+            worker(traces_asks, false, ROUTES_EVERY, move || {
+                out.send(Loaded::Traces(
+                    adage_app::graph::build(&paths, root.as_deref(), 0, &mut |_| {}).map_err(|e| format!("{e:#}")),
+                ))
+                .is_ok()
+            });
+        }
         worker(routes_asks, false, ROUTES_EVERY, move || {
             out.send(Loaded::Routes(routes::load(&paths, root.as_deref()).map_err(|e| format!("{e:#}")))).is_ok()
         });
-        Loader { rx, health, routes }
+        Loader { rx, health, routes, traces }
     }
 
     pub fn want(&self, w: Want) {
         let _ = match w {
+            Want::Traces => self.traces.send(()),
             Want::Health => self.health.send(()),
             Want::Routes => self.routes.send(()),
         };

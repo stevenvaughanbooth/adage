@@ -43,7 +43,7 @@ export function App() {
   }, [url.view]);
 
   // First run: nothing learned and no traces yet (instincts may already be on).
-  const firstRun = Boolean(graph && graph.sessions.total === 0 && graph.events.length === 0 && !graph.routes.some((r) => !isInstinct(r)));
+  const firstRun = Boolean(!url.reflex && graph && graph.sessions.total === 0 && graph.events.length === 0 && !graph.routes.some((r) => !isInstinct(r)));
 
   useKeys((k, e) => {
     const dispatch = (name: string, detail: string) => window.dispatchEvent(new CustomEvent(name, { detail }));

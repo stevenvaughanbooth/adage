@@ -6,7 +6,7 @@
 // read older data, so every reader goes through here once, and the rest of the app sees only the
 // new words.
 
-import type { ArmStats, Graph, LearnChange, LearnRun, Live, Route, Savings, TraceEvent } from "./types";
+import type { ArmStats, Graph, LearningHistory, LearnChange, LearnRun, Live, Route, Savings, TraceEvent } from "./types";
 
 type Loose = Record<string, unknown>;
 
@@ -109,6 +109,7 @@ export function normalizeRoute(raw: unknown): Route {
     origin: normalizeOrigin(r.origin, Boolean(r.imported), Boolean(r.instinct)),
     directive: (r.directive ?? null) as string | null,
     review,
+    last_review: r.last_review ?? null,
     quiet,
     obligation: (r.obligation ?? null) as string | null,
     strength: strengthWord(r.strength ?? r.aspect),
@@ -182,6 +183,22 @@ function savings(raw: unknown): Savings {
   };
 }
 
+function learningHistory(raw: unknown): LearningHistory | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const h = obj(raw);
+  const count = (v: unknown) => typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null;
+  return {
+    source: "recent_conditioning_runs",
+    description: typeof h.description === "string" ? h.description : "Latest retained conditioning run per repository; overlapping runs are not added together.",
+    repositories: (Array.isArray(h.repositories) ? h.repositories : []).map(value => {
+      const r = obj(value);
+      return { repo: String(r.repo ?? ""), last_conditioned_at: num(r.last_conditioned_at),
+        sessions_used: count(r.sessions_used), files_read: count(r.files_read),
+        sessions_steered: count(r.sessions_steered), sessions_duplicates: count(r.sessions_duplicates) };
+    }),
+  };
+}
+
 export function normalizeGraph(raw: unknown): Graph {
   const g = obj(raw) as Loose & Partial<Graph>;
   const s = obj(g.sessions);
@@ -194,6 +211,7 @@ export function normalizeGraph(raw: unknown): Graph {
     events: (g.events ?? []).map(normalizeEvent),
     trace_events: g.trace_events?.map(normalizeEvent),
     learning: g.learning?.map(normalizeLearnRun),
+    learning_history: learningHistory(g.learning_history),
     // Older binaries sent neither.
     savings: Array.isArray(g.savings) ? g.savings.map(savings) : [],
     pretool: Array.isArray(g.pretool) ? g.pretool : [],

@@ -1,0 +1,28 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage  1 2 Reflexes   2  3 4 2  5 6 7               ◆ harbor-dispatch ▾ · LIVE
+─╭ Review reflex ─────────────────────────────────────────────────────────────╮─
+ │ Active advice: the runtime delivers it when its conditions match.          │
+ │                                                                            │
+ │ ◠ The gist of lookup-incident                                              │
+ │    FIRE    Suggests   ○ nascent ── ● forming ── ● firm                     │
+▌│   ○ waits for review: new · conditioned and never reviewed                 │
+ │                                                                            │
+ │ when a prompt names a ticket ──▶ ◠ ──▶ do bin/fetch-incident {item}        │
+ │                                                                            │
+─│ Evidence ────────────────────────────────────────────────────────────────  │─
+ │ Learned from     ━━━━━━━━━━━━━━━━━━━━━━━━━─  24 of 25 traces               │
+ │ Confidence       ━━━━━━━━━━━━━━━━━━━━━─────  0.80 lower bound              │
+ │ Saves            ~8 turns per trace                                        │
+ │ Since installed  3 fired  2 followed  1 not observed  0 finish line met    │
+ │ Took the step    told       ━━━━━━━━━━━━╸──  10/12                         │
+ │                  held back  ━━━────────────  1/5                           │
+ │ ─ 1–15 of 40 · PgUp/PgDn scroll ────────────────────────────────────────── │
+ │  a approve   x extinguish   w weaken   n pin                               │
+ │ Approve: accept the reflex or proposed change, or put a nascent reflex     │
+ │ into service. This does not grant script execution.                        │
+ │  esc  close   ↑↓  scroll   tab  decision   enter  choose                   │
+─╰────────────────────────────────────────────────────────────────────────────╯─
+  ?  keys   :  palette   enter  review   /  filter   f  repository      q  quit

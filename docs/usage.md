@@ -401,8 +401,8 @@ adage update           # later: a newer Adage, the way it was installed; --rollb
 adage sense            # read-only: which reflexes this repository's traces would form
 adage condition        # form them: read this repository's traces, bind instincts, compile the index
 adage watch            # in a split pane: Adage's health, hook activity and conditioning, live
-adage map              # the map of your reflexes in the browser (read-only, loopback only)
-adage ui               # the full terminal app: reflexes, map, health, settings
+adage map              # local browser view, with review actions when started from your terminal
+adage ui               # the full terminal app: reflexes, traces, map, health, settings
 adage doctor           # check binary, data dir, index, tracks, model, hooks, kill switches
 adage review           # evidence, advice previews, and routine candidates awaiting execution approval
 ```
@@ -520,7 +520,8 @@ and reflex; `?` lists the keys. Its tabs:
 | --- | --- |
 | **Home** | setup progress, repository selection, history sources, conditioning, and the next useful action; when a newer Adage is out, its version and `adage update` first |
 | **Live** | the watch view, larger: the pulse tiles, the session flow, and a rail with the reflexes in play, learning and health; `m` opens the map in your browser, as in `adage watch` |
-| **Reflexes** | every instinct and reflex by track, with a fuzzy `/` filter: strength, stage, trigger and step, evidence (traces, Wilson lower bound), live counts, and the exact directive text. Review decisions (`a`pprove, `e`xtinguish, `w`eaken, `s`trengthen, pi`n`, dismiss `x`) ask first, then run exactly what `adage review` runs, with the same ceilings, and show the equivalent command |
+| **Reflexes** | every instinct and reflex by track, with a fuzzy `/` filter and a brief summary and trigger → response graph below the list. Press `Enter` to open a scrollable review dialog with evidence, the exact directive, and the available decisions. Each decision previews its effect before confirmation and shows the saved result |
+| **Traces** | recorded Adage activity by session, with complete recorded session details and the latest conditioning counts shown separately. This is not a list of every transcript the learner can read |
 | **Map** | stimulus → reflex → response as a layered graph in the terminal; `adage map` opens the same in the browser |
 | **Health** | every doctor check, live, including live conditioning's. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), condition this repository now (a card first shows the sources it reads and what they hold; then its stages tick as it runs, in the background if you press `esc`; then a result card says what it did in plain words, `v` for the details and `enter` for the next step; it runs `adage condition --repo-root` without changing the background allowlist), turn live conditioning on, open the settings, or open the fail-open log |
 | **Settings** | every `adage config` key with its value and where it came from (default, file, or environment); `Enter` edits, `Space` toggles, and `adage config set`'s validation and agent-session refusal apply |
@@ -536,6 +537,18 @@ exactly the content previewed; a changed file requires a new review. The browser
 a local server owned by the TUI and opens its map, evidence, traces, or setup view. Trace links
 open the complete recorded session beyond the recent activity window, with historical versions
 identified separately. Closing the TUI stops its server.
+
+The browser's **Review** actions use the same decisions and revision checks as the terminal.
+Start `adage map` or `adage ui` yourself in a terminal to enable them. An agent-started or
+noninteractive map remains read-only and shows the equivalent terminal command. Reviewing
+advice never grants permission to execute commands.
+
+**Why the session counts differ:** recorded activity contains decisions received by Adage's
+hooks. Conditioning reads agent history, including supported subagent transcripts that may
+have no hook recording. The latest conditioning count describes one run; repeated runs read
+overlapping history, so their session counts are not added together. A missing count means
+the older run did not record it. Use **History sources** and **Condition now** to inspect the
+history available for the selected repository.
 
 Health distinguishes hooks registered from hooks actually received in the selected repository.
 Codex's `/hooks` acceptance happens inside Codex; its guidance stays visible until a hook arrives.
@@ -746,6 +759,14 @@ the effect ceiling, and an import cannot be strengthened to fire without first-h
 locally. `adage condition` keeps extinguished reflexes out of service until they strengthen materially, and holds
 weakenings and strengthenings. An extinguished reflex also keeps a teammate's import of the same
 reflex out of the index. Decisions refuse to run inside an agent session. Listing is allowed there.
+
+**Approval and color mean different things.** Approve accepts the reflex as it stands; it
+does not add evidence or turn every suggestion green. Prime (yellow) means the agent receives
+a suggestion, while Fire (green) recommends it more strongly. Some instincts, including
+environment changes, stay at Prime because of their effect ceiling. The review view shows
+whether advice is available and whether your approval still matches the reflex. Strengthen
+appears only when that change is permitted. Automatic execution requires its separate local
+grant even after a reflex is approved.
 
 **Optional comparison:** `adage config set runtime.control 0.1` reserves roughly 10% of new
 sessions as quiet controls. Adage records what it would have said but delivers no intervention.

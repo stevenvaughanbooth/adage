@@ -25,6 +25,7 @@ use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+mod learning;
 mod measurements;
 pub(crate) use measurements::current_judgements;
 pub use measurements::trace;
@@ -161,6 +162,8 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
         )
         .collect();
 
+    let learning = learning(paths);
+    let learning_history = learning::summary(&learning);
     let out = json!({
         "generation": index.generation,
         "home": paths.root.display().to_string(),
@@ -178,7 +181,8 @@ pub fn build(paths: &Paths, here: Option<&Path>, max_events: usize, warn: &mut d
             "events_visible": scan.trace_events.len(), "truncated": scan.trace_events_total > scan.trace_events.len(),
             "limit": max_events.min(1000), "complete_session_inventory": true, "session_endpoint": "/api/v1/trace",
             "description": "Recorded hook decisions and normalized actions, not raw prompts, tool outputs or private reasoning. Hooks that cannot change a decision may be skipped; this is not a complete agent transcript." },
-        "learning": learning(paths),
+        "learning": learning,
+        "learning_history": learning_history,
         "bars": { "min_support": bar.min_support, "fire_lower_bound": bar.fire_lower_bound, "uplift_min": bar.uplift_min },
         "savings": savings,
         "pretool": pretool,

@@ -164,6 +164,7 @@ pub fn entries(s: &AppState) -> Vec<Entry> {
         (Tab::Health, "Health", "4"),
         (Tab::Settings, "Settings", "5"),
         (Tab::Home, "Home", "6"),
+        (Tab::Traces, "Traces", "7"),
     ] {
         let note = match tab {
             Tab::Live => "adage watch",

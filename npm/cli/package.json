@@ -1,6 +1,6 @@
 {
   "name": "__PACKAGE_NAME__",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An experiment in teaching coding agents reusable reflexes from their past sessions.",
   "license": "__LICENSE__",
   "repository": { "type": "git", "url": "git+https://github.com/stevenvaughanbooth/adage.git" },

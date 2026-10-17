@@ -2,8 +2,8 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
- adage    1 Live   2 Reflexes  2   3 Map   4 Health   2   5 Settings   6 Home
-──────────────────────────────────────────━━━━━━━━━━────────────────────────────
+ adage  1 2 2  3 4 Health   2  5 6 7                     harbor-dispatch · LIVE
+────────────────━━━━━━━━━━──────────────────────────────────────────────────────
   ▄███▄   Healthy · 4 checks passed · 2 to look at
   ██!██   ━━━━━━━━━━━━━━━━━━━━━━━━────────────  4 of 6 pass
   ▀███▀   The same checks as adage doctor, rechecked live · R checks now

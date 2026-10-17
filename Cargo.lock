@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "adage-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "adage-exec",
@@ -26,7 +26,7 @@ dependencies = [
 
 [[package]]
 name = "adage-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-app",
  "adage-core",
@@ -65,7 +65,7 @@ dependencies = [
 
 [[package]]
 name = "adage-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "miniz_oxide",
  "once_cell",
@@ -81,7 +81,7 @@ dependencies = [
 
 [[package]]
 name = "adage-eval"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "adage-graph",
@@ -105,7 +105,7 @@ dependencies = [
 
 [[package]]
 name = "adage-exec"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "adage-hook",
@@ -131,7 +131,7 @@ dependencies = [
 
 [[package]]
 name = "adage-graph"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "adage-ingest",
@@ -149,7 +149,7 @@ dependencies = [
 
 [[package]]
 name = "adage-hook"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "adage-ingest",
@@ -169,7 +169,7 @@ dependencies = [
 
 [[package]]
 name = "adage-ingest"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "adage-trace",
@@ -183,7 +183,7 @@ dependencies = [
 
 [[package]]
 name = "adage-instincts"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "adage-tracks",
@@ -197,7 +197,7 @@ dependencies = [
 
 [[package]]
 name = "adage-intent"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "miniz_oxide",
@@ -211,7 +211,7 @@ dependencies = [
 
 [[package]]
 name = "adage-learn"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "adage-graph",
@@ -236,7 +236,7 @@ dependencies = [
 
 [[package]]
 name = "adage-pack"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "adage-instincts",
@@ -260,7 +260,7 @@ dependencies = [
 
 [[package]]
 name = "adage-runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "adage-intent",
@@ -276,7 +276,7 @@ dependencies = [
 
 [[package]]
 name = "adage-safety"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "adage-runtime",
@@ -290,7 +290,7 @@ dependencies = [
 
 [[package]]
 name = "adage-sign"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "rand_core 0.6.4",
@@ -302,14 +302,14 @@ dependencies = [
 
 [[package]]
 name = "adage-sim"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "adage-store"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -319,7 +319,7 @@ dependencies = [
 
 [[package]]
 name = "adage-term"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anstream 0.6.21",
  "anstyle",
@@ -330,7 +330,7 @@ dependencies = [
 
 [[package]]
 name = "adage-trace"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "serde",
@@ -340,7 +340,7 @@ dependencies = [
 
 [[package]]
 name = "adage-tracks"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "adage-intent",
@@ -359,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "adage-train"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "adage-core",
  "adage-exec",
@@ -2536,7 +2536,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "serde_json",

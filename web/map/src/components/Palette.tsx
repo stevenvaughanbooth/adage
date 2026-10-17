@@ -1,5 +1,4 @@
-// ⌘K: reflexes, actions and views in one list. Decisions are copied as adage commands; the map
-// stays read-only.
+// ⌘K: reflexes, actions and views in one list. Decisions open the individual reflex for review.
 
 import { Command } from "cmdk";
 import { useState } from "react";
@@ -98,14 +97,14 @@ export function Palette({ graph, open, onClose, onShortcuts }: { graph: Graph | 
               <Command.Item
                 key={`${routeKey(r)}:${v}`}
                 value={`${v} ${r.id} ${verb(v)}`}
-                onSelect={run(() => setUrl({ view: "setup", reflex: routeKey(r) }, true))}
+                onSelect={run(() => setUrl({ view: "map", reflex: routeKey(r) }, true))}
                 className={ITEM}
               >
                 <span className="grow truncate">
                   {v[0]?.toUpperCase()}
                   {v.slice(1)} <Hl text={r.id} q={q.trim()} />…
                 </span>
-                <span className="font-mono text-xs text-ink-3">{hints.review}</span>
+                <span className="font-mono text-xs text-ink-3">inspect reflex</span>
               </Command.Item>
             ))}
             {STRENGTHS.map((s) => (

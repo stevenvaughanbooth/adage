@@ -40,7 +40,7 @@ pub const GLOBAL: &[Key] = &[
     k("?", "keys", "this list", true),
     k(":", "palette", "command palette (also ctrl-k): every action and reflex", true),
     k("tab", "next tab", "next tab (shift-tab: previous)", false),
-    k("1-6", "tabs", "Live, Reflexes, Map, Health, Settings, Home", false),
+    k("1-7", "tabs", "Live, Reflexes, Map, Health, Settings, Home, Traces", false),
     k("q", "quit", "quit", false),
 ];
 
@@ -67,10 +67,11 @@ pub const LIVE: &[Key] = &[
 ];
 
 pub const REFLEXES: &[Key] = &[
+    k("enter", "review", "open a reflex to review its evidence and decisions; expand a group", true),
     k("/", "filter", "fuzzy filter reflexes by id, trigger, command or track", true),
     k("f", "repository", "choose the repository whose reflexes are shown, or all of them", true),
     k("j/k", "move", "move through the tree", true),
-    k("enter", "expand", "open or close a group, or a reflex's details", true),
+    k("v", "details", "show or hide technical details in the card", false),
     k("tab", "next tab", "next tab", true),
     k("s", "strengthen", "strengthen: prime → fire (adage review strengthen)", false),
     k("w", "weaken", "weaken: fire → prime (adage review weaken)", false),
@@ -87,6 +88,15 @@ pub const REFLEXES: &[Key] = &[
     k("esc", "reset filters", "reset the search, strength and lifecycle filters", false),
     k("PgUp PgDn", "scroll", "scroll the card", false),
     k("R", "reload", "reload the reflexes", false),
+];
+
+pub const TRACES: &[Key] = &[
+    k("enter", "open session", "read all recorded hook events in this session", true),
+    k("h", "history sources", "inspect agent history folders used for conditioning", true),
+    k("c", "condition now", "preview history and condition the open checkout", true),
+    k("f", "repository", "choose whose recorded sessions and conditioning counts are shown", true),
+    k("j/k ↑↓", "move", "select a recorded session", false),
+    k("R", "reload", "reload recorded sessions and conditioning summaries", false),
 ];
 
 pub const MAP: &[Key] = &[

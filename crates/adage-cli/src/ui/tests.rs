@@ -1215,6 +1215,7 @@ fn route_row(
         effect: "observe".into(),
         state: state.into(),
         authored: false,
+        approved: false,
         trigger_kind: trigger.0.into(),
         trigger: trigger.1.into(),
         step_kind: step.0.into(),
@@ -1427,44 +1428,22 @@ fn reflexes_tab_tree_detail_and_empty_state() {
         "▾ Instincts · v0.1.0",
         "▸ Extinguished",
         "→ the gist of lookup-incident",
-        "▰▰▰▰▰▱ 24/25",
-        "forming  ▰▰▰▰▱▱   6/9",
-        "◠ The gist of lookup-incident",
-        "○ nascent ── ● forming ── ● firm",
-        "What the agent sees · example values",
-        "▎   bin/fetch-incident INC-2045",
-        "Evidence",
         "24 of 25 traces",
-        "0.80 lower bound",
-        "Since installed  3 fired  2 followed  1 not observed  0 finish line met",
-        "Took the step",
-        "10/12",
-        "1/5",
-        "Review",
-        "▸ Details",
+        "Review evidence and decisions",
+        "WHEN",
+        "DO",
     ] {
-        assert!(text.contains(want), "the Reflexes tab lacks {want:?}:\n{text}");
+        assert!(text.contains(want), "the overview lacks {want:?}:\n{text}");
     }
-    assert!(!text.contains("grep-for-incident"), "the extinguished group starts closed");
-    // Plain words first: the id, the track's directory and the wrapper's tags wait for a key.
-    for later in ["harbor-dispatch/incidents", "<adage-reflex"] {
-        assert!(!text.contains(later), "{later:?} on the first read:\n{text}");
-    }
-    // Enter opens the details: the id, the track, and the command each action equals.
+    assert!(!text.contains("grep-for-incident"));
+    assert!(!text.contains("What the agent sees"), "long review belongs in the modal");
     s.key(KeyCode::Enter, NONE);
-    s.key(KeyCode::PageDown, NONE);
-    s.key(KeyCode::PageDown, NONE);
+    s.key(KeyCode::End, NONE);
     let text = app_frame(&s, &c, 150, 35);
-    assert!(text.contains("w weaken is the same as, from any shell:"), "{text}");
-    assert!(text.contains("  adage review weaken harbor-dispatch/incidents lookup-incident"), "{text}");
-    s.key(KeyCode::Enter, NONE);
-    s.key(KeyCode::PageUp, NONE);
-    s.key(KeyCode::PageUp, NONE);
-    // No control traces, no with-vs-control comparison.
+    assert!(text.contains("adage review weaken harbor-dispatch/incidents lookup-incident"), "{text}");
+    s.key(KeyCode::Esc, NONE);
     s.key(KeyCode::Down, NONE);
-    let text = app_frame(&s, &c, 150, 35);
-    assert!(text.contains("The gist of read-linked-files") && !text.contains("Took the step"), "{text}");
-    // Empty: the next command.
+    assert!(app_frame(&s, &c, 150, 35).contains("The gist of read-linked-files"));
     s.routes = Some(Ok(Routes::default()));
     let text = app_frame(&s, &c, 100, 24);
     assert!(text.contains("No reflexes yet.") && text.contains("adage condition"), "{text}");
@@ -2371,13 +2350,18 @@ fn reflexes_tab_tells_quiet_from_install_steps() {
     let install = rows.iter().find(|r| r.id == "regen-openapi-client").unwrap();
     assert!(!install.quiet() && install.stage() == "nascent");
     tabs::reflexes::select(&mut s, "harbor-dispatch/learned", "read-before-edit-9a1c");
-    let text = app_frame(&s, &c, 150, 40);
+    let overview = app_frame(&s, &c, 150, 40);
     for want in [
         "▾ Waiting for review",
         "▾ Quiet · agents already do this; approve to deliver",
         "◌ bin/fetch-incident",
         "→ the gist of read-before-edit",
-        "◌ quiet 1",
+    ] {
+        assert!(overview.contains(want), "lacks {want:?}:\n{overview}");
+    }
+    s.key(KeyCode::Enter, NONE);
+    let text = app_frame(&s, &c, 150, 70);
+    for want in [
         "◌ quiet: uplift +0.04 < 0.10 · approve to deliver",
         "when told",
         "0.95",
@@ -2390,13 +2374,11 @@ fn reflexes_tab_tells_quiet_from_install_steps() {
     assert!(!text.contains("waits for review: quiet"), "quiet is said once, in its own words:\n{text}");
     snap("app-reflexes-quiet", &text);
     // A quiet reflex waits to be approved: its details lead with that command.
-    s.key(KeyCode::Enter, NONE);
-    s.reflexes.detail_scroll = 20;
+    s.key(KeyCode::End, NONE);
     let text = app_frame(&s, &c, 150, 40);
     assert!(text.contains("a approve is the same as, from any shell:"), "{text}");
     assert!(text.contains("adage review approve harbor-dispatch/learned read-before-edit-9a1c"), "{text}");
-    s.key(KeyCode::Enter, NONE);
-    s.reflexes.detail_scroll = 0;
+    s.key(KeyCode::Esc, NONE);
     // The lifecycle filter has its own `quiet` choice; `nascent` then means install steps.
     s.reflexes.states = tabs::reflexes::STATES.iter().position(|x| *x == "quiet").unwrap();
     let shown: Vec<String> = tabs::reflexes::tree(&s)
@@ -2428,10 +2410,10 @@ fn reflexes_tab_shows_a_procedure_card() {
     let c = ctx(Paths::at(d.path()), false);
     let mut s = feature_state();
     tabs::reflexes::select(&mut s, "harbor-dispatch/learned", "card-carrier-rules");
-    let text = app_frame(&s, &c, 150, 45);
+    s.key(KeyCode::Enter, NONE);
+    let text = app_frame(&s, &c, 150, 70);
     for want in [
         "▤ The gist of card-carrier-rules",
-        "forming  ▰▰▰▰▰▱ 4 traces",
         "procedure card",
         "Procedure card ─",
         "Files            1 registry/carriers.csv",
@@ -2455,7 +2437,7 @@ fn reflexes_tab_shows_a_procedure_card() {
     // ASCII: the card's glyph falls back.
     let mut a = ctx(Paths::at(d.path()), false);
     a.theme = a.theme.ascii();
-    let text = app_frame(&s, &a, 150, 45);
+    let text = app_frame(&s, &a, 150, 70);
     assert!(text.contains("[=] The gist of card-carrier-rules") && !text.contains('▤'), "{text}");
 }
 
@@ -2465,10 +2447,12 @@ fn reflexes_tab_shows_value_evidence_obligations_and_skills() {
     let c = ctx(Paths::at(d.path()), false);
     let mut s = feature_state();
     tabs::reflexes::select(&mut s, "harbor-dispatch/learned", "tests-after-rules-edit");
-    let text = app_frame(&s, &c, 150, 40);
+    let overview = app_frame(&s, &c, 150, 40);
+    assert!(overview.contains("by value"), "{overview}");
+    s.key(KeyCode::Enter, NONE);
+    let text = app_frame(&s, &c, 150, 70);
     for want in [
         "◠ The gist of tests-after-rules-edit",
-        "by value",
         "Saves            ~1.25 calls when followed",
         "Confidence",
         "──  0.93 · lower bound 0.40",
@@ -2478,8 +2462,9 @@ fn reflexes_tab_shows_value_evidence_obligations_and_skills() {
         assert!(text.contains(want), "lacks {want:?}:\n{text}");
     }
     // A desire path's follow count is context, never its meter or its row's evidence.
-    assert!(!text.contains("0/7") && !text.contains("0 of 7 traces"), "{text}");
+    assert!(!overview.contains("0/7") && !overview.contains("0 of 7 traces"), "{overview}");
     snap("app-reflexes-value", &text);
+    s.key(KeyCode::Esc, NONE);
     tabs::reflexes::select(&mut s, "@imported/@bound/harbor-skills", "release-notes-s2-changelog");
     let text = app_frame(&s, &c, 150, 40);
     assert!(text.contains("◈ The gist of release-notes-s2-changelog") && text.contains("from a skill"), "{text}");
@@ -2573,18 +2558,8 @@ fn reflexes_card_reads_in_sections() {
         "╭─ WHEN ─",
         "╭─ DO ─",
         "│─── ◠ ──▶│ cargo build -p adage-cli │",
-        "Evidence",
         "22 of 35 traces",
-        "0.46 lower bound",
-        "Since installed  4 fired  3 followed  1 not observed",
-        "2 finish line met",
-        "when told",
-        "0.88",
-        "0.60",
-        "uplift +0.28 · lower bound +0.13",
-        "What the agent sees",
-        "▎ In this repository, changes to files matching",
-        "▎   cargo build -p adage-cli",
+        "Review evidence and decisions",
     ] {
         assert!(wide.contains(want), "the card lacks {want:?}:\n{wide}");
     }
@@ -2595,8 +2570,8 @@ fn reflexes_card_reads_in_sections() {
     snap("app-reflexes-card-100x40", &app_frame(&s, &c, 100, 40));
     let narrow = app_frame(&s, &c, 80, 30);
     snap("app-reflexes-card-80x30", &narrow);
-    assert!(narrow.contains("when an edit touches crates/adage-cli/src/*.rs ──▶ ◠ ──▶"), "{narrow}");
-    assert!(narrow.contains("cargo build -p adage-cli") && narrow.contains("more lines below"), "{narrow}");
+    assert!(narrow.contains("crates/adage-cli/src/*.rs") && narrow.contains("│─── ◠ ──▶│"), "{narrow}");
+    assert!(narrow.contains("cargo build -p adage-cli"), "{narrow}");
     // `r` shows the advisory as delivered; enter opens the details.
     s.key(KeyCode::Char('r'), NONE);
     s.key(KeyCode::Enter, NONE);
@@ -2604,7 +2579,8 @@ fn reflexes_card_reads_in_sections() {
     snap("app-reflexes-card-details-140x70", &opened);
     for want in [
         "▎ <adage-reflex",
-        "route=\"run-137805\" strength=\"fire\">",
+        "route=\"run-137805\"",
+        "strength=\"fire\">",
         "▎ </adage-reflex>",
         "▾ Details",
         "reflex       run-137805",
@@ -2616,10 +2592,11 @@ fn reflexes_card_reads_in_sections() {
         assert!(opened.contains(want), "the opened card lacks {want:?}:\n{opened}");
     }
     // Both stay as chosen from reflex to reflex; the keys turn them back.
+    s.key(KeyCode::Esc, NONE);
     s.key(KeyCode::Up, NONE);
     assert!(s.reflexes.raw && s.reflexes.details);
     s.key(KeyCode::Char('r'), NONE);
-    s.key(KeyCode::Enter, NONE);
+    s.key(KeyCode::Char('v'), NONE);
     assert!(!s.reflexes.raw && !s.reflexes.details);
     // Under ASCII, nothing but ASCII.
     let a = Ctx { theme: Theme::with_color(false).ascii(), ..ctx(Paths::at(d.path()), false) };
@@ -3606,5 +3583,130 @@ fn the_live_cockpit_waits_for_an_agent() {
     assert!(
         pane.contains("No traces yet") && pane.contains("adage init") && pane.contains("adage condition"),
         "{pane}"
+    );
+}
+
+#[test]
+fn enter_reviews_a_frozen_reflex_with_scroll_and_explicit_confirmation() {
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    let mut s = app_state();
+    s.tab = Tab::Reflexes;
+    let original = s.selected_route().unwrap().clone();
+    assert!(s.key(KeyCode::Enter, NONE).is_none());
+    assert!(matches!(&s.modal, Some(Modal::ReflexReview(review)) if review.row.id == original.id));
+    let text = app_frame(&s, &c, 80, 24);
+    assert!(text.contains("Review reflex") && text.contains("approve") && text.contains("esc"), "{text}");
+    snap("app-reflex-review-80x24", &text);
+    s.key(KeyCode::PageDown, NONE);
+    assert!(matches!(&s.modal, Some(Modal::ReflexReview(review)) if review.scroll > 0));
+    s.key(KeyCode::End, NONE);
+    let bottom = app_frame(&s, &c, 80, 24);
+    assert!(bottom.contains("approve") && bottom.contains("esc"), "decisions stay visible:\n{bottom}");
+    s.key(KeyCode::Up, NONE);
+    assert_ne!(app_frame(&s, &c, 80, 24), bottom, "End then Up scrolls immediately");
+    // A background refresh must not substitute a different revision under the review.
+    s.routes.as_mut().unwrap().as_mut().unwrap().rows[0].review_preview.as_mut().unwrap().revision = "newer".into();
+    s.key(KeyCode::Char('a'), NONE);
+    let confirm = app_frame(&s, &c, 80, 24);
+    assert!(confirm.contains("confirm") && confirm.contains("back"), "{confirm}");
+    assert!(s.key(KeyCode::Esc, NONE).is_none());
+    assert!(matches!(&s.modal, Some(Modal::ReflexReview(_))), "cancel returns to review");
+    s.key(KeyCode::Char('a'), NONE);
+    match s.key(KeyCode::Enter, NONE) {
+        Some(Cmd::Do(app::Action::Review { verb, expected_revision, .. })) => {
+            assert_eq!(verb, "approve");
+            assert_eq!(expected_revision, original.review_preview.unwrap().revision);
+        }
+        other => panic!("expected exact reviewed approval, got {other:?}"),
+    }
+    s.key(KeyCode::Enter, NONE);
+    assert!(s.key(KeyCode::Char('q'), NONE).is_none(), "q closes review, not the app");
+    assert!(s.modal.is_none());
+}
+
+#[test]
+fn review_and_summary_distinguish_approval_from_strength_and_execution() {
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    let mut s = app_state();
+    s.tab = Tab::Reflexes;
+    s.routes = Some(Ok(card_routes()));
+    let r = s.routes.as_mut().unwrap().as_mut().unwrap().rows.iter_mut().find(|r| r.id == "lockfile-cargo").unwrap();
+    r.approved = true;
+    r.ceiling = "prime".into();
+    let (reference, id) = (r.reference.clone(), r.id.clone());
+    tabs::reflexes::select(&mut s, &reference, &id);
+    let text = app_frame(&s, &c, 100, 40);
+    assert!(text.contains("Approved") && text.contains("active advice") && text.contains("Ceiling: Prime"), "{text}");
+    assert!(text.contains("WHEN") || text.contains("when an edit"), "the lower graph remains:\n{text}");
+    s.key(KeyCode::Enter, NONE);
+    for (width, height) in [(80, 24), (44, 12), (40, 10)] {
+        let text = app_frame(&s, &c, width, height);
+        assert!(text.contains("esc"), "close remains discoverable at {width}x{height}:\n{text}");
+    }
+    s.key(KeyCode::Esc, NONE);
+    let rows = &mut s.routes.as_mut().unwrap().as_mut().unwrap().rows;
+    let r = rows.iter_mut().find(|r| r.id == id).unwrap();
+    r.state = "nascent".into();
+    let text = app_frame(&s, &c, 100, 40);
+    assert!(!text.contains("Approved · active"), "a non-live route is never called active:\n{text}");
+}
+
+#[test]
+fn traces_separate_recorded_activity_from_latest_conditioning_and_open_exact_session() {
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    let mut s = app_state();
+    s.here = Some("harbor-dispatch".into());
+    s.traces.data = Some(Ok(json!({
+        "trace_sessions": [
+            {"session":"first","repo":"harbor-dispatch","end_ts":T0,"events_total":2,"harnesses":["claude-code"]},
+            {"session":"other","repo":"another","end_ts":T0,"events_total":99,"harnesses":["codex"]}
+        ],
+        "learning_history":{"repositories":[{"repo":"harbor-dispatch","sessions_used":6,"files_read":12}]}
+    })));
+    assert!(matches!(s.key(KeyCode::Char('7'), NONE), Some(Cmd::Want(app::WantKind::Traces))));
+    let text = app_frame(&s, &c, 100, 30);
+    for want in
+        ["Recorded activity: 1 session", "6 sessions used / 12 files read", "not a lifetime total", "History sources"]
+    {
+        assert!(text.contains(want), "missing {want:?}:\n{text}");
+    }
+    snap("app-traces-100x30", &text);
+    assert!(
+        matches!(s.key(KeyCode::Enter, NONE), Some(Cmd::OpenTrace {session,repo}) if session == "first" && repo == "harbor-dispatch")
+    );
+    assert!(matches!(
+        s.key(KeyCode::Char('h'), NONE),
+        Some(Cmd::Do(app::Action::Tool(super::tools::Tool::HistorySources)))
+    ));
+    assert!(matches!(s.key(KeyCode::Char('c'), NONE), Some(Cmd::PreviewLearning)));
+    let lines = tabs::traces::detail_lines(&json!({"session":"first","repo":"harbor-dispatch","events_total":3,"events":[
+        {"ts":T0,"event":"PostToolUse","harness":"claude-code","arm":"treated","observed":["exec pwd"],"directives":[],"judgements":[]},
+        {"ts":T0,"event":"Stop","harness":"claude-code","arm":"control","observed":[],"directives":[],"would_have":[{"route":"verify","text":"Run the check"}],"judgements":[]},
+        {"ts":T0,"event":"PreToolUse","harness":"claude-code","arm":"treated","pretool":{"rewrite":"project-python","interpreter":".venv/bin/python"},"predicted":"verify","substituted":"repair","answered":"receipt"}
+    ]})).join("\n");
+    assert!(
+        lines.contains("Observed: exec pwd")
+            && lines.contains("Withheld (control): verify")
+            && lines.contains("Run the check")
+    );
+    for action in [
+        "Applied command rewrite: project-python",
+        "Interpreter: .venv/bin/python",
+        "Chose next step: verify",
+        "Replaced dead end: repair",
+        "Answered from recorded result: receipt",
+    ] {
+        assert!(lines.contains(action), "{lines}");
+    }
+    s.traces.data = Some(Ok(
+        json!({"trace_sessions":[],"learning_history":{"repositories":[{"repo":"harbor-dispatch","sessions_used":null,"files_read":null}]}}),
+    ));
+    let empty = app_frame(&s, &c, 80, 24);
+    assert!(
+        empty.contains("not recorded sessions used") && empty.contains("No hook sessions"),
+        "unknown is not zero:\n{empty}"
     );
 }

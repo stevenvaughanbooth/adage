@@ -1,11 +1,24 @@
 # web/map: the page `adage map` serves
 
 The React app behind `adage map` (and the map `adage ui` opens, and the Claude Code pane's
-**Explore in browser**). It is read-only by design: it explains reflexes, their evidence and live
-traces, and names the command or `/adage` verb that changes something; it never changes anything
-itself. The `adage` binary embeds the built page (`crates/adage-cli/assets/map/`) and serves it
-with the JSON it reads (`/api/v1/graph`, `/api/v1/events`, `/api/v1/health`, `/api/v1/trace`);
-nothing is requested from anywhere but that origin.
+**Explore in browser**). It explains reflexes, their evidence and live traces. A map started
+from the person's own terminal can review individual reflexes; an agent-launched or demo map
+stays read-only and shows the appropriate terminal or `/adage` review command. Approval accepts
+evidence; advice strength and automatic execution permission remain separate.
+
+The binary embeds the built page (`crates/adage-cli/assets/map/`) and serves its graph, events,
+health and traces from the same loopback origin. `GET /api/v1/review` reports whether the
+startup `Person` gate enabled review and supplies a per-server random CSRF token. With
+`reference` and `reflex` query parameters it returns the current directive, proposed changes,
+allowed decisions and an exact revision. `POST /api/v1/review` accepts only bounded JSON with
+that reference, reflex, verb and revision, the exact local Origin, and `X-Adage-CSRF` token.
+The application rechecks the revision under the writer lock; a stale review writes nothing.
+There is no execution-grant API. Host/port checks and duplicate-header rejection apply before
+routing, and no CORS access is enabled. Read endpoints and read-only startup do not create data.
+
+Traces separates recorded hook activity from `learning_history`, the latest retained
+conditioning counts per repository. Histories and subagent histories are learner input, not
+automatically recorded hook sessions; overlapping runs are never summed into a lifetime total.
 
 ## Build and check
 

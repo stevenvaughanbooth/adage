@@ -157,13 +157,18 @@ fn evidence_change(b: &Basis, r: &Route, material: f64) -> Option<String> {
     if (e.lower_bound - b.lower_bound).abs() >= material - 1e-9 {
         return Some(format!("lower bound moved from {:.2} to {:.2}", b.lower_bound, e.lower_bound));
     }
-    if e.support >= MATERIAL_SUPPORT_FACTOR * b.support.max(1) {
+    if support_grew(b.support, e.support) {
         return Some(format!("support grew from {} to {} sessions", b.support, e.support));
     }
-    if e.support * MATERIAL_SUPPORT_FACTOR <= b.support {
+    // Zero evidence staying at zero is not a decline (instincts start without trace support).
+    if e.support < b.support && u64::from(e.support) * u64::from(MATERIAL_SUPPORT_FACTOR) <= u64::from(b.support) {
         return Some(format!("support fell from {} to {} sessions", b.support, e.support));
     }
     None
+}
+
+fn support_grew(before: u32, after: u32) -> bool {
+    u64::from(after) >= u64::from(MATERIAL_SUPPORT_FACTOR) * u64::from(before.max(1))
 }
 
 /// Why `r` changed materially since the decision recorded in `b`, if it did.
@@ -191,7 +196,7 @@ pub fn strengthened(b: &Basis, r: &Route) -> bool {
 pub fn strengthened_with(b: &Basis, r: &Route, material: f64) -> bool {
     shape(r) != b.shape
         || r.evidence.lower_bound >= b.lower_bound + material - 1e-9
-        || r.evidence.support >= MATERIAL_SUPPORT_FACTOR * b.support.max(1)
+        || support_grew(b.support, r.evidence.support)
 }
 
 pub fn strength_str(a: Strength) -> &'static str {
@@ -463,6 +468,48 @@ mod tests {
         // Strengthening is one-directional.
         assert!(!strengthened(&b, &route("a", Strength::Prime, 5, 12)));
         assert!(strengthened(&b, &route("a", Strength::Prime, 20, 20)));
+    }
+
+    #[test]
+    fn support_change_requires_real_growth_or_decline_even_at_count_boundaries() {
+        for (before, after, expected) in [
+            (0, 0, None),
+            (0, 1, None),
+            (0, 2, Some("grew")),
+            (1, 0, Some("fell")),
+            (10, 6, None),
+            (10, 5, Some("fell")),
+            (10, 19, None),
+            (10, 20, Some("grew")),
+            (u32::MAX, u32::MAX, None),
+            (u32::MAX, u32::MAX / 2 + 1, None),
+            (u32::MAX, u32::MAX / 2, Some("fell")),
+            (u32::MAX / 2, u32::MAX, Some("grew")),
+        ] {
+            let mut approved = route("a", Strength::Prime, before, u32::MAX);
+            // Isolate support movement from the separately checked confidence movement.
+            approved.evidence.lower_bound = 0.0;
+            let basis = basis(&approved, 0, 0);
+            let mut current = approved.clone();
+            current.evidence.support = after;
+            let change = material_change(&basis, &current);
+            match expected {
+                Some(direction) => {
+                    assert_eq!(change, Some(format!("support {direction} from {before} to {after} sessions")))
+                }
+                None => assert!(change.is_none(), "unchanged/nonmaterial support {before} -> {after}: {change:?}"),
+            }
+            assert_eq!(strengthened(&basis, &current), expected == Some("grew"), "support {before} -> {after}");
+        }
+    }
+
+    #[test]
+    fn a_zero_support_strengthening_survives_unchanged_relearning() {
+        let approved = route("a", Strength::Fire, 0, 0);
+        let mined = route("a", Strength::Prime, 0, 0);
+        let out = reconcile(None, &reviewed(&approved, Decision::Strengthened), vec![mined]);
+        assert_eq!(out[0].strength, Strength::Fire);
+        assert!(material_change(&basis(&approved, 0, 0), &out[0]).is_none());
     }
 
     #[test]

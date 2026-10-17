@@ -37,6 +37,8 @@ pub struct Reflex {
     /// Its lifecycle state: nascent, forming, firm, dormant or extinguished.
     pub state: String,
     pub authored: bool,
+    /// A person's latest saved decision; `current` is independent of strength and delivery state.
+    pub last_review: Option<crate::review::RecordedReview>,
     /// Kept quiet on its uplift: agents already take the step unaided, so it waits for a person.
     pub quiet: bool,
     pub shape: String,
@@ -84,6 +86,7 @@ impl Reflex {
             effect: lower(r.effect),
             state: lower(r.state),
             authored: r.authored,
+            last_review: crate::review::last_review(inst, r),
             quiet: r.state == adage_tracks::RouteState::Nascent
                 && !r.authored
                 && e.uplift.as_ref().is_some_and(|u| u.gated),

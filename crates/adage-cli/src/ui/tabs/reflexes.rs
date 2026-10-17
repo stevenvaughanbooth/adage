@@ -63,7 +63,7 @@ pub struct State {
     /// Index into [`STATES`].
     pub states: usize,
     pub detail_scroll: u16,
-    /// The card's Details section is open (enter on a reflex). It stays open from reflex to reflex.
+    /// The card's Details section is open (`v`). It stays open from reflex to reflex.
     pub details: bool,
     /// What the agent sees, exactly as delivered: the wrapper's tags too (`r`).
     pub raw: bool,
@@ -291,6 +291,46 @@ fn last_fired(s: &AppState, id: &str) -> Option<u64> {
         .map(|i| i.ts)
 }
 
+pub(crate) fn show_traces(s: &mut AppState, r: &RouteRow) {
+    let lines: Vec<String> = traces(s, &r.id, &r.repo)
+        .iter()
+        .map(|i| {
+            let what: Vec<String> = i
+                .acts
+                .iter()
+                .filter_map(|a| match a {
+                    Act::Directed { route, strength, .. } if *route == r.id => {
+                        Some(format!("fired {}", Theme::strength_word(*strength)))
+                    }
+                    Act::Withheld { route, .. } if *route == r.id => Some("withheld (control)".into()),
+                    Act::Followed(x) if *x == r.id => Some("followed".into()),
+                    Act::Ignored(x) if *x == r.id => Some("not observed within 3 batches".into()),
+                    Act::Misfired(x) if *x == r.id => Some("misfired".into()),
+                    Act::Met(x) if *x == r.id => Some("finish line met".into()),
+                    Act::Unaided(x) if *x == r.id => Some("found unaided (control)".into()),
+                    Act::NotReached(x) if *x == r.id => Some("missed (control)".into()),
+                    _ => None,
+                })
+                .collect();
+            format!(
+                "{}  {}  {:<7} {:<7} {}",
+                view::clock(i.ts, view::local_offset(), true),
+                feed::short_session(&i.session, 6),
+                feed::harness_name(&i.harness),
+                i.event,
+                what.join(", ")
+            )
+        })
+        .collect();
+    let mut lines = if lines.is_empty() {
+        vec![format!("{} has not fired in the traces this screen has seen.", r.id)]
+    } else {
+        lines
+    };
+    lines.insert(0,"Recent feed only, matched by reflex ID in this repository. Historical and duplicate collection versions may appear; use Explore complete traces in browser for attributed evidence.".into());
+    s.modal = Some(Modal::Viewer { title: format!("recent traces · {}", r.id), source: None, lines, scroll: 0 });
+}
+
 pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
     let st = &mut s.reflexes;
     if st.filtering {
@@ -331,12 +371,13 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
         KeyCode::Char('S') => s.reflexes.states = (s.reflexes.states + 1) % STATES.len(),
         KeyCode::Char('R') => return Some(Cmd::Want(WantKind::Routes)),
         KeyCode::Char('r') => s.reflexes.raw = !s.reflexes.raw,
+        KeyCode::Char('v') => s.reflexes.details = !s.reflexes.details,
         KeyCode::Enter | KeyCode::Left | KeyCode::Right | KeyCode::Char('h') | KeyCode::Char('l') => {
             let nodes = tree(s);
             let n = nodes.get(position(s, &nodes)).cloned()?;
-            // On a reflex, enter opens or closes its card's details.
+            // On a reflex, Enter opens a dedicated review without changing it.
             if code == KeyCode::Enter && matches!(n, Node::Reflex(_)) {
-                s.reflexes.details = !s.reflexes.details;
+                crate::ui::reflex_review::open(s);
                 return None;
             }
             let group = match &n {
@@ -365,44 +406,7 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
         }
         KeyCode::Char('t') => {
             let r = s.selected_route()?.clone();
-            let lines: Vec<String> = traces(s, &r.id, &r.repo)
-                .iter()
-                .map(|i| {
-                    let what: Vec<String> = i
-                        .acts
-                        .iter()
-                        .filter_map(|a| match a {
-                            Act::Directed { route, strength, .. } if *route == r.id => {
-                                Some(format!("fired {}", Theme::strength_word(*strength)))
-                            }
-                            Act::Withheld { route, .. } if *route == r.id => Some("withheld (control)".into()),
-                            Act::Followed(x) if *x == r.id => Some("followed".into()),
-                            Act::Ignored(x) if *x == r.id => Some("not observed within 3 batches".into()),
-                            Act::Misfired(x) if *x == r.id => Some("misfired".into()),
-                            Act::Met(x) if *x == r.id => Some("finish line met".into()),
-                            Act::Unaided(x) if *x == r.id => Some("found unaided (control)".into()),
-                            Act::NotReached(x) if *x == r.id => Some("missed (control)".into()),
-                            _ => None,
-                        })
-                        .collect();
-                    format!(
-                        "{}  {}  {:<7} {:<7} {}",
-                        view::clock(i.ts, view::local_offset(), true),
-                        feed::short_session(&i.session, 6),
-                        feed::harness_name(&i.harness),
-                        i.event,
-                        what.join(", ")
-                    )
-                })
-                .collect();
-            let mut lines = if lines.is_empty() {
-                vec![format!("{} has not fired in the traces this screen has seen.", r.id)]
-            } else {
-                lines
-            };
-            lines.insert(0,"Recent feed only, matched by reflex ID in this repository. Historical and duplicate collection versions may appear; use Explore complete traces in browser for attributed evidence.".into());
-            s.modal =
-                Some(Modal::Viewer { title: format!("recent traces · {}", r.id), source: None, lines, scroll: 0 });
+            show_traces(s, &r);
         }
         KeyCode::Char('o') => {
             let r = s.selected_route()?;
@@ -417,80 +421,80 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
         KeyCode::Char(c) => {
             let (_, verb) = *ACTIONS.iter().find(|(k, _)| *k == c)?;
             let r = s.selected_route()?.clone();
-            let word = words::verb(verb);
-            if !r.verbs.contains(&verb) {
-                let open: Vec<&str> = r.verbs.iter().map(|v| words::verb(v)).collect();
-                s.message(
-                    "Not available",
-                    vec![
-                        format!("{word} does not apply to {} as it stands.", r.id),
-                        format!("Available: {}", open.join(", ")),
-                    ],
-                    true,
-                );
-                return None;
-            }
-            let t = Theme::from_env();
-            let mut title = word.to_string();
-            title[..1].make_ascii_uppercase();
-            let mut lines = vec![
-                Line::from(vec![
-                    Span::raw(format!("{title} ")),
-                    Span::styled(r.id.clone(), t.bold()),
-                    Span::raw(format!(" in {}?", r.reference)),
-                ]),
-                Line::raw(""),
-                Line::raw(words::verb_effect(verb)),
-                Line::raw("The decision is recorded in the track's review.yaml and the index is recompiled."),
-                Line::raw(""),
-                Line::from(vec![
-                    Span::styled("same as ", t.dim()),
-                    Span::styled(words::review_command(verb, &r.reference, &r.id), t.command()),
-                    Span::styled(" from any shell", t.dim()),
-                ]),
-                Line::from(vec![
-                    Span::styled("y", t.key()),
-                    Span::styled(format!(" confirm{}", t.sep()), t.dim()),
-                    Span::styled("n", t.key()),
-                    Span::styled(" cancel", t.dim()),
-                ]),
-            ];
-            let Some(preview) = &r.review_preview else {
-                s.message(
-                    "Review unavailable",
-                    vec!["The proposal could not be read safely. Recheck health and reload before reviewing.".into()],
-                    true,
-                );
-                return None;
-            };
-            lines.push(Line::raw(""));
-            lines.push(Line::raw("Current response"));
-            lines.extend(preview.current_directive.lines().map(|l| Line::raw(l.to_string())));
-            if let Some(proposal) = &preview.proposal {
-                lines.push(Line::raw(format!("Proposed on {}: {}", proposal.on, proposal.reason)));
-                for (field, before, after) in &proposal.diff {
-                    lines.push(Line::raw(format!("{field}: {before} → {after}")));
-                }
-                lines.push(Line::raw("Proposed response (approve applies this; dismiss keeps the current response)"));
-                lines.extend(proposal.directive.lines().map(|l| Line::raw(l.to_string())));
-            }
-            lines.push(Line::raw(
-                "Confirmation applies only to this exact reviewed version. Enter/y confirms; Esc/n cancels.",
-            ));
-            s.confirm(
-                &title,
-                lines,
-                Action::Review {
-                    verb,
-                    reference: r.reference.clone(),
-                    route: r.id.clone(),
-                    expected_revision: preview.revision.clone(),
-                },
-            );
+            confirm_review(s, &r, verb);
         }
         _ => {}
     }
     None
+}
+
+/// Prepare a revision-bound decision on exactly the reflex the person inspected.
+pub(crate) fn confirm_review(s: &mut AppState, r: &RouteRow, verb: &'static str) {
+    let word = words::verb(verb);
+    if !r.verbs.contains(&verb) {
+        let open: Vec<&str> = r.verbs.iter().map(|v| words::verb(v)).collect();
+        s.message(
+            "Not available",
+            vec![format!("{word} does not apply to {} as it stands.", r.id), format!("Available: {}", open.join(", "))],
+            true,
+        );
+        return;
+    }
+    let t = Theme::from_env();
+    let mut title = word.to_string();
+    title[..1].make_ascii_uppercase();
+    let mut lines = vec![
+        Line::from(vec![
+            Span::raw(format!("{title} ")),
+            Span::styled(r.id.clone(), t.bold()),
+            Span::raw(format!(" in {}?", r.reference)),
+        ]),
+        Line::raw(""),
+        Line::raw(words::verb_effect(verb)),
+        Line::raw("The decision is recorded in the track's review.yaml and the index is recompiled."),
+        Line::raw(""),
+        Line::from(vec![
+            Span::styled("same as ", t.dim()),
+            Span::styled(words::review_command(verb, &r.reference, &r.id), t.command()),
+            Span::styled(" from any shell", t.dim()),
+        ]),
+        Line::from(vec![
+            Span::styled("y", t.key()),
+            Span::styled(format!(" confirm{}", t.sep()), t.dim()),
+            Span::styled("n", t.key()),
+            Span::styled(" cancel", t.dim()),
+        ]),
+    ];
+    let Some(preview) = &r.review_preview else {
+        s.message(
+            "Review unavailable",
+            vec!["The proposal could not be read safely. Recheck health and reload before reviewing.".into()],
+            true,
+        );
+        return;
+    };
+    lines.push(Line::raw(""));
+    lines.push(Line::raw("Current response"));
+    lines.extend(preview.current_directive.lines().map(|l| Line::raw(l.to_string())));
+    if let Some(proposal) = &preview.proposal {
+        lines.push(Line::raw(format!("Proposed on {}: {}", proposal.on, proposal.reason)));
+        for (field, before, after) in &proposal.diff {
+            lines.push(Line::raw(format!("{field}: {before} → {after}")));
+        }
+        lines.push(Line::raw("Proposed response (approve applies this; dismiss keeps the current response)"));
+        lines.extend(proposal.directive.lines().map(|l| Line::raw(l.to_string())));
+    }
+    lines.push(Line::raw("Confirmation applies only to this exact reviewed version. Enter/y confirms; Esc/n cancels."));
+    s.confirm(
+        &title,
+        lines,
+        Action::Review {
+            verb,
+            reference: r.reference.clone(),
+            route: r.id.clone(),
+            expected_revision: preview.revision.clone(),
+        },
+    );
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1088,6 +1092,45 @@ fn tree_lines(s: &AppState, nodes: &[Node], sel: usize, t: &Theme, width: usize)
 // ---------------------------------------------------------------------------------------------
 // The card
 
+/// The list keeps a compact summary and the trigger-to-response graph. Full review is Enter.
+fn overview(r: &RouteRow, s: &AppState, ctx: &Ctx, width: usize, tall: bool, p: f64) -> Vec<Line<'static>> {
+    let t = &ctx.theme;
+    let mut lines = hero(r, s, ctx, width);
+    lines.push(Line::from(Span::styled(crate::ui::reflex_review::service(r), t.ink2())));
+    if r.approved && r.strength == Strength::Prime && r.ceiling == "prime" {
+        lines
+            .push(Line::from(Span::styled("Ceiling: Prime. Approval does not raise this reflex's strength.", t.dim())));
+    }
+    lines.push(Line::raw(""));
+    lines.extend(arc(r, t, width, tall));
+    let evidence = if let Some(e) = &r.more.execution {
+        Some((
+            e.successful as f64 / e.opportunities.max(1) as f64,
+            format!("{} of {} situations", e.successful, e.opportunities),
+        ))
+    } else if let Some(value) = &r.more.value {
+        lines.push(Line::from(Span::styled(value.clone(), t.ink2())));
+        None
+    } else if let Some(card) = &r.more.card {
+        Some((
+            card.passed as f64 / card.sessions.max(1) as f64,
+            format!("{} of {} traces passed", card.passed, card.sessions),
+        ))
+    } else if r.opportunities > 0 {
+        Some((r.rate, format!("{} of {} traces", r.support, r.opportunities)))
+    } else {
+        None
+    };
+    if let Some((rate, label)) = evidence {
+        let mut spans = cell_meter(rate * p, 6, t.accent(), t);
+        spans.push(Span::styled(format!("  {label}"), t.ink2()));
+        lines.push(Line::from(spans));
+    }
+    lines.push(Line::raw(""));
+    lines.push(Line::from(vec![kit::keycap("enter", t), Span::styled(" Review evidence and decisions", t.accent())]));
+    lines
+}
+
 /// The card for one reflex, `width` columns wide, its meters drawn to `p` of their value. The
 /// arc is drawn as boxes when `tall` (the card has the rows to spare).
 pub fn card(r: &RouteRow, s: &AppState, ctx: &Ctx, width: usize, tall: bool, p: f64) -> Vec<Line<'static>> {
@@ -1386,7 +1429,7 @@ fn review(r: &RouteRow, s: &AppState, t: &Theme, width: usize) -> Vec<Line<'stat
 /// statistics behind the meters, and the review command each action equals.
 fn details(r: &RouteRow, open: bool, t: &Theme, width: usize) -> Vec<Line<'static>> {
     let title = format!("{} Details", if open { t.ch("▾", "v") } else { t.ch("▸", ">") });
-    let mut v = vec![section(Section::new(title), Some(("enter", if open { "close" } else { "open" })), width, t)];
+    let mut v = vec![section(Section::new(title), Some(("v", if open { "close" } else { "open" })), width, t)];
     if !open {
         return v;
     }
@@ -1693,7 +1736,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
 
     let width = card_a.width as usize;
     let d = match &nodes[sel] {
-        Node::Reflex(i) => card(&rows[*i], s, ctx, width, card_a.height >= 20, progress(st, t)),
+        Node::Reflex(i) => overview(&rows[*i], s, ctx, width, card_a.height >= 14, progress(st, t)),
         g => group_card(g, s, t, width),
     };
     let d = kit::wrap_lines(t.lines(d), width, 0);
@@ -1724,6 +1767,7 @@ mod tests {
             effect: "verify".into(),
             state: "firm".into(),
             authored: false,
+            approved: false,
             trigger_kind: "after_edit".into(),
             trigger: trigger.into(),
             step_kind: "run".into(),

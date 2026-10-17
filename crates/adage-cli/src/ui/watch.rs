@@ -142,7 +142,7 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
                     live.needs = r.needs();
                     live.gists = r.gists();
                 }
-                Loaded::Routes(Err(_)) => {}
+                Loaded::Routes(Err(_)) | Loaded::Traces(_) => {}
             }
         }
         sources.poll(&mut live, health.as_ref().and_then(|h| h.repo_key.as_deref()));

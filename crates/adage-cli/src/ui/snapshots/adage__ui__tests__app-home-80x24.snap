@@ -2,8 +2,8 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
- adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home
-─────────────────────────────────────────────────────────────────────━━━━━━━━───
+ adage  1 2 2  3 4 2  5 6 Home  7                        harbor-dispatch · LIVE
+───────────────────────━━━━━━━━─────────────────────────────────────────────────
  ◆ harbor-dispatch · your agent's reflexes, learned from its own traces
    Claude Code connected · auto-condition on
 

@@ -1,0 +1,34 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage  1 2 2  3 4 2  5 6 7 Traces                                       ◆ harbor-dispatch ▾ · LIVE
+─────────────────────────━━━━━━━━━━─────────────────────────────────────────────────────────────────
+ Recorded activity: 1 session
+ Hook observations and Adage decisions, not all agent transcripts.
+
+ Last conditioning: 6 sessions used / 12 files read
+ Counts describe each repository's latest retained run, not a lifetime total.
+ h History sources · c Condition now (open checkout)
+─ RECORDED SESSIONS · enter opens all recorded events ──────────────────────────────────────────────
+ > 12:04:00  first  2 events  claude-code  harbor-dispatch
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ?  keys   :  palette   enter  open session   h  history sources   c  condition now        q  quit

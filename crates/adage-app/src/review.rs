@@ -444,8 +444,38 @@ pub fn verbs(r: &Route, proposed: bool) -> Vec<&'static str> {
 pub struct Standing {
     pub verbs: Vec<&'static str>,
     pub reasons: Vec<(&'static str, String)>,
+    pub last_review: Option<RecordedReview>,
     /// Absent when advisory proposal state cannot be read safely; no decision may be confirmed.
     pub preview: Option<ReviewPreview>,
+}
+
+/// The saved human decision, separately from the route's strength and whether it is in service.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct RecordedReview {
+    pub decision: &'static str,
+    pub on: String,
+    /// False when the route changed, its decision no longer applies, or proposal state is unreadable.
+    pub current: bool,
+}
+
+pub fn last_review(inst: &Installed, route: &Route) -> Option<RecordedReview> {
+    let saved = inst.reviews.routes.get(&route.id)?;
+    let applies = match saved.decision {
+        Decision::Approved => live(route.state),
+        Decision::Extinguished => route.state == RouteState::Extinguished,
+        Decision::Weakened => live(route.state) && route.strength == Strength::Prime,
+        Decision::Strengthened => live(route.state) && route.strength == Strength::Fire,
+        Decision::Pinned => route.authored,
+    };
+    let proposals_known = proposals::load(&inst.dir).is_ok_and(|current| current == inst.proposals);
+    Some(RecordedReview {
+        decision: saved.decision.as_str(),
+        on: saved.on.clone(),
+        current: applies
+            && review::material_change(&saved.basis, route).is_none()
+            && proposals_known
+            && crate::proposal::current(inst.proposals.routes.get(&route.id), route).is_none(),
+    })
 }
 
 /// The state a person inspected, bound to the exact installed route and proposal.
@@ -522,7 +552,12 @@ pub fn standings(paths: &Paths, here: Option<&Path>) -> Result<BTreeMap<(String,
             let proposed = crate::proposal::current(inst.proposals.routes.get(&r.id), r).is_some();
             out.insert(
                 (inst.reference.clone(), r.id.clone()),
-                Standing { verbs: verbs(r, proposed), reasons: vec![], preview: review_preview(inst, r).ok() },
+                Standing {
+                    verbs: verbs(r, proposed),
+                    reasons: vec![],
+                    last_review: last_review(inst, r),
+                    preview: review_preview(inst, r).ok(),
+                },
             );
         }
     }
@@ -1020,6 +1055,60 @@ mod tests {
     }
 
     #[test]
+    fn approving_an_unchanged_instinct_clears_review_without_changing_its_authority() {
+        let mut instinct = route("t", Strength::Prime, RouteState::Forming);
+        instinct.trigger = Trigger::AfterEdit { paths: "src/**/*.rs".into() };
+        instinct.evidence = Evidence {
+            provenance: "instinct:core@0.1.0".into(),
+            origin: Some(adage_tracks::Origin::Instinct {
+                pack: "core".into(),
+                version: "0.1.0".into(),
+                instinct: "U1".into(),
+                ecosystem: Some("Rust".into()),
+                declared: Some("Cargo.toml".into()),
+            }),
+            ..Default::default()
+        };
+        let (_d, paths) = home(vec![instinct.clone()]);
+        io::read(&paths.tracks().join("acme/learned")).expect("valid installed instinct");
+        let key = ("acme/learned".into(), "t".into());
+        let before = standings(&paths, None).unwrap();
+        assert!(before[&key].last_review.is_none());
+        assert_eq!(before[&key].reasons[0].0, "instinct");
+        assert!(!waits(&before[&key].reasons), "a forming instinct is already in service");
+        assert!(!before[&key].verbs.contains(&"strengthen"));
+
+        let approved = confirm(&paths, before[&key].preview.as_ref().unwrap()).unwrap();
+        assert_eq!(approved.after, instinct, "approval neither invents evidence nor raises strength");
+        let after = standings(&paths, None).unwrap();
+        assert!(after[&key].reasons.is_empty(), "unchanged zero support must not reopen review");
+        let saved = after[&key].last_review.as_ref().unwrap();
+        assert_eq!(saved.decision, "approved");
+        assert!(saved.current);
+        let (installed, _) = discover(&paths.tracks()).unwrap();
+        assert_eq!(crate::reflex::Reflex::of(&installed[0], &instinct, None).last_review.as_ref(), Some(saved));
+        assert!(!after[&key].verbs.contains(&"strengthen"));
+        let index = Index::load(&paths.index());
+        assert_eq!(index.routes.len(), 1);
+        assert_eq!(index.routes[0].route, instinct);
+        assert!(!adage_exec::approvals::path(&paths.root).exists(), "approval grants no execution authority");
+        assert!(decide_as_person(&paths, Verb::Strengthen, "t").unwrap_err().to_string().contains("an instinct"));
+        assert_eq!(decide_as_person(&paths, Verb::Approve, "t").unwrap().already, Some(Already::Approved));
+        assert!(standings(&paths, None).unwrap()[&key].reasons.is_empty());
+
+        // A real directive change must still ask for another review, even with zero trace support.
+        let dir = paths.tracks().join("acme/learned");
+        let mut changed = io::read(&dir).unwrap();
+        changed.routes[0].step = Step::Run { command: "make check".into() };
+        io::write(&dir, &changed).unwrap();
+        let updated = standings(&paths, None).unwrap();
+        assert_eq!(updated[&key].reasons[0].0, "changed");
+        assert!(!updated[&key].last_review.as_ref().unwrap().current);
+        assert!(updated[&key].reasons[0].1.contains("step"));
+        assert!(confirm(&paths, after[&key].preview.as_ref().unwrap()).is_err(), "a stale review is still refused");
+    }
+
+    #[test]
     fn extinguishing_twice_says_so() {
         let (_d, paths) = home(vec![route("t", Strength::Prime, RouteState::Firm)]);
         assert_eq!(decide_as_person(&paths, Verb::Extinguish, "t").unwrap().already, None);
@@ -1158,5 +1247,17 @@ mod tests {
         std::fs::write(dir.join(proposals::FILE), "routes: [invalid").unwrap();
         assert!(standings(&paths, None).unwrap()[&("acme/learned".into(), "t".into())].preview.is_none());
         assert!(!paths.index().exists());
+    }
+
+    #[test]
+    fn recorded_review_is_not_current_when_proposals_cannot_be_read() {
+        let (_dir, paths) = home(vec![route("t", Strength::Prime, RouteState::Firm)]);
+        decide_as_person(&paths, Verb::Approve, "t").unwrap();
+        let key = ("acme/learned".into(), "t".into());
+        assert!(standings(&paths, None).unwrap()[&key].last_review.as_ref().unwrap().current);
+        std::fs::write(paths.tracks().join("acme/learned").join(proposals::FILE), "routes: [invalid").unwrap();
+        let standing = standings(&paths, None).unwrap().remove(&key).unwrap();
+        assert!(standing.preview.is_none());
+        assert!(!standing.last_review.as_ref().unwrap().current);
     }
 }

@@ -19,6 +19,8 @@
 //! - `trigger`: `auto` (the background learner a hook started) or `manual` (`adage condition`).
 //! - `sessions_read`: transcripts the run read (an automatic run counts only its repository's);
 //!   `sessions_used`: this repository's sessions with steps.
+//! - `input_scope`: `repository` when input counts belong to the one reported repository,
+//!   otherwise `run`; a manual run can repeat global input counts on several repository lines.
 //! - `changes`: [`adage_learn::diff`] — `change` is `new`, `extinguished`, `strength`, `evidence`, `nascent`
 //!   or `proposal`; `from`/`to` are strengths (`fire`, `prime`, `inhibit`) or null; `summary` is a
 //!   fixed template (route kind, strength, session counts).
@@ -60,6 +62,8 @@ pub fn append(paths: &Paths, line: &Value) -> std::io::Result<()> {
 pub struct Learned<'a> {
     pub trigger: &'a str,
     pub repo: Option<&'a str>,
+    /// The repository the input was scoped or explicitly assigned to, not inferred from outputs.
+    pub input_repo: Option<&'a str>,
     pub sessions_read: usize,
     pub duration_ms: u64,
     pub changes: &'a [Change],
@@ -98,6 +102,7 @@ pub fn learn_line(ts: u64, l: &Learned) -> Value {
         "trigger": l.trigger,
         "repo": l.repo,
         "sessions_read": l.sessions_read,
+        "input_scope": if l.repo.is_some() && l.repo == l.input_repo { "repository" } else { "run" },
         "sessions_used": rr.map(|r| r.sessions).unwrap_or(0),
         "duration_ms": l.duration_ms,
         "index_generation": rep.index_generation,
@@ -137,4 +142,31 @@ pub fn read(paths: &Paths) -> Vec<Value> {
         .filter_map(|p| std::fs::read_to_string(p).ok())
         .flat_map(|t| t.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).collect::<Vec<_>>())
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn one_usable_repository_does_not_make_global_input_counts_repository_scoped() {
+        let mut report = Report { sessions_read: 20, ..Default::default() };
+        report.repos.insert("acme".into(), adage_learn::RepoReport { sessions: 3, ..Default::default() });
+        for (input_repo, expected) in [(None, "run"), (Some("other"), "run"), (Some("acme"), "repository")] {
+            let line = learn_line(
+                1,
+                &Learned {
+                    trigger: "manual",
+                    repo: Some("acme"),
+                    input_repo,
+                    sessions_read: 20,
+                    duration_ms: 0,
+                    changes: &[],
+                    report: &report,
+                },
+            );
+            assert_eq!(line["input_scope"], expected);
+            assert_eq!(line["sessions_used"], 3);
+        }
+    }
 }

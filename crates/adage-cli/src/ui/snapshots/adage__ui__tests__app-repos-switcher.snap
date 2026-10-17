@@ -1,9 +1,8 @@
 ---
 source: crates/adage-cli/src/ui/tests.rs
-assertion_line: 230
 expression: text
 ---
- adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home                 ◆ harbor-dispatch ▾ · LIVE
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home   7 Traces      ◆ harbor-dispatch ▾ · LIVE
 ─────────━━━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────
  LIVE   harbor-dispatch · 2 sessions · since 12:04 · last call 12:04:08
  ╭─ ▁▃▅ Activity ──────── peak 7/min ─╮ ╭─ ▪ Tool calls ──╮ ╭─ ◠ Fired ───────╮ ╭─ ✓ Followed ────╮ ╭─ ■ Finish ──────╮
@@ -13,7 +12,7 @@ expression: text
 
   Claude Code  session, since 12:04 ──────────────────────────────────────────── │ Reflexes in play  1 ────────────────
   ┬ earlier i╭ Repository ───────────────────────────────────────────────────────────────────────────────╮ead-end-npm-t…
-  ├ Run  ls  │ Live, Reflexes and Map show one repository at a time.                                     │ed 0  ────
+  ├ Run  ls  │ Live, Reflexes, Map and Traces show one repository at a time.                             │ed 0  ────
   ├ Tool     │                                                                                           │
   │  ◆ adage │ / ▌                                                                                       │─────────────
   │    ──▶ np│                                                                                           │─────────────╮

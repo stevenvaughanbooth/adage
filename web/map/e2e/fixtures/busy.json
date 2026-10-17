@@ -24,6 +24,7 @@
     "kind": "learned",
     "label": null
    },
+   "last_review": null,
    "review": {
     "verbs": [
      "approve",
@@ -115,6 +116,7 @@
     "kind": "learned",
     "label": null
    },
+   "last_review": null,
    "review": {
     "verbs": [
      "approve",
@@ -207,6 +209,7 @@
     "kind": "learned",
     "label": null
    },
+   "last_review": null,
    "review": {
     "verbs": [
      "approve",
@@ -299,6 +302,7 @@
     "kind": "learned",
     "label": null
    },
+   "last_review": null,
    "review": {
     "verbs": [
      "approve",
@@ -394,6 +398,7 @@
     "declared": "Makefile",
     "version": "0.1.0"
    },
+   "last_review": null,
    "review": {
     "verbs": [
      "approve",
@@ -484,6 +489,7 @@
     "kind": "learned",
     "label": null
    },
+   "last_review": null,
    "review": {
     "verbs": [
      "approve",
@@ -579,6 +585,7 @@
     "kind": "learned",
     "label": null
    },
+   "last_review": null,
    "review": {
     "verbs": [
      "approve",
@@ -675,6 +682,7 @@
     "kind": "imported",
     "label": null
    },
+   "last_review": null,
    "review": {
     "verbs": [
      "approve",
@@ -767,6 +775,7 @@
     "kind": "learned",
     "label": null
    },
+   "last_review": null,
    "review": {
     "verbs": [
      "approve",
@@ -876,6 +885,7 @@
     "kind": "learned",
     "label": null
    },
+   "last_review": null,
    "review": {
     "verbs": [
      "approve",
@@ -15728,6 +15738,20 @@
    ]
   }
  ],
+ "learning_history": {
+  "source": "recent_conditioning_runs",
+  "description": "Illustrative latest conditioning run per repository; not a lifetime total.",
+  "repositories": [
+   {
+    "repo": "acme-billing",
+    "last_conditioned_at": 1790596800000,
+    "sessions_used": 120,
+    "files_read": 144,
+    "sessions_steered": 8,
+    "sessions_duplicates": 16
+   }
+  ]
+ },
  "bars": {
   "min_support": 3,
   "fire_lower_bound": 0.5,
