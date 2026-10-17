@@ -1,6 +1,0 @@
-diff --git a/lib/ansible/x.py b/lib/ansible/x.py
---- a/lib/ansible/x.py
-+++ b/lib/ansible/x.py
-@@ -1 +1 @@
--a
-+b

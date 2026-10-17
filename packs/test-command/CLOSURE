@@ -1,5 +1,0 @@
-detector U3 -
-edge:detector route:run-declared-test-command->detector:U3 -
-edge:template route:run-declared-test-command->template:after@1 -
-route run-declared-test-command 05ecc0edce048a8d00da2025fe103e0b7b7ce8887a1df3f5af875b42359fc8c9
-template after@1 -

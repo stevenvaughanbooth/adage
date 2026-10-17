@@ -1,6 +1,0 @@
-{
-  "name": "adage-probe",
-  "displayName": "Adage Probe (S5)",
-  "version": "1.0.0",
-  "description": "S5 spike probe plugin: logs hook firings for packaging research."
-}

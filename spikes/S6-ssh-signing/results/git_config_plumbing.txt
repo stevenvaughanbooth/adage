@@ -1,8 +1,0 @@
-repo-local config only; nothing global was touched. Values as Adage would read them:
-gpg.format = ssh
-user.signingkey = /Users/stevenbooth/Documents/skill-compile/spikes/S6-ssh-signing/keys/dev_ed25519.pub
-commit.gpgsign = true
-gpg.ssh.allowedSignersFile = /Users/stevenbooth/Documents/skill-compile/spikes/S6-ssh-signing/sandbox/allowed_signers
-
-proof global config is untouched (should be empty/absent):
-(not set globally, good)

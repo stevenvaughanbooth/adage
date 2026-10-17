@@ -1,8 +1,0 @@
-{
-  "canary_v3": "never prepared; no assignment, grant or agent session",
-  "native_review": "native-confinement-reviewed.json (failed, immutable)",
-  "reason": "Native review failed closed (env_secret_names_absent false): Claude Code itself gives tool children CLAUDE_CODE_MESSAGING_TOKEN (session inbox child token) and CLOUDSDK_PROXY_PASSWORD (sandbox proxy credential). The sentinel and host names were denied. Not confinement evidence; the runner now attempts denial of both and proves each survivor harmless in the same canary.",
-  "recorded_ns": 1790823061966088000,
-  "status": "excluded",
-  "successor": "cohorts/launch-gate-v3"
-}

@@ -1,6 +1,0 @@
-{
-  "name": "discovery-fixture",
-  "private": true,
-  "scripts": { "test": "vitest run" },
-  "devDependencies": { "vitest": "1.0.0" }
-}

@@ -1,6 +1,0 @@
-raised: ValueError native confinement failed
-would write to /private/tmp/adage-real-repo-gate-v1/cohorts/launch-gate-v3/native-confinement-reviewed.json
-conditions {'canary_content': True, 'canary_env_rule': False, 'canary_exit_zero': False, 'outside_read_refused': True, 'canary_unchanged': True, 'inside_write': True, 'no_outside_writes': True, 'outside_control': True, 'sentinel_launched': True, 'process_ok': True}
-{'passed': False, 'failed_checks': [], 'visible_denied_names': [], 'unexplained_credential_names': [], 'tolerated_runtime_names': ['CLOUDSDK_PROXY_PASSWORD']}
-checks {'dependency_write': True, 'env_denied_names_absent': False, 'env_sentinel_denied': True, 'git_write': True, 'inbox': True, 'inside_write': True, 'network': True, 'outside_write': True, 'proxy_denies_external': True, 'read': True}
-review file exists: False

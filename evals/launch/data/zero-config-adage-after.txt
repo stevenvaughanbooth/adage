@@ -1,7 +1,0 @@
-adage 0.1.0 · github.com/pallets/click                         ● check: hooks: codex
-  16 reflexes active: 15 instincts, 1 learned
-  learning after each session · last: just now, 0 changes
-  last 30 days: 3 sessions · 0 directives · 0 followed · 0 dead ends headed off
-  measuring savings: 0 of 10 quiet sessions so far (Adage stays quiet in 1 of 10 sessions so its effect can be measured)
-  hooks: codex: codex is installed, but Adage's hooks are not registered with it → `adage install codex --write` (this repository) or add `--scope user`
-  adage ui · adage map · adage doctor

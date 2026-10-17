@@ -1,9 +1,0 @@
-{"event": "SessionStart", "exit": 0, "i": 0, "spool": [{"arm": "treated", "event": "SessionStart", "kind": "session_start", "repo": "$CWD"}], "stdout": ""}
-{"event": "UserPromptSubmit", "exit": 0, "i": 1, "spool": [{"arm": "treated", "decision": {"directives": [{"route": "lookup", "strength": "fire", "text": "./scripts/wi-lookup W-2042 --json"}], "judgements": [], "observed": [], "would_have": []}, "event": "UserPromptSubmit", "kind": "userpromptsubmit", "repo": "$CWD"}], "stdout": "{\"hookSpecificOutput\":{\"additionalContext\":\"<adage-reflex track=\\\"acme/work@0.3.0\\\" route=\\\"lookup\\\" strength=\\\"fire\\\" kind=\\\"run\\\">\\nIn this repository, work item details are looked up with:\\n  ./scripts/wi-lookup W-2042 --json\\n</adage-reflex>\",\"hookEventName\":\"UserPromptSubmit\"}}\n"}
-{"event": "PreToolUse", "exit": 0, "i": 2, "spool": [{"arm": "treated", "event": "PreToolUse", "kind": "pretooluse", "repo": "$CWD"}], "stdout": ""}
-{"event": "PostToolBatch", "exit": 0, "i": 3, "spool": [{"arm": "treated", "event": "PostToolBatch", "kind": "posttoolbatch", "repo": "$CWD"}], "stdout": ""}
-{"event": "PreToolUse", "exit": 0, "i": 4, "spool": [{"arm": "treated", "event": "PreToolUse", "kind": "pretooluse", "repo": "$CWD"}], "stdout": ""}
-{"event": "PostToolUseFailure", "exit": 0, "i": 5, "spool": [{"arm": "treated", "event": "PostToolUseFailure", "kind": "posttoolusefailure", "repo": "$CWD"}], "stdout": ""}
-{"event": "PostToolBatch", "exit": 0, "i": 6, "spool": [{"arm": "treated", "event": "PostToolBatch", "kind": "posttoolbatch", "repo": "$CWD"}], "stdout": ""}
-{"event": "Stop", "exit": 0, "i": 7, "spool": [{"arm": "treated", "event": "Stop", "kind": "stop", "repo": "$CWD"}], "stdout": ""}
-{"event": "SessionEnd", "exit": 0, "i": 8, "spool": [{"arm": "treated", "event": "SessionEnd", "kind": "sessionend", "repo": "$CWD"}], "stdout": ""}

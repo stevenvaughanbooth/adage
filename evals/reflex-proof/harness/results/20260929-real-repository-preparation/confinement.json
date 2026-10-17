@@ -1,7 +1,0 @@
-{
-  "checks": "{\"read\": true, \"write\": true, \"network\": true}",
-  "outside_network_control": true,
-  "outside_read_control": true,
-  "passed": true,
-  "returncode": 0
-}

@@ -1,4 +1,0 @@
-# Matches the style the codebase was written in (long lines, compact small items), which keeps
-# the one-time `cargo fmt` diff small. CI runs `cargo fmt --all --check`.
-max_width = 120
-use_small_heuristics = "Max"

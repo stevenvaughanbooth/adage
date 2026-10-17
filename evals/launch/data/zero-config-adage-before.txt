@@ -1,6 +1,0 @@
-adage 0.1.0
-  Not connected to any agent yet.
-  Claude Code found → in Claude Code: /plugin marketplace add stevenvaughanbooth/adage, then /plugin install adage@adage
-                       or, from here: adage install claude-code --write --scope user
-  codex found → adage install codex --write --scope user
-  adage --help · adage doctor

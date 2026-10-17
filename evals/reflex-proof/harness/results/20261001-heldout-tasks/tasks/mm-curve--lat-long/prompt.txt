@@ -1,5 +1,0 @@
-Add a new validator to marshmallow: `marshmallow.validate.LatLong(*, error=None)`, which accepts a `(latitude, longitude)` pair: a sequence of exactly two real numbers, the latitude between -90 and 90 and the longitude between -180 and 180, bounds included. Its default error message is `Must satisfy LatLong.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `(0, 0)`. Examples of invalid input: `(91, 0)`.
-
-Follow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.
-
-Do not create git commits.

@@ -1,9 +1,0 @@
-signer,verifier,result,detail
-S1,ssh-keygen,PASS,"Good "adage-track" signature for steven with ED25519 key SHA256:RRS1qaB387PKzfCznKbu671wfEMVUfDtUg0KIWhXLZE "
-S1,rust,PASS,"GOOD signature: namespace="adage-track" principal(s)=["steven"] key=SHA256:RRS1qaB387PKzfCznKbu671wfEMVUfDtUg0KIWhXLZE alg=Ed25519 "
-S2,ssh-keygen,PASS,"Good "adage-track" signature for steven with ED25519 key SHA256:RRS1qaB387PKzfCznKbu671wfEMVUfDtUg0KIWhXLZE "
-S2,rust,PASS,"GOOD signature: namespace="adage-track" principal(s)=["steven"] key=SHA256:RRS1qaB387PKzfCznKbu671wfEMVUfDtUg0KIWhXLZE alg=Ed25519 "
-S3,ssh-keygen,PASS,"Good "adage-track" signature for steven with ED25519 key SHA256:RRS1qaB387PKzfCznKbu671wfEMVUfDtUg0KIWhXLZE "
-S3,rust,PASS,"GOOD signature: namespace="adage-track" principal(s)=["steven"] key=SHA256:RRS1qaB387PKzfCznKbu671wfEMVUfDtUg0KIWhXLZE alg=Ed25519 "
-S4,ssh-keygen,PASS,"Good "adage-track" signature for steven with ED25519 key SHA256:RRS1qaB387PKzfCznKbu671wfEMVUfDtUg0KIWhXLZE "
-S4,rust,PASS,"GOOD signature: namespace="adage-track" principal(s)=["steven"] key=SHA256:RRS1qaB387PKzfCznKbu671wfEMVUfDtUg0KIWhXLZE alg=Ed25519 "

@@ -1,6 +1,0 @@
-diff --git a/.claude/settings.local.json b/.claude/settings.local.json
-new file mode 100644
---- /dev/null
-+++ b/.claude/settings.local.json
-@@ -0,0 +1 @@
-+{}

@@ -1,2 +1,0 @@
-pace_us=0 appends>10ms=95 "events_per_s": 16058
-pace_us=20000 appends>10ms=0 "events_per_s": 2884

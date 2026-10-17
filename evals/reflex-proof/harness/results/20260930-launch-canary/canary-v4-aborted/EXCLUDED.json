@@ -1,8 +1,0 @@
-{
-  "canary_v4": "never prepared; no assignment, grant or agent session",
-  "native_review": "never written; must not be written for this session",
-  "reason": "Review crashed before writing (parser assumed checks JSON ended the tool result; Claude Code appends <sandbox_violations>), and the canary program contradicted its own exemption (env_denied_names_absent false for the proven-harmless sandbox proxy credential, so the canary exited 1). Review semantics changed after seeing this output, so this session is never reviewed; excluded. Content-level dry run under the fixed code is recorded as a test fixture only.",
-  "recorded_ns": 1790823618087886000,
-  "status": "excluded",
-  "successor": "cohorts/launch-gate-v4"
-}

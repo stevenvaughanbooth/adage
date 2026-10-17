@@ -1,6 +1,0 @@
-SKILL.md in this directory is an unmodified copy of
-https://raw.githubusercontent.com/anthropics/skills/main/skills/webapp-testing/SKILL.md
-fetched 2026-09-29 (sha256 51b7349e77ec63b7744a6f63647e7566a0b4d2e301121cc10e8c2113af6556a2),
-Copyright Anthropic, licensed under the Apache License, Version 2.0
-(https://www.apache.org/licenses/LICENSE-2.0). It is used here only as parser input: no session
-was run with it (its helper scripts and a Playwright web app are not part of any sandbox here).

@@ -1,3 +1,0 @@
-[alias]
-# `cargo xtask tokens [--check]` (xtask/src/main.rs).
-xtask = "run --quiet --package xtask --"

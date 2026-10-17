@@ -1,7 +1,0 @@
-detector U4 -
-edge:detector route:generated-file->detector:U4 -
-edge:template route:generated-file->template:advise:generated-file@1 -
-edge:template route:generated-file->template:advise@1 -
-route generated-file 672860a3afdfebc9de3380033b4103bb11c96f6d8c7dd3b9857f8bbb9bec862a
-template advise:generated-file@1 -
-template advise@1 -

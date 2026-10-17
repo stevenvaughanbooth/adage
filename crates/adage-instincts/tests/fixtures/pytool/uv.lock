@@ -1,7 +1,0 @@
-version = 1
-requires-python = ">=3.11"
-
-[[package]]
-name = "quayside"
-version = "2.0.1"
-source = { editable = "." }

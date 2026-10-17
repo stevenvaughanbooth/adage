@@ -1,7 +1,0 @@
-detector U6 -
-edge:detector route:lockfile->detector:U6 -
-edge:template route:lockfile->template:advise:lockfile@1 -
-edge:template route:lockfile->template:advise@1 -
-route lockfile 16c2b97744f44a1461e00cd4a05124838113fcd608f32f1f592d9e4f77df0d66
-template advise:lockfile@1 -
-template advise@1 -
