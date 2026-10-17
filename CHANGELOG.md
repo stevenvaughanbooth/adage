@@ -25,6 +25,8 @@ The development history is recorded in Git and the design documents under `docs/
 - Health checks detect a stale local Claude Code plugin even when it reports the same version
   as the terminal installation. `adage update` repairs its binaries and modules and explains
   when a new Claude Code session is needed.
+- The terminal checks health every 15 seconds while idle, reducing repeated plugin scans.
+  Health still refreshes immediately at startup, after actions and when requested.
 - The Claude Code marketplace downloads the bundled plugin over HTTPS, so a fresh install
   does not require GitHub SSH keys or host trust.
 - Release publishers read large manifests from files, avoiding the process-size limit that

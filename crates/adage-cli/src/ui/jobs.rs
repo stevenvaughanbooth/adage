@@ -1,4 +1,4 @@
-//! Work that must not freeze the screen: the health checks (re-run every few seconds), loading
+//! Work that must not freeze the screen: periodic health checks, loading
 //! the reflexes, and one-off jobs (fetch the intent model, run `adage condition`). Each runs on its own thread
 //! and reports over a channel the event loop drains between frames. Threads end when the screen
 //! drops its receiver.
@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 
-/// How often health is re-checked.
-pub const HEALTH_EVERY: Duration = Duration::from_secs(3);
+/// Idle health checks include binary integrity scans. Startup and explicit requests run at once.
+pub const HEALTH_EVERY: Duration = Duration::from_secs(15);
 /// How often the reflexes are reloaded while a tab wants them.
 pub const ROUTES_EVERY: Duration = Duration::from_secs(10);
 
