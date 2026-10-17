@@ -274,6 +274,7 @@ pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
                 &learnlog::Learned {
                     trigger: "auto",
                     repo: Some(&repo),
+                    input_repo: Some(&repo),
                     sessions_read: done.report.sessions_read,
                     duration_ms: t.elapsed().as_millis() as u64,
                     changes: &done.changes,

@@ -59,7 +59,9 @@ pub fn run(matches: &clap::ArgMatches, paths: &Paths) -> Result<()> {
                     (r, adage_learn::diff::diff(before.get(r).unwrap_or(&empty), after.get(r).unwrap_or(&empty)))
                 })
                 .collect();
-            if let Err(e) = crate::log_learn(paths, &report, &changes, started.elapsed().as_millis() as u64) {
+            if let Err(e) =
+                crate::log_learn(paths, &report, &changes, started.elapsed().as_millis() as u64, Some(&repo))
+            {
                 let _ = adage_term::Out::stderr().warn(&format!("could not record learning progress: {e}"));
             }
             println!("{}", serde_json::to_string_pretty(&report)?);

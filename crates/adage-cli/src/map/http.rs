@@ -1,5 +1,5 @@
 //! Requests and responses for `adage map`: just enough HTTP/1.1 for a browser on this machine.
-//! One request per connection (`Connection: close`), GET and HEAD only.
+//! One request per connection (`Connection: close`), GET/HEAD reads and a bounded, same-origin review POST.
 
 use super::assets::{self, Asset};
 use super::events::Next;
@@ -30,10 +30,16 @@ pub(crate) const CSP: &str = "default-src 'none'; script-src 'self'; style-src '
 pub(crate) struct Request {
     pub(crate) method: String,
     pub(crate) path: String,
-    query: String,
+    pub(super) query: String,
     pub(crate) host: Option<String>,
     pub(crate) accept_encoding: Option<String>,
     pub(crate) last_event_id: Option<u64>,
+    pub(super) origin: Option<String>,
+    pub(super) csrf: Option<String>,
+    pub(super) content_type: Option<String>,
+    content_length: Option<usize>,
+    invalid: bool,
+    pub(super) body: Vec<u8>,
 }
 
 impl Request {
@@ -46,9 +52,24 @@ impl Request {
         let query =
             target.split_once('?').map(|(_, q)| q.split('#').next().unwrap_or("").to_owned()).unwrap_or_default();
         let mut r = Request { method, path, query, ..Default::default() };
-        for (k, v) in lines.filter_map(|l| l.split_once(':')) {
+        let mut seen = std::collections::BTreeSet::new();
+        for (k, v) in lines.take_while(|l| !l.is_empty()).filter_map(|l| l.split_once(':')) {
             let v = v.trim();
-            match k.trim().to_ascii_lowercase().as_str() {
+            let key = k.trim().to_ascii_lowercase();
+            if !seen.insert(key.clone()) {
+                r.invalid = true;
+            }
+            match key.as_str() {
+                "origin" => r.origin = Some(v.into()),
+                "x-adage-csrf" => r.csrf = Some(v.into()),
+                "content-type" => r.content_type = Some(v.into()),
+                "content-length" => {
+                    r.content_length = v.parse().ok();
+                    if r.content_length.is_none() {
+                        r.invalid = true;
+                    }
+                }
+                "transfer-encoding" => r.invalid = true,
                 "host" => r.host = Some(v.to_ascii_lowercase()),
                 "accept-encoding" => r.accept_encoding = Some(v.to_ascii_lowercase()),
                 "last-event-id" => r.last_event_id = v.parse().ok(),
@@ -71,7 +92,11 @@ pub(crate) struct Response {
 }
 
 impl Response {
-    fn new(status: &'static str, content_type: &'static str, body: impl Into<Cow<'static, [u8]>>) -> Response {
+    pub(super) fn new(
+        status: &'static str,
+        content_type: &'static str,
+        body: impl Into<Cow<'static, [u8]>>,
+    ) -> Response {
         Response { status, content_type, headers: vec![], body: body.into() }
     }
 
@@ -86,7 +111,7 @@ impl Response {
     }
 }
 
-fn text(status: &'static str, body: &str) -> Response {
+pub(super) fn text(status: &'static str, body: &str) -> Response {
     Response::new(status, "text/plain; charset=utf-8", format!("{body}\n").into_bytes())
         .header("Cache-Control", "no-store")
 }
@@ -105,7 +130,7 @@ fn runtime(paths: &adage_store::Paths) -> Value {
     })
 }
 
-fn json_response(v: &Value) -> Response {
+pub(super) fn json_response(v: &Value) -> Response {
     Response::new("200 OK", "application/json", v.to_string().into_bytes()).header("Cache-Control", "no-store")
 }
 
@@ -182,6 +207,12 @@ pub(crate) fn route(req: &Request, shared: &Shared) -> Reply {
     let allowed = [format!("127.0.0.1:{port}"), format!("localhost:{port}")];
     if !req.host.as_ref().is_some_and(|h| allowed.contains(h)) {
         return Reply::Full(text("403 Forbidden", "adage map answers only requests for 127.0.0.1 or localhost"));
+    }
+    if req.invalid {
+        return Reply::Full(text("400 Bad Request", "invalid or duplicate request headers"));
+    }
+    if req.path == "/api/v1/review" {
+        return Reply::Full(super::review::respond(req, shared));
     }
     if req.method != "GET" && !req.head_only() {
         return Reply::Full(
@@ -261,7 +292,7 @@ pub(crate) fn route(req: &Request, shared: &Shared) -> Reply {
 }
 
 /// The request head (request line and headers), or `None` if it is too large, malformed, or slow.
-fn read_head(s: &mut TcpStream) -> Option<String> {
+fn read_head(s: &mut TcpStream) -> Option<(String, Vec<u8>)> {
     let mut buf = Vec::with_capacity(1024);
     let mut chunk = [0u8; 1024];
     while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
@@ -274,7 +305,11 @@ fn read_head(s: &mut TcpStream) -> Option<String> {
         }
         buf.extend_from_slice(&chunk[..n]);
     }
-    String::from_utf8(buf).ok()
+    let end = buf.windows(4).position(|w| w == b"\r\n\r\n")? + 4;
+    if end > MAX_HEAD {
+        return None;
+    }
+    Some((String::from_utf8(buf[..end].to_vec()).ok()?, buf[end..].to_vec()))
 }
 
 fn common_headers(content_type: &str) -> String {
@@ -313,10 +348,24 @@ pub(crate) fn busy(mut s: TcpStream) {
 pub(crate) fn handle(mut s: TcpStream, shared: &Shared) -> std::io::Result<()> {
     s.set_read_timeout(Some(READ_TIMEOUT))?;
     s.set_write_timeout(Some(WRITE_TIMEOUT))?;
-    let Some(head) = read_head(&mut s) else {
+    let Some((head, mut body)) = read_head(&mut s) else {
         return write(&mut s, &text("400 Bad Request", "bad request"), false);
     };
-    let req = Request::parse(&head);
+    let mut req = Request::parse(&head);
+    if req.method == "POST" && req.path == "/api/v1/review" {
+        let Some(length) = req.content_length.filter(|n| *n > 0 && *n <= 16 << 10) else {
+            return write(&mut s, &text("400 Bad Request", "review requires a bounded Content-Length"), false);
+        };
+        if req.invalid || body.len() > length {
+            return write(&mut s, &text("400 Bad Request", "invalid request body"), false);
+        }
+        let received = body.len();
+        body.resize(length, 0);
+        if s.read_exact(&mut body[received..]).is_err() {
+            return write(&mut s, &text("400 Bad Request", "incomplete request body"), false);
+        }
+        req.body = body;
+    }
     match route(&req, shared) {
         Reply::Full(res) => write(&mut s, &res, req.head_only()),
         Reply::Events => stream(s, &req, shared),
@@ -406,7 +455,7 @@ pub(crate) fn encode_component(s: &str) -> String {
     out
 }
 
-fn decode_component(s: &str) -> String {
+pub(super) fn decode_component(s: &str) -> String {
     let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
@@ -462,6 +511,7 @@ mod tests {
 
     fn shared(dir: &std::path::Path) -> Shared {
         Shared {
+            review: super::super::review::Access::read_only("test"),
             paths: adage_store::Paths::at(dir),
             port: 8765,
             demo: false,

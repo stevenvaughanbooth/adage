@@ -2,8 +2,8 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
- adage    1 Live   2 Reflexes   2   3 Map   4 Health  2   5 Settings   6 Home
-──────────────────━━━━━━━━━━━━──────────────────────────────────────────────────
+ adage  1 2 Reflexes   2  3 4 2  5 6 7               ◆ harbor-dispatch ▾ · LIVE
+─────────━━━━━━━━━━━━───────────────────────────────────────────────────────────
  / filter reflexes, commands, files
  FIRE 2  PRIME 3  INHIBIT 1  all states ▾
 
@@ -18,17 +18,17 @@ expression: text
  ◠ The gist of lookup-incident
     FIRE    Suggests   ○ nascent ── ● forming ── ● firm  last fired 12:04:00
    ○ waits for review: new · conditioned and never reviewed
+ Active advice: the runtime delivers it when its conditions match.
 
- when a prompt names a ticket ──▶ ◠ ──▶ do bin/fetch-incident {item}
+ ╭─ WHEN ──────────────────╮         ╭─ DO ──────────────────────╮
+ │ a prompt names a ticket │─── ◠ ──▶│ bin/fetch-incident {item} │
+ ╰─────────────────────────╯         ╰───────────────────────────╯
+ ▰▰▰▰▰▱  24 of 25 traces
 
- Evidence ────────────────────────────────────────────────────────────────────
- Learned from     ━━━━━━━━━━━━━━━━━━━━━━━━━─  24 of 25 traces
- Confidence       ━━━━━━━━━━━━━━━━━━━━━─────  0.80 lower bound
- Saves            ~8 turns per trace
- Since installed  3 fired  2 followed  1 not observed  0 finish line met
- Took the step    told       ━━━━━━━━━━━━╸──  10/12
-                  held back  ━━━────────────  1/5
+  enter  Review evidence and decisions
 
- ▾ 12 more lines below · PgDn
+
+
+
 ────────────────────────────────────────────────────────────────────────────────
-  ?  keys   :  palette   /  filter   f  repository   j/k  move          q  quit
+  ?  keys   :  palette   enter  review   /  filter   f  repository      q  quit

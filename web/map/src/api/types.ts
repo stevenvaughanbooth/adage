@@ -160,6 +160,7 @@ export interface Route {
   instinct?: boolean;
   origin: Origin;
   /** The same object `adage review --json` carries: the verbs that apply, why it is listed, and its next command. */
+  last_review?: { decision: string; on: string; current: boolean } | null;
   review?: { verbs: string[]; reasons: { kind: string; why: string }[]; next?: string | null };
   /** Silent unless an exact local execution grant is valid; never ordinary advice. */
   execution_only?: boolean;
@@ -348,6 +349,19 @@ export interface RewriteState {
   marker: boolean;
 }
 
+export interface LearningHistory {
+  source: "recent_conditioning_runs";
+  description: string;
+  repositories: {
+    repo: string;
+    last_conditioned_at: number;
+    sessions_used: number | null;
+    files_read: number | null;
+    sessions_steered: number | null;
+    sessions_duplicates: number | null;
+  }[];
+}
+
 export interface Graph {
   demo?: boolean;
   generation: string;
@@ -362,6 +376,7 @@ export interface Graph {
   totals?: Live;
   attribution?: Record<string, unknown>;
   learning?: LearnRun[];
+  learning_history?: LearningHistory;
   bars?: { min_support: number; fire_lower_bound: number; uplift_min?: number };
   savings: Savings[];
   pretool: PretoolCounts[];

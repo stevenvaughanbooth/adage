@@ -1,4 +1,4 @@
-//! Work that must not freeze the screen: the health checks (re-run every few seconds), loading
+//! Work that must not freeze the screen: periodic health checks, loading
 //! the reflexes, and one-off jobs (fetch the intent model, run `adage condition`). Each runs on its own thread
 //! and reports over a channel the event loop drains between frames. Threads end when the screen
 //! drops its receiver.
@@ -10,29 +10,46 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 
-/// How often health is re-checked.
-pub const HEALTH_EVERY: Duration = Duration::from_secs(3);
+/// Terminal health includes costly integrity scans; the streaming feed needs quicker updates.
+/// Both load immediately at startup and on explicit requests.
+#[derive(Clone, Copy)]
+pub enum HealthCadence {
+    Terminal,
+    Follow,
+}
+
+impl HealthCadence {
+    fn interval(self) -> Duration {
+        Duration::from_secs(match self {
+            Self::Terminal => 15,
+            Self::Follow => 3,
+        })
+    }
+}
+
 /// How often the reflexes are reloaded while a tab wants them.
 pub const ROUTES_EVERY: Duration = Duration::from_secs(10);
 
 pub enum Loaded {
     Health(Box<Health>),
     Routes(Result<Routes, String>),
+    Traces(Result<serde_json::Value, String>),
 }
 
 #[derive(Clone, Copy)]
 pub enum Want {
+    Traces,
     Health,
     Routes,
 }
 
-/// The background loaders, one thread each so a slow one never holds up the other: health every
-/// [`HEALTH_EVERY`] (and on request), routes on request (and every [`ROUTES_EVERY`] once
-/// requested).
+/// The background loaders, one thread each so a slow one never holds up the other: health on its
+/// chosen cadence (and on request), routes on request (and every [`ROUTES_EVERY`] once requested).
 pub struct Loader {
     pub rx: Receiver<Loaded>,
     health: Sender<()>,
     routes: Sender<()>,
+    traces: Sender<()>,
 }
 
 /// Run `load` at once, then every `every` (once `periodic`, or once asked), and whenever asked;
@@ -63,24 +80,35 @@ fn worker(asks: Receiver<()>, periodic: bool, every: Duration, mut load: impl Fn
 }
 
 impl Loader {
-    pub fn spawn(paths: Paths, root: Option<PathBuf>) -> Loader {
+    pub fn spawn(paths: Paths, root: Option<PathBuf>, health_cadence: HealthCadence) -> Loader {
         let (out, rx) = mpsc::channel();
         let (health, health_asks) = mpsc::channel();
         let (routes, routes_asks) = mpsc::channel();
+        let (traces, traces_asks) = mpsc::channel();
         {
             let (out, paths, root) = (out.clone(), paths.clone(), root.clone());
-            worker(health_asks, true, HEALTH_EVERY, move || {
+            worker(health_asks, true, health_cadence.interval(), move || {
                 out.send(Loaded::Health(Box::new(health::gather(&paths, root.as_deref())))).is_ok()
+            });
+        }
+        {
+            let (out, paths, root) = (out.clone(), paths.clone(), root.clone());
+            worker(traces_asks, false, ROUTES_EVERY, move || {
+                out.send(Loaded::Traces(
+                    adage_app::graph::build(&paths, root.as_deref(), 0, &mut |_| {}).map_err(|e| format!("{e:#}")),
+                ))
+                .is_ok()
             });
         }
         worker(routes_asks, false, ROUTES_EVERY, move || {
             out.send(Loaded::Routes(routes::load(&paths, root.as_deref()).map_err(|e| format!("{e:#}")))).is_ok()
         });
-        Loader { rx, health, routes }
+        Loader { rx, health, routes, traces }
     }
 
     pub fn want(&self, w: Want) {
         let _ = match w {
+            Want::Traces => self.traces.send(()),
             Want::Health => self.health.send(()),
             Want::Routes => self.routes.send(()),
         };

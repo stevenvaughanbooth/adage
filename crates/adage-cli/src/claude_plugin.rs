@@ -19,9 +19,9 @@
 //! adage@adage-local`, verified with `claude plugin list --json`. Claude Code reads a directory
 //! marketplace's plugin in place, so staging again (`adage init` again, `adage init --restage` from
 //! `adage update`) takes effect at the next session start. Staging is idempotent: a file whose
-//! bytes are already there is not rewritten, a binary whose size and modification time match the
-//! last staging is not hashed again (`.staged.json` beside the plugin), and a file the new set does
-//! not have is removed.
+//! bytes are already there is not rewritten, binary contents are verified even when their version
+//! or size is unchanged, and a file the new set does not have is removed. `.staged.json` records
+//! the source of each copied binary.
 //!
 //! Every `claude` call goes through [`ClaudeCli`], so tests stub them. When `claude` is not on
 //! `PATH`, or it refuses, the typed spellings of the published marketplace stay the route
@@ -129,8 +129,8 @@ fn marketplace_json(version: &str, description: &str) -> String {
     serde_json::to_string_pretty(&doc).unwrap_or_default() + "\n"
 }
 
-/// What the last staging recorded of each binary's source: unchanged size and modification
-/// time mean unchanged bytes, so a re-run need not hash a large binary again.
+/// The source identities recorded by the last staging. Contents are checked independently: a
+/// same-sized destination or a shared version string does not prove that a copy is current.
 #[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 struct Stamp {
     binaries: std::collections::BTreeMap<String, Source>,
@@ -171,19 +171,18 @@ fn put(to: &Path, bytes: &[u8], executable: bool) -> Result<bool> {
     Ok(true)
 }
 
-/// Copy the binary `from` to `to` (beside a temporary name, then renamed) unless the last staging
-/// recorded the same source and `to` is still that copy; returns its SHA-256 and whether it wrote.
-fn put_binary(from: &Path, to: &Path, last: Option<&Source>) -> Result<(Source, bool)> {
+/// Copy the binary `from` to `to` (beside a temporary name, then renamed) unless its contents
+/// already match; returns the source identity and whether it wrote.
+fn put_binary(from: &Path, to: &Path) -> Result<(Source, bool)> {
     let (size, modified_ns) = source_of(from).with_context(|| format!("cannot read {}", from.display()))?;
-    if let Some(l) = last.filter(|l| l.from == from && l.size == size && l.modified_ns == modified_ns) {
-        if std::fs::metadata(to).is_ok_and(|m| m.len() == size) {
-            return Ok((l.clone(), false));
-        }
-    }
     let sha256 = crate::net::sha256_file(from).with_context(|| format!("cannot read {}", from.display()))?;
     let src = Source { from: from.to_path_buf(), size, modified_ns, sha256 };
-    if last.is_some_and(|l| l.sha256 == src.sha256) && std::fs::metadata(to).is_ok_and(|m| m.len() == size) {
-        return Ok((src, false));
+    if crate::net::sha256_file(to).is_ok_and(|hash| hash == src.sha256) {
+        let changed = !crate::detect::executable(to);
+        if changed {
+            crate::net::make_executable(to)?;
+        }
+        return Ok((src, changed));
     }
     let dir = to.parent().context("no parent directory")?;
     std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
@@ -230,7 +229,6 @@ pub(crate) fn stage(paths: &Paths, exe: &Path) -> Result<Staged> {
     }
     // The binaries, under the target the shim maps this machine to.
     let stamp_file = root.join(".staged.json");
-    let last: Stamp = std::fs::read(&stamp_file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
     let mut stamp = Stamp::default();
     let mut binaries = Vec::new();
     let mut missing = Vec::new();
@@ -242,7 +240,7 @@ pub(crate) fn stage(paths: &Paths, exe: &Path) -> Result<Staged> {
             continue;
         };
         let rel = format!("{}/{name}{}", target(), std::env::consts::EXE_SUFFIX);
-        let (src, wrote) = put_binary(&from, &plugin.join("dist").join(&rel), last.binaries.get(name))?;
+        let (src, wrote) = put_binary(&from, &plugin.join("dist").join(&rel))?;
         changed += usize::from(wrote);
         sums.push(format!("{}  {rel}", src.sha256));
         want.insert(format!("dist/{rel}"));
@@ -266,6 +264,46 @@ pub(crate) fn stage(paths: &Paths, exe: &Path) -> Result<Staged> {
     )?);
     let _ = adage_store::config::write_atomic(&stamp_file, &serde_json::to_vec_pretty(&stamp)?);
     Ok(Staged { root, plugin, binaries, missing, changed, version })
+}
+
+/// Whether the locally managed plugin still contains this install's modules and binaries.
+/// This deliberately checks content rather than versions: two builds can both report 0.1.0.
+/// No files are written, and separately installed marketplace plugins are not inspected.
+pub(crate) fn staged_matches(paths: &Paths, exe: &Path) -> bool {
+    let plugin = plugin_dir(paths);
+    let (version, description) = manifest();
+    if embedded().is_empty()
+        || !std::fs::read(paths.plugin().join(".claude-plugin/marketplace.json"))
+            .is_ok_and(|bytes| bytes == marketplace_json(&version, &description).as_bytes())
+    {
+        return false;
+    }
+    let mut want = std::collections::BTreeSet::new();
+    for f in embedded() {
+        let file = plugin.join(f.path);
+        if !std::fs::read(&file).is_ok_and(|bytes| bytes == f.bytes)
+            || (f.executable && !crate::detect::executable(&file))
+        {
+            return false;
+        }
+        want.insert(f.path.to_string());
+    }
+    let mut sums = Vec::new();
+    for name in BINARIES {
+        let from = if name == "adage" { Some(exe.to_path_buf()) } else { companion(exe, name) };
+        let Some(from) = from else { continue };
+        let Ok(hash) = crate::net::sha256_file(&from) else { return false };
+        let rel = format!("{}/{name}{}", target(), std::env::consts::EXE_SUFFIX);
+        let file = plugin.join("dist").join(&rel);
+        if !crate::net::sha256_file(&file).is_ok_and(|other| other == hash) || !crate::detect::executable(&file) {
+            return false;
+        }
+        sums.push(format!("{hash}  {rel}"));
+        want.insert(format!("dist/{rel}"));
+    }
+    want.insert("dist/SHA256SUMS".into());
+    std::fs::read(plugin.join("dist/SHA256SUMS")).is_ok_and(|bytes| bytes == (sums.join("\n") + "\n").as_bytes())
+        && files_under(&plugin).into_iter().collect::<std::collections::BTreeSet<_>>() == want
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -462,7 +500,10 @@ pub(crate) fn verify(cli: &dyn ClaudeCli, staged: &Staged, cwd: &Path) -> Result
     if !p.enabled {
         bail!("`claude plugin list` lists {PLUGIN_ID} but not enabled");
     }
-    if let Some(from) = p.read_from.as_deref().filter(|f| !same_dir(f, &staged.plugin)) {
+    let Some(from) = p.read_from.as_deref() else {
+        bail!("Claude Code did not report where it reads {PLUGIN_ID}; the refreshed local plugin could not be verified (update Claude Code, then run `adage init`)");
+    };
+    if !same_dir(from, &staged.plugin) {
         bail!("Claude Code reads {PLUGIN_ID} from {}, not from {}", from.display(), staged.plugin.display());
     }
     Ok(p)
@@ -628,6 +669,47 @@ pub(crate) mod tests {
 
     #[test]
     #[cfg(unix)]
+    fn staging_repairs_same_size_binary_damage_and_checks_every_part() {
+        let d = tempfile::tempdir().unwrap();
+        let paths = Paths::at(d.path().join("data"));
+        let exe = exe_with_companions(&d.path().join("bin"), &COMPANIONS);
+        let staged = stage(&paths, &exe).unwrap();
+        assert!(staged_matches(&paths, &exe));
+        // The source and staging stamp have not changed. Size alone must not accept a stale copy.
+        let bin = staged.plugin.join("dist").join(target()).join("adage");
+        let mut damaged = std::fs::read(&bin).unwrap();
+        damaged[0] ^= 1;
+        std::fs::write(&bin, damaged).unwrap();
+        assert!(!staged_matches(&paths, &exe));
+        assert!(stage(&paths, &exe).unwrap().changed > 0);
+        assert_eq!(std::fs::read(&bin).unwrap(), std::fs::read(&exe).unwrap());
+        assert!(staged_matches(&paths, &exe));
+
+        // The main binary is already current: modules, companions, checksums and obsolete files
+        // must still cause update to restage. Version strings do not participate in this decision.
+        for rel in ["hooks/register.ts", "dist/SHA256SUMS", "hooks/removed.ts"] {
+            std::fs::write(staged.plugin.join(rel), b"stale").unwrap();
+            assert!(!staged_matches(&paths, &exe), "{rel}");
+            assert!(stage(&paths, &exe).unwrap().changed > 0);
+            assert!(staged_matches(&paths, &exe), "{rel}");
+        }
+        for name in COMPANIONS {
+            let from = d.path().join("bin").join(name);
+            std::fs::write(&from, format!("#!/bin/sh\necho new {name}\n")).unwrap();
+            assert!(!staged_matches(&paths, &exe), "{name}");
+            assert!(stage(&paths, &exe).unwrap().changed > 0);
+            assert!(staged_matches(&paths, &exe), "{name}");
+        }
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(!staged_matches(&paths, &exe));
+        assert!(stage(&paths, &exe).unwrap().changed > 0);
+        assert!(staged_matches(&paths, &exe));
+        assert_eq!(stage(&paths, &exe).unwrap().changed, 0);
+    }
+
+    #[test]
+    #[cfg(unix)]
     fn connecting_adds_installs_and_verifies() {
         let d = tempfile::tempdir().unwrap();
         let paths = Paths::at(d.path().join("data"));
@@ -685,6 +767,14 @@ pub(crate) mod tests {
         let elsewhere = fake_claude(d.path().join("other"));
         let e = connect(&elsewhere, &paths, &exe, "user", d.path()).unwrap_err().to_string();
         assert!(e.contains("reads adage@adage-local from"), "{e}");
+        // A version and enabled flag alone do not prove which plugin files will run.
+        let unknown_source = Stub {
+            calls: RefCell::new(vec![]),
+            answer: Box::new(|_| ok(r#"[{"id":"adage@adage-local","version":"0.1.0","scope":"user","enabled":true}]"#)),
+        };
+        let staged = stage(&paths, &exe).unwrap();
+        let e = verify(&unknown_source, &staged, d.path()).unwrap_err().to_string();
+        assert!(e.contains("did not report where it reads") && e.contains("could not be verified"), "{e}");
     }
 
     #[test]

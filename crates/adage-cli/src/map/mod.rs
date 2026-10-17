@@ -7,8 +7,9 @@
 //! alias), `/api/v1/events` (server-sent events: new decisions from the session spools, learning
 //! runs from `learn.log`, and graph changes) and `/api/v1/health` (the doctor's checks).
 //!
-//! Standard library only, and nothing on the hook's path: a thread per connection, at most
-//! [`MAX_CONNECTIONS`] at once. Bound to 127.0.0.1 only, GET and HEAD only, and read-only.
+//! Standard-library HTTP server, with nothing on the hook's path: a thread per connection,
+//! at most [`MAX_CONNECTIONS`] at once. Bound to 127.0.0.1 only. Review writes require a
+//! terminal-owned Person, the same origin, and a cryptographically random CSRF token.
 //! Requests whose `Host` is not this address are refused, so a web page elsewhere cannot read the
 //! map through DNS rebinding. The content security policy allows this origin's own files and
 //! nothing else: no inline script, no font CDN. `--port 0` picks a free port.
@@ -16,6 +17,7 @@
 mod assets;
 mod events;
 mod http;
+mod review;
 
 use adage_store::Paths;
 use adage_term::{Line, Out, Role};
@@ -73,6 +75,7 @@ pub(crate) struct Shared {
     pub(crate) paths: Paths,
     pub(crate) port: u16,
     pub(crate) demo: bool,
+    review: review::Access,
     /// The repository the doctor's per-repository checks look at.
     pub(crate) repo_root: Option<PathBuf>,
     pub(crate) hub: events::Hub,
@@ -93,6 +96,7 @@ impl Server {
         let address = listener.local_addr()?;
         listener.set_nonblocking(true)?;
         let shared = Arc::new(Shared {
+            review: review::Access::new(demo),
             paths,
             repo_root,
             demo,
@@ -177,6 +181,7 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
     };
     let addr = listener.local_addr()?;
     let shared = Arc::new(Shared {
+        review: review::Access::new(opts.demo),
         paths: paths.clone(),
         port: addr.port(),
         demo: opts.demo,
@@ -191,7 +196,8 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
 
     // A closed stdout (the launcher went away) must not stop the server: every write is checked.
     let mut out = Out::stdout();
-    let _ = out.header("map", &[&url, "read-only", "this machine only"]);
+    let mode = if shared.review.enabled() { "review enabled" } else { "read-only" };
+    let _ = out.header("map", &[&url, mode, "this machine only"]);
     let _ = out.kv("data", Line::new().quiet(paths.root.display().to_string()));
     let _ = out.kv("api", Line::new().cmd(format!("http://{addr}/api/v1/graph")).sep().quiet("events, health"));
     if demo.is_some() {

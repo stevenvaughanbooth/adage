@@ -1,9 +1,8 @@
 ---
 source: crates/adage-cli/src/ui/tests.rs
-assertion_line: 230
 expression: text
 ---
-[magenta b] adage[/]   [magenta b r] 1 Live [/] [darkgray] 2 [/][d]Reflexes [/][yellow b r] 2 [/] [darkgray] 3 [/][d]Map [/] [darkgray] 4 [/][d]Health [/][yellow b r] 2 [/] [darkgray] 5 [/][d]Settings [/] [darkgray] 6 [/][d]Home [/]                                  [magenta]◆ [/][b]harbor-dispatch[/][darkgray] ▾[/][d] · [/][green]● [/]live
+[magenta b] adage[/]   [magenta b r] 1 Live [/] [darkgray] 2 [/][d]Reflexes [/][yellow b r] 2 [/] [darkgray] 3 [/][d]Map [/] [darkgray] 4 [/][d]Health [/][yellow b r] 2 [/] [darkgray] 5 [/][d]Settings [/] [darkgray] 6 [/][d]Home [/] [darkgray] 7 [/][d]Traces [/]                       [magenta]◆ [/][b]harbor-dispatch[/][darkgray] ▾[/][d] · [/][green]● [/]live
 [darkgray]─────────[/][magenta]━━━━━━━━[/][darkgray]───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[/]
  [green]● [/]live [darkgray]▁▁▁▁▁▁▁▁[/]   [b]harbor-dispatch[/][d] · 2 sessions · since 12:04 · last call 12:33:10[/]
  [darkgray]╭─[/][darkgray d] ▁▃▅ Activity [/][darkgray]──────────────── peak 1/min ─╮[/] [darkgray]╭─[/][darkgray d] ▪ Tool calls [/][darkgray]─────╮[/] [darkgray]╭─[/][darkgray d] ◠ Fired [/][darkgray]──────────╮[/] [darkgray]╭─[/][darkgray d] ✓ Followed [/][darkgray]───────╮[/] [darkgray]╭─[/][darkgray d] ■ Finish lines [/][darkgray]───╮[/]

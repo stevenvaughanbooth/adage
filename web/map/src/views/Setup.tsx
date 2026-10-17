@@ -4,7 +4,7 @@ import { isPlugin, setupCopy } from "../lib/setup";
 import { useUrl } from "../state/url";
 
 /** Where to act, worded for the surface the person uses (`adage.channel`): `/adage` in Claude Code
- * for a plugin user, the `adage` commands otherwise. The map stays a read-only observer. */
+ * for a plugin user, the `adage` commands otherwise. Execution grants stay in that person-controlled surface. */
 export function Setup({ graph }: { graph: Graph | null }) {
   const [url, setUrl] = useUrl();
   const selected = findRoute(graph, url.reflex);

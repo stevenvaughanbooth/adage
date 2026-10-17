@@ -1,9 +1,8 @@
 ---
 source: crates/adage-cli/src/ui/tests.rs
-assertion_line: 230
 expression: text
 ---
- adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home                                                                             ◆ harbor-dispatch ▾ · LIVE
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home   7 Traces                                                                  ◆ harbor-dispatch ▾ · LIVE
 ─────────━━━━━━━━───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  LIVE   harbor-dispatch · 2 sessions · since 12:04 · last call 12:33:10
  ╭─ ▁▃▅ Activity ──────────────────────────── peak 1/min ─╮ ╭─ ▪ Tool calls ────────────╮ ╭─ ◠ Fired ─────────────────╮ ╭─ ✓ Followed ──────────────╮ ╭─ ■ Finish lines ──────────╮

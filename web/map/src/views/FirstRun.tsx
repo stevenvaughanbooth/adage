@@ -8,6 +8,7 @@ import type { Graph, Health } from "../api/types";
 import { InstinctGlyph, Icons } from "../components/glyphs";
 import { StrengthChip, cx } from "../components/ui";
 import { useUrl } from "../state/url";
+import { routeKey } from "../lib/graph";
 import { firstRunHint } from "../lib/setup";
 import { isInstinct, plural, strength } from "../lib/words";
 
@@ -126,24 +127,24 @@ export function FirstRun({ graph, connection }: { graph: Graph; connection: Conn
 
         {instincts.length > 0 && (
           <div className="flex w-full max-w-[560px] flex-col gap-3 lg:mt-[410px]">
-            <span className="lbl">Active from day 0</span>
+            <span className="lbl">Built-in instincts · inspect and review</span>
             {instincts.slice(0, 3).map((r) => (
-              <div key={`${r.reference}${r.id}`} className="flex items-center gap-3 rounded-lg border border-line-strong bg-panel px-4 py-3.5">
+              <button type="button" key={`${r.reference}${r.id}`} onClick={() => setUrl({ view: "map", reflex: routeKey(r) }, true)} className="flex items-center gap-3 rounded-lg border border-line-strong bg-panel px-4 py-3.5 text-left hover:border-accent/50">
                 <InstinctGlyph size={18} />
                 <div className="flex min-w-0 grow flex-col gap-0.5">
                   <span className="truncate font-mono text-[13.5px]">{r.id}</span>
                   <span className="truncate text-[12.5px] text-ink-2">{r.summary || `${r.trigger.label.replace(/`/g, "")} → ${r.step.label}`}</span>
                 </div>
                 <StrengthChip strength={strength(r.strength)} />
-              </div>
+              </button>
             ))}
-            <span className="text-[12.5px] text-ink-3">Instincts start as prime. Your own traces confirm them to fire.</span>
+            <span className="text-[12.5px] text-ink-3">Instincts provide suggestions. Open one to see its readiness, review status and advice strength.</span>
           </div>
         )}
       </div>
 
       <div className="relative flex h-10 shrink-0 items-center gap-4 border-t border-line bg-panel px-5 font-mono text-[11.5px] text-ink-3">
-        <span>{port} · read-only · this machine only</span>
+        <span>{port} · this machine only</span>
         <span className="grow" />
         <span className="hidden sm:inline">
           {connection === "live" ? "live stream connected" : connection === "offline" ? "live stream offline: is adage map running? Retrying" : "connecting…"}

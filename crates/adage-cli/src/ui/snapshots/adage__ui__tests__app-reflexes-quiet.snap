@@ -2,43 +2,73 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
- adage    1 Live   2 Reflexes   3   3 Map   4 Health  2   5 Settings   6 Home                                              ◆ harbor-dispatch ▾ · LIVE
-──────────────────━━━━━━━━━━━━────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
- / filter reflexes, commands, files                                         │ ◠ The gist of read-before-edit-9a1c
- FIRE 3  PRIME 6  INHIBIT 1  ◌ quiet 1  all states ▾                        │    PRIME    Suggests   ○ nascent ── ○ forming ── ○ firm
-                                                                            │   ◌ quiet: uplift +0.04 < 0.10 · approve to deliver
-  ▾ incidents · v0.3.0 ──────────────────────────────────────── 3 reflexes  │
-  F a prompt names a ti… → the gist of lookup-incident     ▰▰▰▰▰▱    24/25  │ ╭─ WHEN ────────────────────╮         ╭─ DO ─────────────────────────╮
-  F bin/fetch-incident … → the gist of read-linked-files   ▰▰▰▰▰▱    13/17  │ │ bin/fetch-incident {item} │─── ◠ ──▶│ read ≤5 listed files at once │
-  I npm test fails: HAR… → the gist of dead-end-npm-test   ▰▰▱▱▱▱    11/43  │ │ succeeds                  │         │                              │
-                                                                            │ ╰───────────────────────────╯         ╰──────────────────────────────╯
-  ▾ intents · v0.3.0 ──────────────────────────────────────────── 1 reflex  │
-  P a prompt means: run… → the gist of start-wi…  forming  ▰▰▰▰▱▱      6/9  │ Evidence ──────────────────────────────────────────────────────────────
-                                                                            │ Learned from     ━━━━━━━━━━━━━━━━━━━━━━━╸──  21 of 23 traces
-  ▾ Learned here · v0.3.0 ───────────────────────────────────── 2 reflexes  │ Confidence       ━━━━━━━━━━━━━━────────────  0.53 lower bound
-  P a prompt means: add… → the gist of card-car…  forming  ▰▰▰▰▰▱ 4 traces  │ Since installed  nothing yet: it has not fired here
-  P edit …/rules_*.ts    → the gist of tests-after-rules…         by value  │ Uplift           when told  ━━━━━━━━━━━━━━╸  0.95
-                                                                            │                  unaided    ━━━━━━━━━━━━━╸─  0.91
-  ▾ From pack · harbor-skills · v0.3.0 ────────────────────────── 1 reflex  │                  uplift +0.04 · lower bound -0.02
-  F edit CHANGELOG.md    → the gist of release-notes-s2-…                –  │
-                                                                            │ What the agent sees · example values ──────────────────────────  r  raw
-  ▾ Waiting for review ────────────────────────────────────────── 1 reflex  │ No preview: the reflex has no directive text.
-  ○ edit api/*.yaml      → the gist of regen-openapi-cli…  ▰▰▰▰▰▱      3/4  │
-                                                                            │ Review ────────────────────────────────────────────────────────────────
-  ▾ Quiet · agents already do this; approve to deliver ────────── 1 reflex  │  x  extinguish    a  approve    n  pin    d  delegate    t  traces (0)
-▌ ◌ bin/fetch-incident … → the gist of read-before-edit-…  ▰▰▰▰▰▱    21/23  │  o  open in map
-                                                                            │
-  ▾ Instincts · v0.1.0 ──────────────────────────────────────── 1 instinct  │ ▸ Details ────────────────────────────────────────────────  enter  open
-  P edit registry/*.csv  → the gist of finish-line/regen…         built in  │
-                                                                            │
-  ▸ Extinguished ──────────────────────────────────────────────── 1 reflex  │
-                                                                            │
-                                                                            │
-                                                                            │
-                                                                            │
-                                                                            │
-                                                                            │
-                                                                            │
-                                                                            │
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  ?  keys   :  palette   /  filter   f  repository   j/k  move   enter  expand   tab  next tab                                                q  quit
+ adage    1 Live   2 Reflexes   3   3 Map   4 Health  2   5 Settings   6 Home   7 Traces                                   ◆ harbor-dispatch ▾ · LIVE
+──────────────────━━╭ Review reflex ─────────────────────────────────────────────────────────────────────────────────────────────╮────────────────────
+ / filter reflexes, │ Waiting for approval before advisory delivery.                                                             │
+ FIRE 3  PRIME 6  IN│                                                                                                            │irm
+                    │ ◠ The gist of read-before-edit-9a1c                                                                        │
+  ▾ incidents · v0.3│    PRIME    Suggests   ○ nascent ── ○ forming ── ○ firm                                                    │
+  F a prompt names a│   ◌ quiet: uplift +0.04 < 0.10 · approve to deliver                                                        │
+  F bin/fetch-incide│                                                                                                            │─────────────────╮
+  I npm test fails: │ ╭─ WHEN ─────────────────────────────╮         ╭─ DO ─────────────────────────╮                            │ed files at once │
+                    │ │ bin/fetch-incident {item} succeeds │─── ◠ ──▶│ read ≤5 listed files at once │                            │                 │
+  ▾ intents · v0.3.0│ ╰────────────────────────────────────╯         ╰──────────────────────────────╯                            │─────────────────╯
+  P a prompt means: │                                                                                                            │
+                    │ Evidence ────────────────────────────────────────────────────────────────────────────────────────────────  │
+  ▾ Learned here · v│ Learned from     ━━━━━━━━━━━━━━━━━━━━━━━╸──  21 of 23 traces                                               │
+  P a prompt means: │ Confidence       ━━━━━━━━━━━━━━────────────  0.53 lower bound                                              │
+  P edit …/rules_*.t│ Since installed  nothing yet: it has not fired here                                                        │
+                    │ Uplift           when told  ━━━━━━━━━━━━━━╸  0.95                                                          │
+  ▾ From pack · harb│                  unaided    ━━━━━━━━━━━━━╸─  0.91                                                          │
+  F edit CHANGELOG.m│                  uplift +0.04 · lower bound -0.02                                                          │
+                    │                                                                                                            │
+  ▾ Waiting for revi│ What the agent sees · example values ────────────────────────────────────────────────────────────  r  raw  │
+  ○ edit api/*.yaml │ No preview: the reflex has no directive text.                                                              │
+                    │                                                                                                            │
+  ▾ Quiet · agents a│ Review ──────────────────────────────────────────────────────────────────────────────────────────────────  │
+▌ ◌ bin/fetch-incide│  x  extinguish    a  approve    n  pin    d  delegate    t  traces (0)    o  open in map                   │
+                    │                                                                                                            │
+  ▾ Instincts · v0.1│ ▾ Details ─────────────────────────────────────────────────────────────────────────────────────  v  close  │
+  P edit registry/*.│   reflex      read-before-edit-9a1c                                                                        │
+                    │   track       harbor-dispatch/learned                                                                      │
+  ▸ Extinguished ───│   version     0.3.0                                                                                        │
+                    │   repository  harbor-dispatch                                                                              │
+                    │   mode        Suggest · No execution grant                                                                 │
+                    │   trigger     after_command · `bin/fetch-incident {item}` succeeds                                         │
+                    │   step        read_batch · read ≤5 listed files at once                                                    │
+                    │   evidence    21/23 traces · rate 0.91 · lower bound 0.53                                                  │
+                    │   uplift      +0.04 (lower bound -0.02): followed 0.95 when told, 0.91 unaided; 20 of 22 traces did it     │
+                    │               unaided. Quiet: agents already do this, so delivering it changes little                      │
+                    │   limits      ceiling fire · effect observe · not in the index                                             │
+                    │                                                                                                            │
+                    │   a approve is the same as, from any shell:                                                                │
+                    │   adage review approve harbor-dispatch/learned read-before-edit-9a1c                                       │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │                                                                                                            │
+                    │ ────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+                    │  a approve   x extinguish   n pin                                                                          │
+                    │ Approve: accept the reflex or proposed change, or put a nascent reflex into service. This does not grant   │
+                    │ script execution.                                                                                          │
+                    │  esc  close   ↑↓  scroll   tab  decision   enter  choose                                                   │
+────────────────────╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯────────────────────
+  ?  keys   :  palette   enter  review   /  filter   f  repository   j/k  move   tab  next tab                                                q  quit

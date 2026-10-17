@@ -122,6 +122,7 @@ export function Traces({ graph }: { graph: Graph }) {
   const now = Math.max(Date.now(), ...graph.events.map((e) => e.ts));
   const selected = findRoute(graph, url.reflex);
   const inventory = traceInventory(graph);
+  const conditioning = (graph.learning_history?.repositories ?? []).filter(r => !url.repo || r.repo === url.repo);
   const selectedMeasurement = selected ? measurement(selected, url.version) : null;
   const contributing = selectedMeasurement?.measurement_sessions;
   const choices = inventory.filter((s) => (!url.repo || s.repo === url.repo) && (!s.end_ts || s.end_ts >= windowStart(url.window, now)) &&
@@ -149,7 +150,7 @@ export function Traces({ graph }: { graph: Graph }) {
       <div className="flex flex-wrap items-end justify-between gap-4 px-4 pt-7 pb-5 sm:px-10">
         <div className="flex flex-col gap-1.5">
           <span className="lbl">
-            Traces · {plural(choices.length, "recorded session")} · {plural(events.length, "recent decision")}
+            Recorded activity · {plural(choices.length, "recorded session")} · {plural(events.length, "recent decision")}
           </span>
           <h1 className="display m-0 text-[32px] leading-[1.05] font-semibold sm:text-[40px]">
             {selected ? (
@@ -189,6 +190,18 @@ export function Traces({ graph }: { graph: Graph }) {
           />
         </div>
       </div>
+      <section aria-label="Learning history" className="border-t border-line px-4 py-3 text-xs text-ink-2 sm:px-10">
+        <details>
+          <summary className="cursor-pointer font-medium text-ink-1">Last conditioning · {conditioning.length === 1 ? `${conditioning[0]!.sessions_used ?? "Unrecorded"} sessions used · ${conditioning[0]!.files_read ?? "unrecorded"} files read` : `${conditioning.length} repositories with retained counts`}</summary>
+          <p>Agent histories, including discovered subagent histories, are learning input. They are not automatically recorded hook sessions in the activity below. These counts describe the latest retained run per repository, not a lifetime total.</p>
+          {conditioning.map(r => <div key={r.repo} className="mb-2 rounded border border-line p-2">
+            <p className="m-0 break-words font-medium text-ink-1">{r.repo} · {new Date(r.last_conditioned_at).toLocaleString()}</p>
+            <p className="my-1">{r.sessions_used ?? "Not recorded"} sessions used · {r.files_read ?? "Not recorded"} files read · {r.sessions_steered ?? "Not recorded"} steered sessions · {r.sessions_duplicates ?? "Not recorded"} duplicate sessions</p>
+          </div>)}
+          {!conditioning.length && <p>No retained conditioning counts for this selection. Older runs may not have recorded them.</p>}
+          {graph.learning_history?.description && <p className="mb-0">{graph.learning_history.description}</p>}
+        </details>
+      </section>
       <div className="flex flex-wrap items-end gap-3 border-t border-line px-4 py-3 sm:px-10">
         <label className="flex min-w-0 flex-col gap-1 text-xs text-ink-2">Find a session<input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Session or repository" className="h-9 rounded-md border border-line-strong bg-panel px-3 text-ink-1" /></label>
         <label className="flex min-w-0 grow flex-col gap-1 text-xs text-ink-2">Recorded session<select value={activeSession ? traceKey(activeSession) : ""} onChange={(e) => { const s = inventory.find((s) => traceKey(s) === e.target.value); setUrl({ session: s?.session ?? null, traceRepo: s?.repo ?? null, sequence: null }, true); }} className="h-9 min-w-0 max-w-full rounded-md border border-line-strong bg-panel px-3 text-ink-1">

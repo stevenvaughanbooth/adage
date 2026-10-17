@@ -40,6 +40,8 @@ anyhow.workspace = true
 regex.workspace = true
 sha2.workspace = true
 toml.workspace = true
+# Per-server CSRF capability for terminal-owned web review.
+rand_core = { version = "0.6", features = ["getrandom"] }
 # The terminal UI (`adage watch`, `adage ui`, interactive `adage init`); never used by hooks.
 ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
 # The command-line grammar, help and completions (never used by hooks: `adage hook` is
@@ -65,6 +67,5 @@ adage-sim = { path = "../adage-sim" }
 # `adage train accept` installs what `adage train` (adage-train) stages.
 adage-train = { path = "../adage-train" }
 ssh-key = { version = "=0.6.7", features = ["std", "crypto", "rand_core"] }
-rand_core = { version = "0.6", features = ["getrandom"] }
 # The workspace test kit (route, track and index builders, a learned home): tests and examples only.
 adage-tracks = { path = "../adage-tracks", features = ["testkit"] }

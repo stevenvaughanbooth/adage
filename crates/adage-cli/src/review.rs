@@ -96,7 +96,6 @@ fn list(paths: &Paths, as_json: bool, verbose: bool) -> Result<()> {
                 row["waits"] = json!(waits(&it.reasons));
                 row["live"] = json!(live.get(&(it.inst.reference.clone(), r.id.clone())).cloned().unwrap_or_default());
                 row["example_values"] = json!(preview(t, r).1);
-                row["last_review"] = json!(it.inst.reviews.routes.get(&r.id).map(|v| json!({ "decision": v.decision.as_str(), "on": v.on, "by": v.by })));
                 row["proposal"] = json!(it.proposal.map(|p| {
                     let diff: Vec<Value> = crate::proposal::diff(r, &adage_app::review::proposed_route(it.inst, p))
                         .into_iter()
@@ -621,21 +620,13 @@ pub(crate) fn decide_quietly(
     route_id: &str,
     expected_revision: &str,
     paths: &Paths,
-) -> Result<Decided> {
+) -> Result<Outcome> {
     // `adage ui` owns the terminal, so no press can reach it on stdin: the check is the terminal's.
     let Some(verb) = Verb::parse(verb) else { bail!("{USAGE}") };
     let person = adage_app::person::require_or_press(PersonVerb::Review(verb), None, paths)?;
     // `adage ui` decides on its event loop: it waits a moment for a running learner, never longer.
     let wait = std::time::Duration::from_secs(2);
-    Ok(report(adage_app::review::decide_reviewed_within(
-        &person,
-        verb,
-        spec,
-        route_id,
-        expected_revision,
-        paths,
-        wait,
-    )?))
+    adage_app::review::decide_reviewed_within(&person, verb, spec, route_id, expected_revision, paths, wait)
 }
 
 /// What a decision did: the header's facts and the rows under it.

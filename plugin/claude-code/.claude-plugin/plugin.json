@@ -1,6 +1,6 @@
 {
   "name": "adage",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agent traces become reflexes: Adage compiles the paths your agents take into reflexes and tells them, deterministically, what to do next.",
   "author": {
     "name": "Adage"

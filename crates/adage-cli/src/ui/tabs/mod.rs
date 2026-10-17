@@ -11,6 +11,7 @@ pub mod home;
 pub mod map;
 pub mod reflexes;
 pub mod settings;
+pub mod traces;
 
 use super::theme::Theme;
 use ratatui::text::{Line, Span};

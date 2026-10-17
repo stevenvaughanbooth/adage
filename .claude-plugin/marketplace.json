@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Adage: agent traces become reflexes.",
-    "version": "0.1.0"
+    "version": "0.1.1"
   },
   "plugins": [
     {
@@ -17,7 +17,7 @@
         "ref": "marketplace"
       },
       "description": "Agent traces become reflexes: Adage learns the paths your agents take in each repository and tells them, deterministically, what to do next, and, once you allow a step, does it for them. Three binaries (adage, adage-exec, adage-train) are bundled for macOS and Linux and checked against their checksums before they run; nothing is downloaded. Windows hooks are untested and execute nothing.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "repository": "https://github.com/stevenvaughanbooth/adage",
       "homepage": "https://github.com/stevenvaughanbooth/adage"
     }

@@ -66,6 +66,8 @@ pub struct RouteRow {
     /// The stored state (`firm`, `nascent`, …); [`RouteRow::lifecycle`] is its word.
     pub state: String,
     pub authored: bool,
+    /// A current saved approval of this exact response and evidence.
+    pub approved: bool,
     /// `prompt`, `after_command`, `after_failure`, `after_edit`, `session_start`, `intent`.
     pub trigger_kind: String,
     pub trigger: String,
@@ -259,6 +261,7 @@ pub fn from_graph(
                 effect: r["effect"].as_str().unwrap_or("").to_string(),
                 state: r["state"].as_str().unwrap_or("").to_string(),
                 authored: r["authored"].as_bool().unwrap_or(false),
+                approved: r["last_review"]["decision"] == "approved" && r["last_review"]["current"] == true,
                 trigger_kind: r["trigger"]["kind"].as_str().unwrap_or("").to_string(),
                 trigger: r["trigger"]["label"].as_str().unwrap_or("").to_string(),
                 step_kind: r["step"]["kind"].as_str().unwrap_or("").to_string(),

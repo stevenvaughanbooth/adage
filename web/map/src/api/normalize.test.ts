@@ -96,3 +96,12 @@ describe("reading the graph JSON", () => {
     expect(normalizeLearnRun({ ts: 1, kind: "learn_error" }).kind).toBe("condition_error");
   });
 });
+
+it("keeps absent conditioning counts unknown and separate from recorded sessions", () => {
+  const g = normalizeGraph({ sessions: { total: 54 }, learning_history: {
+    source: "recent_conditioning_runs", repositories: [{ repo: "acme", last_conditioned_at: 12, files_read: 144, sessions_used: 120, sessions_steered: null }],
+  } });
+  expect(g.sessions.total).toBe(54);
+  expect(g.learning_history?.repositories[0]).toMatchObject({ files_read: 144, sessions_used: 120, sessions_steered: null, sessions_duplicates: null });
+  expect(normalizeGraph({}).learning_history).toBeUndefined();
+});

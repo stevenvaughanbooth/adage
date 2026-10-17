@@ -594,6 +594,80 @@ fn doctor_names_versions_that_disagree() {
     );
 }
 
+/// A terminal install manages adage-local's exact files, even when old and new binaries report
+/// the same release. Updating modules or companions must not require a newer npm version.
+#[test]
+fn same_version_local_plugin_drift_is_reported_and_repaired() {
+    let w = World::new();
+    w.server.route(NPM_ANSWER, 200, &format!(r#"{{"name":"@adage-sh/cli","version":"{CURRENT}"}}"#));
+    for name in ["adage-exec", "adage-train"] {
+        write_exe(&w.p(NPM_BIN).join(name), &format!("#!/bin/sh\necho '{name} {CURRENT}'\n"));
+    }
+    let plugin = w.p("data/plugin/adage");
+    std::fs::create_dir_all(w.p("data/plugin/.claude-plugin")).unwrap();
+    std::fs::write(w.p("data/plugin/.claude-plugin/marketplace.json"), "{}").unwrap();
+    std::fs::create_dir_all(w.p("home/.claude/plugins")).unwrap();
+    std::fs::write(
+        w.p("home/.claude/plugins/installed_plugins.json"),
+        serde_json::json!({"version":2,"plugins":{"adage@adage-local":[{"scope":"user","version":CURRENT}]}})
+            .to_string(),
+    )
+    .unwrap();
+    std::fs::write(w.p("home/.claude/settings.json"), r#"{"enabledPlugins":{"adage@adage-local":true}}"#).unwrap();
+    let listed = serde_json::json!([{
+        "id": "adage@adage-local", "version": CURRENT, "scope": "user", "enabled": true,
+        "readFromFolder": plugin,
+    }]);
+    write_exe(&w.p("bin/claude"), &format!(
+        "#!/bin/sh\ncase \"$*\" in\n'plugin list --json') cat <<'ADAGE_JSON'\n{listed}\nADAGE_JSON\n;;\n'plugin marketplace update adage-local --json') echo '{{\"outcome\":\"ok\"}}';;\n*) exit 3;;\nesac\n"
+    ));
+    let check = || -> Value {
+        let out = w.run(&w.npm_adage(), &["doctor", "--json"]);
+        let v: Value = serde_json::from_slice(&out.stdout).unwrap_or_else(|_| panic!("{}", text(&out)));
+        v["checks"].as_array().unwrap().iter().find(|c| c["check"] == "claude-code plugin binary").unwrap().clone()
+    };
+    let before = check();
+    assert_eq!(before["status"], "warn", "{before}");
+    assert_eq!(before["action"], serde_json::json!({"kind": "run", "command": "adage update"}), "{before}");
+    let repaired = w.run(&w.npm_adage(), &["update", "--yes"]);
+    assert!(repaired.status.success(), "{}", text(&repaired));
+    assert!(text(&repaired).contains("refreshing the local Claude Code plugin"), "{}", text(&repaired));
+    assert_eq!(check()["status"], "pass");
+    let dist = plugin.join("dist");
+    let target = std::fs::read_dir(&dist).unwrap().flatten().find(|e| e.path().is_dir()).unwrap().path();
+    assert_eq!(sha(&target.join("adage")), sha(&w.npm_adage()));
+
+    // The main binary is unchanged. Same-sized companion damage and edited modules are enough
+    // to trigger the repair, including the destination check in the binary staging fast path.
+    let companion = target.join("adage-exec");
+    let mut broken = std::fs::read(&companion).unwrap();
+    broken[0] ^= 1;
+    std::fs::write(&companion, broken).unwrap();
+    std::fs::write(plugin.join("hooks/register.ts"), b"stale module").unwrap();
+    assert_eq!(check()["status"], "warn");
+    let repaired = w.run(&w.npm_adage(), &["update", "--yes"]);
+    assert!(repaired.status.success(), "{}", text(&repaired));
+    assert_eq!(sha(&companion), sha(&w.p(NPM_BIN).join("adage-exec")));
+    assert_ne!(std::fs::read(plugin.join("hooks/register.ts")).unwrap(), b"stale module");
+    assert_eq!(check()["status"], "pass");
+    assert!(w.npm_calls().is_empty(), "no release update needed");
+
+    // After staging, an existing session may still be linked to the old digest. It needs a new
+    // session, not another package installation or a fictional version upgrade.
+    let active = w.p("home/.claude/plugins/data/adage-adage-local/bin/adage");
+    write_exe(&active, &format!("#!/bin/sh\necho 'adage {CURRENT}'\n"));
+    let waiting = check();
+    assert_eq!(waiting["status"], "warn", "{waiting}");
+    assert!(waiting["detail"].as_str().unwrap().contains("staged local plugin is current"), "{waiting}");
+    assert!(waiting["fix"].as_str().unwrap().contains("start a new Claude Code session"), "{waiting}");
+    std::fs::remove_file(&active).unwrap();
+    std::os::unix::fs::symlink(target.join("adage"), &active).unwrap();
+    assert_eq!(check()["status"], "pass");
+    std::fs::remove_file(&active).unwrap();
+    std::os::unix::fs::symlink(w.p("missing-binary"), &active).unwrap();
+    assert_eq!(check()["status"], "warn", "a broken active link cannot be considered current");
+}
+
 /// The status card's `update` field (docs/claude-mod/impl/O5-O7-O8-notes.md): absent without a
 /// newer release, the pair and the command with one.
 #[test]

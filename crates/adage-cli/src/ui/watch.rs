@@ -1,7 +1,7 @@
 //! `adage watch`: the compact live pane.
 
 use super::health::{self, Health};
-use super::jobs::{Loaded, Loader, Want};
+use super::jobs::{HealthCadence, Loaded, Loader, Want};
 use super::tail::{LineTail, SpoolTail};
 use super::term::{self, Term};
 use super::view::{self, Ctx, Live};
@@ -119,7 +119,7 @@ pub fn wait(live: &Live) -> Duration {
 
 /// Run the pane until `q`. `before_tick` runs each frame (the demo uses it to keep playing).
 pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
-    let loader = Loader::spawn(ctx.paths.clone(), ctx.root.clone());
+    let loader = Loader::spawn(ctx.paths.clone(), ctx.root.clone(), HealthCadence::Terminal);
     loader.want(Want::Routes);
     let mut sources = Sources::new(&ctx);
     let mut live = Live::default();
@@ -142,7 +142,7 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
                     live.needs = r.needs();
                     live.gists = r.gists();
                 }
-                Loaded::Routes(Err(_)) => {}
+                Loaded::Routes(Err(_)) | Loaded::Traces(_) => {}
             }
         }
         sources.poll(&mut live, health.as_ref().and_then(|h| h.repo_key.as_deref()));

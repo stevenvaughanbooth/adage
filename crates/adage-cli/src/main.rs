@@ -529,7 +529,13 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
             (r, adage_learn::diff::diff(before.get(r).unwrap_or(&empty), after.get(r).unwrap_or(&empty)))
         })
         .collect();
-    if let Err(e) = log_learn(paths, &rep, &changes, started.elapsed().as_millis() as u64) {
+    if let Err(e) = log_learn(
+        paths,
+        &rep,
+        &changes,
+        started.elapsed().as_millis() as u64,
+        inputs.only_repo.as_deref().or(inputs.repo_override.as_deref()),
+    ) {
         let _ = adage_term::Out::stderr().warn(&format!("could not write {}: {e}", paths.learn_log().display()));
     }
     let run = condition_out::Run {
@@ -583,7 +589,7 @@ pub(crate) fn instincts_only_then(args: &[String], paths: &Paths, next: bool) ->
     let rep = result?;
     let changes: BTreeMap<&String, Vec<adage_learn::diff::Change>> =
         rep.repos.keys().map(|r| (r, adage_learn::diff::diff(&before, &after))).collect();
-    if let Err(e) = log_learn(paths, &rep, &changes, started.elapsed().as_millis() as u64) {
+    if let Err(e) = log_learn(paths, &rep, &changes, started.elapsed().as_millis() as u64, Some(&repo)) {
         let _ = adage_term::Out::stderr().warn(&format!("could not write {}: {e}", paths.learn_log().display()));
     }
     let after: BTreeMap<String, adage_learn::diff::Snapshot> = BTreeMap::from([(repo.clone(), after)]);
@@ -617,6 +623,7 @@ fn log_learn(
     rep: &adage_learn::Report,
     changes: &BTreeMap<&String, Vec<adage_learn::diff::Change>>,
     duration_ms: u64,
+    input_repo: Option<&str>,
 ) -> Result<()> {
     let ts = learnlog::now_ms();
     let line = |repo: Option<&str>, changes: &[adage_learn::diff::Change]| {
@@ -625,6 +632,7 @@ fn log_learn(
             &learnlog::Learned {
                 trigger: "manual",
                 repo,
+                input_repo,
                 sessions_read: rep.sessions_read,
                 duration_ms,
                 changes,

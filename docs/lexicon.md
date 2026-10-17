@@ -30,6 +30,8 @@ behavior is useful or correct.
 ## Evidence strength
 
 These labels describe how strongly guidance is phrased. None grants execution permission.
+Approval is a separate decision: an approved Prime reflex can already provide advice. Approving
+it does not create evidence or make it Fire, and an effect ceiling may keep it at Prime.
 
 | CLI label | Plain meaning |
 | --- | --- |
@@ -42,8 +44,8 @@ These labels describe how strongly guidance is phrased. None grants execution pe
 | CLI label | Plain meaning |
 | --- | --- |
 | **nascent** | New; awaiting review |
-| **forming** | In probation |
-| **firm** | Active |
+| **forming** | Still being evaluated; can provide advice when available |
+| **firm** | Established lifecycle stage; availability is shown separately |
 | **dormant** | Stale |
 | **extinguished** | Retired |
 | **ignored** | The agent did not follow the guidance |

@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*", "xtask"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 # Apache-2.0 (decision D1; LICENSE, NOTICE). Releases ship through GitHub Releases, the Claude Code
 # marketplace branch and npm (docs/release.md); the crates are not published to crates.io yet

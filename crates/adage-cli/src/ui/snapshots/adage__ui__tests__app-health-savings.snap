@@ -2,7 +2,7 @@
 source: crates/adage-cli/src/ui/tests.rs
 expression: text
 ---
- adage    1 Live   2 Reflexes  2   3 Map   4 Health   2   5 Settings   6 Home                                                  harbor-dispatch · LIVE
+ adage    1 Live   2 Reflexes  2   3 Map   4 Health   2   5 Settings   6 Home   7 Traces                                       harbor-dispatch · LIVE
 ──────────────────────────────────────────━━━━━━━━━━──────────────────────────────────────────────────────────────────────────────────────────────────
   ▄███▄   Healthy · 5 checks passed · 2 to look at
   ██!██   ━━━━━━━━━━━━━━━━━━━━━━━━━╸──────────  5 of 7 pass

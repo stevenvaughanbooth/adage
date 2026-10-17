@@ -34,6 +34,7 @@ mod kit;
 mod learnlog;
 mod motion;
 mod palette;
+mod reflex_review;
 mod routes;
 mod scope;
 mod splash;

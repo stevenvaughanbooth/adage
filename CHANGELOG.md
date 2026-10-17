@@ -8,10 +8,26 @@ version as the GitHub Release notes.
 The first version brings together local learning, agent integrations and shareable reflex packs.
 The development history is recorded in Git and the design documents under `docs/`.
 
-## Unreleased
+## 0.1.1 - 2026-10-17
+
+### Added
+
+- Reflex review dialogs in the terminal and local browser make decisions, their effects and
+  saved outcomes visible. The terminal keeps a brief summary and graph below the reflex list;
+  Enter opens the full review.
+- A terminal Traces view and separate conditioning counts explain the difference between
+  recorded Adage activity and the agent history used for learning.
 
 ### Fixed
 
+- Approving an instinct with no local evidence no longer immediately reports that support
+  fell from zero to zero. Approval status is separate from advice strength and execution grants.
+- Health checks detect a stale local Claude Code plugin even when it reports the same version
+  as the terminal installation. `adage update` repairs its binaries and modules and explains
+  when a new Claude Code session is needed.
+- The terminal checks health every 15 seconds while idle, reducing repeated plugin scans.
+  The streaming feed keeps its three-second health refresh. Health still refreshes immediately
+  at startup, after actions and when requested.
 - The Claude Code marketplace downloads the bundled plugin over HTTPS, so a fresh install
   does not require GitHub SSH keys or host trust.
 - Release publishers read large manifests from files, avoiding the process-size limit that

@@ -1,8 +1,10 @@
 // The right inspector: the exact directive, its evidence, with vs control, its lifecycle, and the
-// commands a person runs to decide about it. The page itself never changes anything.
+// decisions a person reviews, separate from execution permission.
 
 import type { ReactNode } from "react";
 import type { ArmStats, Card, CardCommand, Graph, Route, Uplift } from "../api/types";
+import { approvalLabel, readinessLabel } from "../lib/review";
+import { ReviewActions } from "./ReviewActions";
 import { MeasurementLinks } from "./MeasurementLinks";
 import { relates } from "../lib/traces";
 import { findRoute, routeKey } from "../lib/graph";
@@ -19,12 +21,10 @@ import {
   isQuiet,
   judgement,
   lifecycle,
-  orderedVerbs,
   plural,
   reviewCommand,
   signed,
   strength,
-  verbWhy,
 } from "../lib/words";
 import { useUrl } from "../state/url";
 import { CardGlyph, KindGlyph, Lamp, QuietGlyph } from "./glyphs";
@@ -401,7 +401,6 @@ export function Inspector({ graph }: { graph: Graph }) {
   const inst = isInstinct(r);
   const e = r.evidence;
   const executionOnly = Boolean(r.execution_only);
-  const verbs = orderedVerbs(r);
   const bar = graph.bars?.fire_lower_bound ?? 0.8;
   const upliftBar = graph.bars?.uplift_min ?? UPLIFT_MIN;
   const quiet = isQuiet(r);
@@ -449,11 +448,17 @@ export function Inspector({ graph }: { graph: Graph }) {
         )}
         {waits.length > 0 && (
           <p className="m-0 rounded-md border border-prime/30 bg-prime/8 px-2.5 py-1.5 text-xs text-ink-2">
-            <span className="text-ink-1">Waits for review:</span> <Prose text={waits.map((x) => x.why).join("; ")} />
+            <span className="text-ink-1">{waits.some(x => ["quiet", "approval", "execution"].includes(x.kind)) ? "Needs your decision:" : "Worth reviewing:"}</span> <Prose text={waits.map((x) => x.why).join("; ")} />
           </p>
         )}
       </div>
 
+      <section aria-label="Readiness and strength" className="flex flex-col gap-1 text-xs text-ink-2">
+        <p className="m-0"><strong className="text-ink-1">Review:</strong> {approvalLabel(r)}{r.last_review && <span className="text-ink-3"> · {r.last_review.on}</span>}</p>
+        <p className="m-0"><strong className="text-ink-1">Readiness:</strong> {readinessLabel(r)}</p>
+        <p className="m-0"><strong className="text-ink-1">Advice strength:</strong> {executionOnly ? "No advisory response" : `${s} · ${s === "prime" ? "suggests the step" : s === "fire" ? "directs the step" : "warns against a step"}`}. {inst && s === "prime" && "This instinct stays at suggestion strength after approval; its color describes strength, not approval."}</p>
+      </section>
+      <ReviewActions key={routeKey(r)} route={r} />
       {quiet && !executionOnly && <QuietPanel r={r} bar={upliftBar} />}
 
       {r.trigger.kind === "context" && r.trigger.items && r.trigger.items.length > 0 && (
@@ -594,21 +599,6 @@ export function Inspector({ graph }: { graph: Graph }) {
       <div className="flex flex-col gap-2">
         {executionOnly && r.review?.next && (
           <CommandButton command={r.review.next} why={executionReviewWhy(graph)} primary />
-        )}
-        {verbs.slice(0, 1).map((v) => (
-          <CommandButton key={v} command={reviewCommand(v, r)} why={executionOnly && v === "approve" ? "Accept the evidence; this does not grant execution permission." : verbWhy(v)} primary={!executionOnly} />
-        ))}
-        {verbs.length > 1 && (
-          <details className="group">
-            <summary className="cursor-pointer list-none py-1 text-xs text-ink-2 hover:text-ink-1">
-              {plural(verbs.length - 1, "more decision")} ▾
-            </summary>
-            <div className="mt-1 flex flex-col gap-1.5">
-              {verbs.slice(1).map((v) => (
-                <CommandButton key={v} command={reviewCommand(v, r)} why={executionOnly && v === "approve" ? "Accept the evidence; this does not grant execution permission." : verbWhy(v)} />
-              ))}
-            </div>
-          </details>
         )}
         <div className="flex gap-2">
           <button

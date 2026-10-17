@@ -28,6 +28,7 @@
     "declared": "Makefile",
     "version": "0.1.0"
    },
+   "last_review": null,
    "review": {
     "verbs": [
      "approve",
@@ -137,6 +138,11 @@
   "description": "Illustrative recorded hook decisions for browser tests."
  },
  "learning": [],
+ "learning_history": {
+  "source": "recent_conditioning_runs",
+  "description": "Illustrative latest conditioning run per repository; not a lifetime total.",
+  "repositories": []
+ },
  "bars": {
   "min_support": 3,
   "fire_lower_bound": 0.5,

@@ -11,7 +11,7 @@
 
 use super::forms::{self, Form, Kind as FormKind};
 use super::health::{Fix, Health};
-use super::jobs::{self, Job, Loaded, Loader, Want};
+use super::jobs::{self, HealthCadence, Job, Loaded, Loader, Want};
 use super::keys;
 use super::palette::{self, Palette};
 use super::routes::{RouteRow, Routes};
@@ -45,15 +45,17 @@ pub enum Tab {
     Map,
     Health,
     Settings,
+    Traces,
 }
 
-pub const TABS: [(Tab, &str); 6] = [
+pub const TABS: [(Tab, &str); 7] = [
     (Tab::Live, "Live"),
     (Tab::Reflexes, "Reflexes"),
     (Tab::Map, "Map"),
     (Tab::Health, "Health"),
     (Tab::Settings, "Settings"),
     (Tab::Home, "Home"),
+    (Tab::Traces, "Traces"),
 ];
 
 impl Tab {
@@ -66,6 +68,7 @@ impl Tab {
             Tab::Map => keys::MAP,
             Tab::Health => keys::HEALTH,
             Tab::Settings => keys::SETTINGS,
+            Tab::Traces => keys::TRACES,
         }
     }
 
@@ -98,6 +101,7 @@ pub enum Action {
 }
 
 pub enum Modal {
+    ReflexReview(Box<super::reflex_review::State>),
     Form(Form),
     Help {
         scroll: u16,
@@ -150,6 +154,7 @@ pub enum Cmd {
     Do(Action),
     PlanInstall { harness: String, scope: &'static str },
     OpenFailOpen,
+    OpenTrace { session: String, repo: String },
     PreviewLearning,
     PrepareTool(Tool),
     OpenRepository(PathBuf),
@@ -160,6 +165,7 @@ pub enum Cmd {
 
 #[derive(Debug, Clone, Copy)]
 pub enum WantKind {
+    Traces,
     Routes,
     Health,
 }
@@ -198,6 +204,7 @@ pub struct AppState {
     pub health: Option<Health>,
     pub routes: Option<Result<Routes, String>>,
     pub reflexes: tabs::reflexes::State,
+    pub traces: tabs::traces::State,
     pub map: tabs::map::State,
     pub check_sel: usize,
     pub setting_sel: usize,
@@ -228,6 +235,7 @@ impl AppState {
             health: None,
             routes: None,
             reflexes: tabs::reflexes::State::default(),
+            traces: tabs::traces::State::default(),
             map: tabs::map::State::default(),
             check_sel: 0,
             setting_sel: 0,
@@ -295,6 +303,7 @@ impl AppState {
         self.live.scroll = 0;
         self.reflexes.sel = None;
         self.map.sel = None;
+        self.traces.selected = 0;
         self.refresh_counts();
         self.toast(format!("Live, Reflexes and Map show {name}"), true);
     }
@@ -425,7 +434,11 @@ impl AppState {
 
     fn switch(&mut self, tab: Tab) -> Option<Cmd> {
         self.tab = tab;
-        tab.wants_routes().then_some(Cmd::Want(WantKind::Routes))
+        if tab == Tab::Traces {
+            Some(Cmd::Want(WantKind::Traces))
+        } else {
+            tab.wants_routes().then_some(Cmd::Want(WantKind::Routes))
+        }
     }
 
     /// Whether the current tab is taking typed text (a filter), so letters are not commands.
@@ -464,7 +477,7 @@ impl AppState {
                     self.modal = Some(Modal::Help { scroll: 0 });
                     return None;
                 }
-                KeyCode::Tab | KeyCode::BackTab | KeyCode::Char('1'..='6') => {
+                KeyCode::Tab | KeyCode::BackTab | KeyCode::Char('1'..='7') => {
                     let i = TABS.iter().position(|(t, _)| *t == self.tab).unwrap_or(0);
                     let next = match code {
                         KeyCode::Tab => (i + 1) % TABS.len(),
@@ -504,6 +517,7 @@ impl AppState {
             Tab::Map => tabs::map::key(self, code),
             Tab::Health => tabs::health::key(self, code),
             Tab::Settings => tabs::settings::key(self, code),
+            Tab::Traces => tabs::traces::key(self, code),
         }
     }
 
@@ -611,6 +625,7 @@ impl AppState {
             _ => {}
         };
         match m {
+            Modal::ReflexReview(review) => super::reflex_review::key(self, review, code),
             Modal::Form(form) => forms::key(self, form, code),
             Modal::Help { mut scroll } => match code {
                 // Scrolls when taller than the screen; any other key closes it.
@@ -854,6 +869,7 @@ pub(super) fn draw_base(f: &mut Frame, s: &AppState, ctx: &Ctx) -> Option<Rect> 
         Tab::Map => tabs::map::draw(f, content, s, ctx),
         Tab::Health => tabs::health::draw(f, content, s, ctx),
         Tab::Settings => tabs::settings::draw(f, content, s, ctx),
+        Tab::Traces => tabs::traces::draw(f, content, s, ctx),
     }
     f.render_widget(Paragraph::new(view::rule("", None, area.width, t)), rule_b);
     draw_toasts(f, Rect { height: extra + 1, y: rule_b.y - extra, ..rule_b }, s, t);
@@ -867,6 +883,7 @@ pub(super) fn draw_overlays(f: &mut Frame, s: &AppState, ctx: &Ctx) {
     let area = f.area();
     let [_, _, body, _, _] = regions(area);
     match &s.modal {
+        Some(Modal::ReflexReview(review)) => super::reflex_review::draw(f, area, s, review, ctx),
         Some(Modal::Repos { query, sel }) => draw_repos(f, body, s, query, *sel, ctx),
         Some(m) => draw_modal(f, body, m, s, t),
         None => {}
@@ -931,11 +948,11 @@ fn draw_tabs(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) -> Option<(u16,
         (spans, active)
     };
     let full = tabs(false);
-    let (mut spans, active) =
+    let (mut spans, mut active) =
         if full.0.iter().map(|s| s.width()).sum::<usize>() <= area.width as usize { full } else { tabs(true) };
     // The repository Live, Reflexes and Map show, on those tabs (`f` or the palette switches it);
     // elsewhere, the repository the app was opened in.
-    let scoped = matches!(s.tab, Tab::Live | Tab::Reflexes | Tab::Map);
+    let scoped = matches!(s.tab, Tab::Live | Tab::Reflexes | Tab::Map | Tab::Traces);
     let mut right = if scoped { scope_chip(s, t, false) } else { vec![Span::styled(ctx.label.clone(), t.ink2())] };
     right.push(Span::styled(t.sep(), t.ink2()));
     if ctx.demo {
@@ -953,7 +970,7 @@ fn draw_tabs(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) -> Option<(u16,
         right.push(Span::styled("LIVE", t.bold()));
     }
     right.push(Span::raw(" "));
-    let lw: usize = spans.iter().map(|s| s.width()).sum();
+    let mut lw: usize = spans.iter().map(|s| s.width()).sum();
     let mut rw: usize = right.iter().map(|s| s.width()).sum();
     // Short of room, the scope keeps its last name (`billing`), not the whole origin.
     if scoped && lw + rw >= area.width as usize {
@@ -962,6 +979,10 @@ fn draw_tabs(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) -> Option<(u16,
         rw = rw - long + chip.iter().map(|s| s.width()).sum::<usize>();
         let n = chip.len();
         right.splice(usize::from(ctx.demo)..usize::from(ctx.demo) + n, chip);
+    }
+    if scoped && lw + rw >= area.width as usize {
+        (spans, active) = tabs(true);
+        lw = spans.iter().map(|s| s.width()).sum();
     }
     if lw + rw < area.width as usize {
         spans.push(Span::raw(" ".repeat(area.width as usize - lw - rw)));
@@ -995,7 +1016,7 @@ fn draw_repos(f: &mut Frame, area: Rect, s: &AppState, query: &str, sel: usize, 
     let current = s.scope_key();
     let name_w = choices.iter().flatten().map(|k| k.name.chars().count()).max().unwrap_or(16).clamp(16, 44);
     let mut lines = vec![
-        Line::from(Span::styled("Live, Reflexes and Map show one repository at a time.", t.dim())),
+        Line::from(Span::styled("Live, Reflexes, Map and Traces show one repository at a time.", t.dim())),
         Line::raw(""),
         Line::from(vec![
             Span::styled("/ ", t.key()),
@@ -1116,7 +1137,7 @@ fn app_help(tab: Tab, t: &Theme) -> Vec<Line<'static>> {
 fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
     match m {
         // Drawn by `draw_repos`, which needs the clock's offset.
-        Modal::Repos { .. } => {}
+        Modal::Repos { .. } | Modal::ReflexReview(_) => {}
         Modal::Form(form) => forms::draw(f, area, form, t),
         Modal::Help { scroll } => view::popup_keys(f, area, app_help(s.tab, t), t, *scroll),
         Modal::Confirm { title, lines, scroll, .. } => view::popup(f, area, title, lines.clone(), t, *scroll),
@@ -1349,6 +1370,21 @@ fn execute(
             match preview { Ok(lines) => s.confirm(tool.title(),lines.into_iter().map(Line::raw).collect(),Action::Tool(tool)),Err(e)=>s.message("Cannot prepare action",vec![format!("{e:#}")],true) }
         },
         Cmd::Quit => return true,
+        Cmd::OpenTrace { session, repo } => {
+            if job.is_some() {
+                s.message("Job running", vec!["Wait for the current job before opening a recorded session.".into()], false);
+                return false;
+            }
+            let paths = ctx.paths.clone();
+            let j = Job::spawn("Recorded session", move |_| {
+                let trace = adage_app::graph::trace(&paths, &session, &repo)?
+                    .ok_or_else(|| anyhow::anyhow!("This recorded session is no longer available. Reload Traces."))?;
+                Ok(tabs::traces::detail_lines(&trace))
+            });
+            s.modal = Some(progress_modal(&j, s));
+            *job = Some(j);
+        },
+        Cmd::Want(WantKind::Traces) => loader.want(Want::Traces),
         Cmd::Want(WantKind::Routes) => loader.want(Want::Routes),
         Cmd::Want(WantKind::Health) => loader.want(Want::Health),
         Cmd::OpenFailOpen => s.modal = Some(fail_open_viewer(&ctx.paths)),
@@ -1369,7 +1405,9 @@ fn execute(
             Action::Review { verb, reference, route, expected_revision } => {
                 // `crate::review` takes the lexicon's verbs.
                 match crate::review::decide_quietly(verb, &reference, &route, &expected_revision, &ctx.paths) {
-                    Ok(_) => s.toast(format!("{route}: {} recorded", words::verb(verb)), true),
+                    Ok(outcome) => {
+                        s.message("Decision saved", super::reflex_review::outcome_lines(&outcome), false);
+                    },
                     Err(e) => s.message("Refused", vec![format!("{e:#}")], true),
                 }
                 loader.want(Want::Routes);
@@ -1489,7 +1527,7 @@ pub(super) fn from_watch(ctx: Ctx, before_tick: Option<Box<dyn FnMut()>>, web: b
     run_inner(ctx, before_tick, true, web)
 }
 fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bool, web: bool) -> Result<()> {
-    let mut loader = Loader::spawn(ctx.paths.clone(), ctx.root.clone());
+    let mut loader = Loader::spawn(ctx.paths.clone(), ctx.root.clone(), HealthCadence::Terminal);
     // The Live tab's review count and the palette's reflexes need them from the start.
     loader.want(Want::Routes);
     let mut sources = Sources::new(&ctx);
@@ -1532,6 +1570,7 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
                     }
                     ctx.tz = view::local_offset();
                 }
+                Loaded::Traces(data) => s.traces.data = Some(data),
                 Loaded::Routes(r) => {
                     s.routes = Some(r);
                     s.refresh_counts();
@@ -1634,7 +1673,7 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
                             dashboard = None;
                             before_tick = None;
                             job = None;
-                            loader = Loader::spawn(next.paths.clone(), next.root.clone());
+                            loader = Loader::spawn(next.paths.clone(), next.root.clone(), HealthCadence::Terminal);
                             loader.want(Want::Routes);
                             sources = Sources::new(&next);
                             s = AppState::new(next.paths.config());

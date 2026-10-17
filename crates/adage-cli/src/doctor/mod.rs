@@ -817,11 +817,55 @@ fn cloud_check_with(root: &Path, offloaded: &dyn Fn(&Path) -> bool) -> Option<Ch
     ))
 }
 
-/// The Claude Code plugin's staged binary (`<plugin data>/bin/adage`): there, and the same version
-/// as this binary. Versions are compared before digests: two builds of one version are expected
-/// (a release's and a `cargo install` of the same tag), and only a checkout loaded with
-/// `--plugin-dir`, which a developer restages with `plugin/build.sh`, is told so.
+/// The plugin installed from `adage init` must follow this terminal installation byte for byte.
+/// Published plugins may intentionally be independent builds; never apply this rule to them.
+fn managed_plugin_check(paths: &Paths, repo_root: Option<&Path>, exe: Option<&Path>) -> Option<Check> {
+    let exe = exe.filter(|p| !adage_store::release::plugin_binary(p))?;
+    let managed =
+        detect::claude_plugins(repo_root).into_iter().find(|p| p.enabled && p.id == crate::claude_plugin::PLUGIN_ID)?;
+    let name = "claude-code plugin binary";
+    if !paths.plugin().join(".claude-plugin/marketplace.json").is_file() {
+        return Some(warn(
+            name,
+            "the locally installed Claude Code plugin is missing its staged marketplace",
+            Fix::run("adage init"),
+        ));
+    }
+    if !crate::claude_plugin::staged_matches(paths, exe) {
+        return Some(warn(
+            name,
+            "the local Claude Code plugin differs from this installation; the same version number can contain different builds",
+            Fix::run_in("{} refreshes the local plugin's binaries and modules; then start a new Claude Code session", "adage update"),
+        ));
+    }
+    let data = detect::claude_dir()?.join("plugins/data").join(managed.data_dir_name()).join("bin");
+    let staged = crate::claude_plugin::plugin_dir(paths).join("dist").join(crate::claude_plugin::target());
+    // SessionStart links these two into plugin data. Training remains in the plugin's dist tree.
+    for name in ["adage", "adage-exec"] {
+        let file = format!("{name}{}", std::env::consts::EXE_SUFFIX);
+        let active = data.join(&file);
+        if active.symlink_metadata().is_err() {
+            continue;
+        }
+        let matches = sha256_file(&active).zip(sha256_file(&staged.join(file))).is_some_and(|(a, b)| a == b);
+        if !matches {
+            return Some(warn(
+                "claude-code plugin binary",
+                format!("the staged local plugin is current, but Claude Code's {name} still uses a different build"),
+                Fix::manual("start a new Claude Code session to load the refreshed local plugin"),
+            ));
+        }
+    }
+    Some(pass(name, "the local Claude Code plugin's binaries and modules match this installation"))
+}
+
+/// Check the managed local plugin first, then independently installed plugin binaries. Different
+/// builds of one version are expected for a published plugin (a release and `cargo install` of
+/// the same tag); only a developer checkout loaded with `--plugin-dir` is told to rebuild.
 fn plugin_check(paths: &Paths, repo_root: Option<&Path>, exe: Option<&Path>) -> Option<Check> {
+    if let Some(check) = managed_plugin_check(paths, repo_root, exe) {
+        return Some(check);
+    }
     let regs = detect::registrations(repo_root);
     let r = regs.iter().find(|r| r.kind == "plugin-data")?;
     let name = "claude-code plugin binary";

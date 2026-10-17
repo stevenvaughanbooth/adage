@@ -279,7 +279,9 @@ fn update(args: &[String], paths: &Paths) -> Result<()> {
     let target = known.as_ref().and_then(|l| l.newer_than(VERSION)).cloned();
     if let Some(l) = &known {
         if target.is_none() && l.failure.is_none() && l.latest.is_some() {
-            o.line(&Line::new().text(format!("adage {VERSION} is the latest · nothing to do")))?;
+            let stale_plugin = !print && channel != Channel::Plugin && local_plugin_stale(paths, &exe);
+            let next = if stale_plugin { "refreshing the local Claude Code plugin" } else { "nothing to do" };
+            o.line(&Line::new().text(format!("adage {VERSION} is the latest · {next}")))?;
             let root = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d));
             if !print && channel != Channel::Plugin {
                 // Registrations an update under a press left as they were (it writes none): a
@@ -289,7 +291,7 @@ fn update(args: &[String], paths: &Paths) -> Result<()> {
                 repoint_or_say(&mut o, &found, by, VERSION, has("--yes") || has("-y"))?;
                 // The plugin `adage init` staged follows this install: one left behind (staged
                 // from an older build) is staged again, so the two never diverge (O8).
-                if local_plugin_stale(paths, &exe) {
+                if stale_plugin {
                     restage_plugin(&mut o, paths, &exe, root.as_deref())?;
                 }
             }
@@ -828,11 +830,9 @@ fn local_plugin(paths: &Paths) -> bool {
     paths.plugin().join(".claude-plugin/marketplace.json").is_file()
 }
 
-/// Does the local plugin bundle another `adage` than `bin`?
+/// Does any part of the locally managed plugin differ from this install?
 fn local_plugin_stale(paths: &Paths, bin: &Path) -> bool {
-    let staged =
-        claude_plugin::plugin_dir(paths).join("dist").join(claude_plugin::target()).join(channel::exe_name("adage"));
-    local_plugin(paths) && crate::net::sha256_file(&staged).ok() != crate::net::sha256_file(bin).ok()
+    local_plugin(paths) && !claude_plugin::staged_matches(paths, bin)
 }
 
 /// Stage the Claude Code plugin `adage init` staged (`$ADAGE_HOME/plugin`) again from `bin` and its
