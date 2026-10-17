@@ -8,6 +8,13 @@ version as the GitHub Release notes.
 The first version brings together local learning, agent integrations and shareable reflex packs.
 The development history is recorded in Git and the design documents under `docs/`.
 
+## Unreleased
+
+### Documentation
+
+- Standalone install links in the README, usage guide and website follow the latest stable
+  release. The website describes the local browser review available in 0.1.1.
+
 ## 0.1.1 - 2026-10-17
 
 ### Added

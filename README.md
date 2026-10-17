@@ -62,12 +62,12 @@ this repository's history. Codex also requires its own hook review in `/hooks`.
 For a standalone install on macOS or Linux:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/download/v0.1.0/adage-cli-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
 ```
 
 Follow the installer's PATH instructions, then run `adage init`. It offers to fetch matching
 companions and checks their published checksums. Windows binaries and other archives are on the
-[v0.1.0 GitHub release](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0).
+[latest GitHub release](https://github.com/stevenvaughanbooth/adage/releases/latest).
 The [installation guide](docs/usage.md#install) also covers the Claude Code plugin.
 
 ```sh

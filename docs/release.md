@@ -4,8 +4,8 @@ Adage is an early experiment. A release should make it easy to try, state what h
 been tested, and leave people a way to report failures. It does not need to claim a general
 speedup or replace the agent's reasoning.
 
-Version `0.1.0` is available through [npm](https://www.npmjs.com/package/@adage-sh/cli),
-[GitHub Releases](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0) and the Claude
+Version `0.1.1` is available through [npm](https://www.npmjs.com/package/@adage-sh/cli),
+[GitHub Releases](https://github.com/stevenvaughanbooth/adage/releases/latest) and the Claude
 Code marketplace. For each release, verify every channel's public artifacts and a fresh
 installation before describing it as available in the README and website.
 
