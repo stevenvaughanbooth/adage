@@ -10,8 +10,23 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 
-/// Idle health checks include binary integrity scans. Startup and explicit requests run at once.
-pub const HEALTH_EVERY: Duration = Duration::from_secs(15);
+/// Terminal health includes costly integrity scans; the streaming feed needs quicker updates.
+/// Both load immediately at startup and on explicit requests.
+#[derive(Clone, Copy)]
+pub enum HealthCadence {
+    Terminal,
+    Follow,
+}
+
+impl HealthCadence {
+    fn interval(self) -> Duration {
+        Duration::from_secs(match self {
+            Self::Terminal => 15,
+            Self::Follow => 3,
+        })
+    }
+}
+
 /// How often the reflexes are reloaded while a tab wants them.
 pub const ROUTES_EVERY: Duration = Duration::from_secs(10);
 
@@ -28,9 +43,8 @@ pub enum Want {
     Routes,
 }
 
-/// The background loaders, one thread each so a slow one never holds up the other: health every
-/// [`HEALTH_EVERY`] (and on request), routes on request (and every [`ROUTES_EVERY`] once
-/// requested).
+/// The background loaders, one thread each so a slow one never holds up the other: health on its
+/// chosen cadence (and on request), routes on request (and every [`ROUTES_EVERY`] once requested).
 pub struct Loader {
     pub rx: Receiver<Loaded>,
     health: Sender<()>,
@@ -66,14 +80,14 @@ fn worker(asks: Receiver<()>, periodic: bool, every: Duration, mut load: impl Fn
 }
 
 impl Loader {
-    pub fn spawn(paths: Paths, root: Option<PathBuf>) -> Loader {
+    pub fn spawn(paths: Paths, root: Option<PathBuf>, health_cadence: HealthCadence) -> Loader {
         let (out, rx) = mpsc::channel();
         let (health, health_asks) = mpsc::channel();
         let (routes, routes_asks) = mpsc::channel();
         let (traces, traces_asks) = mpsc::channel();
         {
             let (out, paths, root) = (out.clone(), paths.clone(), root.clone());
-            worker(health_asks, true, HEALTH_EVERY, move || {
+            worker(health_asks, true, health_cadence.interval(), move || {
                 out.send(Loaded::Health(Box::new(health::gather(&paths, root.as_deref())))).is_ok()
             });
         }

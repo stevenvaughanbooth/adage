@@ -2124,9 +2124,9 @@ fn clock_times_use_the_offset() {
 
 #[test]
 fn loader_delivers_health_at_once_and_reflexes_on_request() {
-    use super::jobs::{Loaded, Loader, Want};
+    use super::jobs::{HealthCadence, Loaded, Loader, Want};
     let home = super::demo::setup().unwrap();
-    let loader = Loader::spawn(home.paths.clone(), Some(home.repo.clone()));
+    let loader = Loader::spawn(home.paths.clone(), Some(home.repo.clone()), HealthCadence::Terminal);
     let wait = |want: &dyn Fn(&Loaded) -> bool| {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
         while std::time::Instant::now() < deadline {

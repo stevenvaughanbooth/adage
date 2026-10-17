@@ -35,7 +35,7 @@
 
 use super::feed::{self, Act, FeedItem};
 use super::health::{self, Health};
-use super::jobs::{Loaded, Loader};
+use super::jobs::{HealthCadence, Loaded, Loader};
 use super::learnlog::{self, Tone};
 use super::tail::{BACKFILL_AGE, BACKFILL_BYTES, LOG_BACKFILL_BYTES};
 use super::theme::Lamp;
@@ -601,7 +601,7 @@ pub fn run(
     let repo = root.as_deref().map(|r| health::repo_key(paths, r, &index));
     let current = session.map(adage_store::paths::sanitise);
     let mut tail = Tail::new(paths, repo.clone(), since);
-    let loader = Loader::spawn(paths.clone(), root.clone());
+    let loader = Loader::spawn(paths.clone(), root.clone(), HealthCadence::Follow);
     let mut out = std::io::stdout().lock();
     let mut last_health: Option<Value> = None;
     let mut last_learner: Option<Value> = None;

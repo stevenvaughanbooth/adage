@@ -11,7 +11,7 @@
 
 use super::forms::{self, Form, Kind as FormKind};
 use super::health::{Fix, Health};
-use super::jobs::{self, Job, Loaded, Loader, Want};
+use super::jobs::{self, HealthCadence, Job, Loaded, Loader, Want};
 use super::keys;
 use super::palette::{self, Palette};
 use super::routes::{RouteRow, Routes};
@@ -1527,7 +1527,7 @@ pub(super) fn from_watch(ctx: Ctx, before_tick: Option<Box<dyn FnMut()>>, web: b
     run_inner(ctx, before_tick, true, web)
 }
 fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bool, web: bool) -> Result<()> {
-    let mut loader = Loader::spawn(ctx.paths.clone(), ctx.root.clone());
+    let mut loader = Loader::spawn(ctx.paths.clone(), ctx.root.clone(), HealthCadence::Terminal);
     // The Live tab's review count and the palette's reflexes need them from the start.
     loader.want(Want::Routes);
     let mut sources = Sources::new(&ctx);
@@ -1673,7 +1673,7 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
                             dashboard = None;
                             before_tick = None;
                             job = None;
-                            loader = Loader::spawn(next.paths.clone(), next.root.clone());
+                            loader = Loader::spawn(next.paths.clone(), next.root.clone(), HealthCadence::Terminal);
                             loader.want(Want::Routes);
                             sources = Sources::new(&next);
                             s = AppState::new(next.paths.config());
