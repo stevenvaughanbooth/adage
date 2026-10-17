@@ -8,7 +8,7 @@ Every tab in the header is a page of its own, so no page scrolls forever:
 | `/how` | `how.html` | How Adage plugs into Claude Code (a diagram that follows the hooks as the page scrolls), then the nine chapters in 3D, with the math behind every threshold |
 | `/packs` | `packs.html` | What a pack is, file by file, sharing one, and the base instincts |
 | `/evidence` | `evidence.html` | The results at a glance, what we tested and how, the held-out result in advisory and execution mode, what the Claude Code mod changes, the limits and the data (`/how-we-tested` redirects here) |
-| `/get-started` | `get-started.html` | GitHub release downloads, the Claude Code plugin, npm publication status, source fallback and local demos |
+| `/get-started` | `get-started.html` | npm install, GitHub standalone downloads, the Claude Code plugin, source fallback and local demos |
 | `/early-access` | `early-access.html` | The legacy route with installation links and an optional one-email release notification |
 
 Every page carries the same header, with the page you are on marked; on a phone its pages slide
@@ -32,12 +32,14 @@ The site describes Adage as an experiment. Claims of savings belong to a named s
 comparisons remain visible. Skills can carry judgment and their own evaluations; packs are a
 complementary way to distribute rules, not proof that inference is unnecessary.
 
-`get-started.html` leads with the published v0.1.0 GitHub release and the Claude Code plugin.
-The primary copy button provides the version-pinned shell installer for macOS and Linux; Windows
-users can download the CLI archive from the release page. npm is explicitly pending, without a
-registry link or primary install command. Verify the public launcher and platform packages before
-activating that channel. The main CTA goes to installation. The existing `/early-access` route remains available for older links, with
-a direct install link and an optional one-email notification for the next release. Registration
+`get-started.html` leads with `npm install -g @adage-sh/cli` and links the published package.
+The launcher selects prebuilt platform binaries. The standalone-download disclosure retains the
+version-pinned v0.1.0 GitHub installer for macOS and Linux, its PATH instructions, and Windows
+archives; the Claude Code plugin remains a separate option. Verify the public launcher, platform
+packages and clean installation before publishing changes to these install paths.
+
+The main CTA goes to installation. The existing `/early-access` route remains available for older
+links, with a direct install link and an optional one-email notification for the next release. Registration
 stays closed unless its existing webhook is configured; publication does not enable it.
 
 ## How the page behaves

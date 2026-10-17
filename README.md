@@ -42,30 +42,33 @@ guidance without enabling automatic execution.
 
 ### Install
 
-Install the **0.1.0 release**, with no Rust build or Git checkout. On macOS or Linux:
+With Node.js 18 or later:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/download/v0.1.0/adage-cli-installer.sh | sh
+npm install -g @adage-sh/cli
 ```
 
-Follow any PATH instructions printed by the installer, then:
+npm selects prebuilt binaries for your platform; you do not need Rust or a Git checkout.
+Then connect Adage from your repository:
 
 ```sh
 cd /path/to/your/repository
 adage init
 ```
 
-Download Windows binaries and other standalone archives from the
-[v0.1.0 GitHub release](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0), or install
-the [Claude Code plugin](docs/usage.md#install). See the installation guide for each option.
+`adage init` connects the agents it finds, shows its proposed changes, and offers to learn from
+this repository's history. Codex also requires its own hook review in `/hooks`.
 
-The shell installer installs `adage`. On macOS and Linux, `adage init` offers to fetch matching
-skill-compiler and execution companions, checking their published checksums. It then connects
-the agents it finds, shows its proposed changes, and offers to learn from this repository's
-history. Codex also requires its own hook review in `/hooks`.
+For a standalone install on macOS or Linux:
 
-**npm publication is pending.** The planned command is `npm install -g @adage-sh/cli`; use the
-release downloads above until the package is published.
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/download/v0.1.0/adage-cli-installer.sh | sh
+```
+
+Follow the installer's PATH instructions, then run `adage init`. It offers to fetch matching
+companions and checks their published checksums. Windows binaries and other archives are on the
+[v0.1.0 GitHub release](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0).
+The [installation guide](docs/usage.md#install) also covers the Claude Code plugin.
 
 ```sh
 adage doctor                   # check the connection

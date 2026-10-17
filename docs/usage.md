@@ -10,25 +10,37 @@ second keeps all of them current.
 
 ### Install
 
-Download prebuilt binaries from the
-[v0.1.0 GitHub release](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0).
-You do not need Rust or a checkout. On macOS or Linux, the shell installer installs `adage`;
-`adage init` offers to fetch matching companions and checks their published checksums:
+With Node.js 18 or later, install the npm package:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/download/v0.1.0/adage-cli-installer.sh | sh
+npm install -g @adage-sh/cli
 ```
 
-Follow any PATH instructions printed by the installer, then run:
+npm selects prebuilt binaries for macOS (Apple Silicon or Intel), Linux (arm64 or x64), or
+Windows (x64). Keep optional dependencies enabled: they carry the platform binaries. There
+are no install-time download scripts, and you do not need Rust or a checkout.
+
+Then run this in your repository:
 
 ```sh
 adage init
 ```
 
-On macOS and Linux, the three commands are `adage` for setup, learning and review;
-`adage-exec` for separately approved execution; and `adage-train` for compiling supported skill
-steps. Windows packages include `adage` and `adage-train`; execution is unsupported.
-`adage` finds its companions beside it.
+npm puts `adage` on your PATH for setup, learning and review. Its platform package also contains
+`adage-train`, used by `adage train` to compile supported skill steps, and, on macOS and Linux,
+`adage-exec` for separately approved execution. Adage finds these companions beside its native
+binary; npm does not add separate commands for them to your PATH. Windows execution is unsupported.
+
+**Standalone downloads:** get binaries from the
+[v0.1.0 GitHub release](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0).
+On macOS or Linux, the shell installer installs `adage`:
+
+```sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/download/v0.1.0/adage-cli-installer.sh | sh
+```
+
+Follow its PATH instructions, then run `adage init`. It offers to fetch matching companions
+and checks their published checksums.
 
 The release's Claude Code plugin bundles the same platform binaries. Install it inside Claude
 Code with:
@@ -40,10 +52,6 @@ Code with:
 
 Windows release artifacts provide advisory operation only. Automatic execution is unsupported,
 and Windows hook invocation has not been verified. See [harness support](harnesses.md).
-
-**npm publication is pending.** The prepared `@adage-sh/cli` package selects the matching
-platform binaries without an install-time download script. Once published, its install command
-will be `npm install -g @adage-sh/cli`. Use GitHub downloads or the plugin in the meantime.
 
 **From source:** to build version 0.1.0 yourself, use Rust and a C compiler:
 

@@ -4,16 +4,14 @@ Adage is an early experiment. A release should make it easy to try, state what h
 been tested, and leave people a way to report failures. It does not need to claim a general
 speedup or replace the agent's reasoning.
 
-Version `0.1.0` is available through
+Version `0.1.0` is available through [npm](https://www.npmjs.com/package/@adage-sh/cli),
 [GitHub Releases](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0) and the Claude
-Code marketplace. The npm packages are staged and checked; their first publication is pending
-publishing authorization. Verify each channel's public artifacts and a fresh installation
-before describing it as available in the README and website.
+Code marketplace. For each release, verify every channel's public artifacts and a fresh
+installation before describing it as available in the README and website.
 
 ## The install path
 
-The planned npm package is `@adage-sh/cli`, in the `adage-sh` npm organization. After its first
-publication, users can install it with:
+The npm package is `@adage-sh/cli`, in the `adage-sh` npm organization. With Node.js 18 or later:
 
 ```bash
 npm install -g @adage-sh/cli
@@ -204,5 +202,4 @@ After changing the dist configuration, temporarily remove `allow-dirty = ["ci"]`
 macOS Developer ID signing is not configured yet. Direct downloads can encounter
 Gatekeeper prompts. Enable `macos-sign` only after the Apple credentials described in
 `dist-workspace.toml` exist. Homebrew can follow signing; its configuration and checks
-must be updated together. GitHub downloads and the bundled plugin are available now; npm
-follows its first verified publication.
+must be updated together.
