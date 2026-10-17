@@ -32,11 +32,11 @@ npm puts `adage` on your PATH for setup, learning and review. Its platform packa
 binary; npm does not add separate commands for them to your PATH. Windows execution is unsupported.
 
 **Standalone downloads:** get binaries from the
-[v0.1.0 GitHub release](https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0).
+[latest GitHub release](https://github.com/stevenvaughanbooth/adage/releases/latest).
 On macOS or Linux, the shell installer installs `adage`:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/download/v0.1.0/adage-cli-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
 ```
 
 Follow its PATH instructions, then run `adage init`. It offers to fetch matching companions
@@ -53,10 +53,10 @@ Code with:
 Windows release artifacts provide advisory operation only. Automatic execution is unsupported,
 and Windows hook invocation has not been verified. See [harness support](harnesses.md).
 
-**From source:** to build version 0.1.0 yourself, use Rust and a C compiler:
+**From source:** to build version 0.1.1 yourself, use Rust and a C compiler:
 
 ```sh
-cargo install --locked --git https://github.com/stevenvaughanbooth/adage --tag v0.1.0 adage-cli adage-exec adage-train
+cargo install --locked --git https://github.com/stevenvaughanbooth/adage --tag v0.1.1 adage-cli adage-exec adage-train
 ```
 
 For a Windows source install, omit `adage-exec`. Source installs place the binaries in `~/.cargo/bin`.

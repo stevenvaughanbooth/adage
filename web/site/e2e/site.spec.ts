@@ -239,9 +239,9 @@ test.describe("every tab is a page of its own", () => {
     await expect(page.locator("body")).not.toContainText("publication pending");
     await expect(page.locator("body")).not.toContainText("awaiting publication");
     await page.locator("#release-install summary").click();
-    await expect(page.getByRole("link", { name: "v0.1.0 GitHub release", exact: true })).toHaveAttribute("href", "https://github.com/stevenvaughanbooth/adage/releases/tag/v0.1.0");
+    await expect(page.getByRole("link", { name: "latest GitHub release", exact: true })).toHaveAttribute("href", "https://github.com/stevenvaughanbooth/adage/releases/latest");
     await expect(page.locator("#release-install")).toContainText("Follow any PATH instructions it prints");
-    await expect(page.getByRole("button", { name: "Copy standalone install" })).toHaveAttribute("data-copy", "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/download/v0.1.0/adage-cli-installer.sh | sh");
+    await expect(page.getByRole("button", { name: "Copy standalone install" })).toHaveAttribute("data-copy", "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh");
     await page.locator("#plugin-install summary").click();
     await expect(page.getByRole("button", { name: "Copy plugin install" })).toHaveAttribute("data-copy", "/plugin marketplace add stevenvaughanbooth/adage\n/plugin install adage@adage");
   });

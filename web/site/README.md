@@ -33,8 +33,8 @@ comparisons remain visible. Skills can carry judgment and their own evaluations;
 complementary way to distribute rules, not proof that inference is unnecessary.
 
 `get-started.html` leads with `npm install -g @adage-sh/cli` and links the published package.
-The launcher selects prebuilt platform binaries. The standalone-download disclosure retains the
-version-pinned v0.1.0 GitHub installer for macOS and Linux, its PATH instructions, and Windows
+The launcher selects prebuilt platform binaries. The standalone-download disclosure links the
+latest stable GitHub installer for macOS and Linux, its PATH instructions, and Windows
 archives; the Claude Code plugin remains a separate option. Verify the public launcher, platform
 packages and clean installation before publishing changes to these install paths.
 
