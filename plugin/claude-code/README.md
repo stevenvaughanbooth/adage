@@ -10,7 +10,8 @@ binary says. The binary decides; the mod never does
 
 ## Installing and updating
 
-- **From a terminal, today:** `adage init` installs this plugin for you. It stages it from the
+- **From a terminal:** install with `npm install -g @adage-sh/cli`, then run `adage init` in
+  your repository to install this plugin. It stages it from the
   `adage` you run (these files are carried inside the binary) as a one-plugin local marketplace
   under `$ADAGE_HOME/plugin/`, with `adage`, `adage-exec` and `adage-train` and their
   `dist/SHA256SUMS`, then runs `claude plugin marketplace add <that directory>` and

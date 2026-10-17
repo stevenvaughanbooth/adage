@@ -20,9 +20,9 @@ The development history is recorded in Git and the design documents under `docs/
 
 ### Documentation
 
-- Installation guides link the verified 0.1.0 release downloads and Claude Code plugin, and
-  identify npm publication as pending. The legacy early-access page points to installation
-  and describes updates for the next release.
+- Installation guides lead with `npm install -g @adage-sh/cli` and retain the verified
+  0.1.0 release downloads and Claude Code plugin as alternatives. The legacy early-access
+  page points to installation and describes updates for the next release.
 - Setup guides remove an obsolete plugin-data workaround and distinguish preview integrations
   from commands that apply hook configuration.
 
