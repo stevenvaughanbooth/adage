@@ -178,8 +178,10 @@ what every surface reads. `adage config set update.check off` (or `ADAGE_UPDATE_
 and `ADAGE_OFFLINE=1` stops every request. `adage update` itself asks when the kept answer is a day
 old.
 
-**The update.** With nothing newer, `adage 0.2.0 is the latest · nothing to do` and nothing runs.
-Otherwise it prints its plan, then, in order:
+**The update.** Even when the binary is current, `adage update` refreshes a stale locally managed
+Claude Code plugin and repairs registrations belonging to that installation. When everything
+matches, it reports that there is nothing to do. When a newer release is available, it prints
+its plan, then, in order:
 
 1. **Keeps** the running `adage`, and the `adage-exec` and `adage-train` beside it, in
    `$ADAGE_HOME/previous/<version>/` with their SHA-256 (`previous.json` says where each came from).
@@ -207,6 +209,14 @@ These steps after the package manager are run by the new binary (`adage update -
 update, leaves the kept binaries where they are and names `adage update --rollback`, which copies
 them back byte for byte (each checked against its recorded SHA-256 first) and re-points the
 registrations to them.
+
+**Switching installations.** Installing through npm does not replace an older Cargo binary or
+hooks registered to it. Check `adage --version` and run `adage doctor` from the new installation;
+use its full path if your terminal still selects the older one. Run `adage update` from that
+installation to refresh its locally managed Claude Code plugin. To move Codex hooks from another
+installation, run `adage install codex --write --scope user` from the new binary, review the diff,
+then approve the changed entries in Codex's `/hooks`. Use `--scope project` for hooks registered
+only in that repository. Start a new Claude Code session after refreshing its plugin.
 
 **Development versions.** `adage update --branch main` builds the main branch instead of a
 published release. A checkout build needs no release.
@@ -521,7 +531,7 @@ and reflex; `?` lists the keys. Its tabs:
 | **Home** | setup progress, repository selection, history sources, conditioning, and the next useful action; when a newer Adage is out, its version and `adage update` first |
 | **Live** | the watch view, larger: the pulse tiles, the session flow, and a rail with the reflexes in play, learning and health; `m` opens the map in your browser, as in `adage watch` |
 | **Reflexes** | every instinct and reflex by track, with a fuzzy `/` filter and a brief summary and trigger → response graph below the list. Press `Enter` to open a scrollable review dialog with evidence, the exact directive, and the available decisions. Each decision previews its effect before confirmation and shows the saved result |
-| **Traces** | recorded Adage activity by session, with complete recorded session details and the latest conditioning counts shown separately. This is not a list of every transcript the learner can read |
+| **Traces** | recorded Adage activity by session, with complete recorded session details and the latest conditioning time and counts shown separately. Press `c` to preview history and condition the selected repository |
 | **Map** | stimulus → reflex → response as a layered graph in the terminal; `adage map` opens the same in the browser |
 | **Health** | every doctor check, live, including live conditioning's. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), condition this repository now (a card first shows the sources it reads and what they hold; then its stages tick as it runs, in the background if you press `esc`; then a result card says what it did in plain words, `v` for the details and `enter` for the next step; it runs `adage condition --repo-root` without changing the background allowlist), turn live conditioning on, open the settings, or open the fail-open log |
 | **Settings** | every `adage config` key with its value and where it came from (default, file, or environment); `Enter` edits, `Space` toggles, and `adage config set`'s validation and agent-session refusal apply |
@@ -547,8 +557,16 @@ advice never grants permission to execute commands.
 hooks. Conditioning reads agent history, including supported subagent transcripts that may
 have no hook recording. The latest conditioning count describes one run; repeated runs read
 overlapping history, so their session counts are not added together. A missing count means
-the older run did not record it. Use **History sources** and **Condition now** to inspect the
-history available for the selected repository.
+the older run did not record it. The recorded sessions list is not a list of every transcript
+the learner can read.
+
+In **Traces**, press `h` for **History sources** or `c` for **Condition**. If the selected
+repository's checkout is not open, a form asks for its folder and checks that it matches your
+selection. With all repositories selected, choose the one checkout to condition. A preview
+shows the available files before you confirm learning. These are file counts, including
+supported agent and subagent histories; the learner determines usable sessions and independent
+evidence. A trace containing Adage advice may still contribute unrelated unsteered work.
+After conditioning finishes, the view refreshes the latest run's time and counts.
 
 Health distinguishes hooks registered from hooks actually received in the selected repository.
 Codex's `/hooks` acceptance happens inside Codex; its guidance stays visible until a hook arrives.

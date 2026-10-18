@@ -1,5 +1,6 @@
 //! Recorded hook sessions and the latest conditioning counts are different inventories.
-use crate::ui::app::{AppState, Cmd, WantKind};
+use crate::ui::app::{AppState, Cmd, Modal, WantKind};
+use crate::ui::forms::Form;
 use crate::ui::tools::Tool;
 use crate::ui::view::{self, Ctx};
 use crate::ui::{feed, scope};
@@ -44,16 +45,21 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
         KeyCode::Char('f') => s.open_repos(),
         KeyCode::Char('R') => return Some(Cmd::Want(WantKind::Traces)),
         KeyCode::Char('h') => return Some(Cmd::Do(super::super::app::Action::Tool(Tool::HistorySources))),
-        KeyCode::Char('c') => {
-            if s.scope_key() != s.here() {
-                s.message("Open this repository", vec!["Condition now works in the open checkout. Choose Open repository from the palette to condition another repository.".into()], false);
-            } else {
-                return Some(Cmd::PreviewLearning);
-            }
-        }
+        KeyCode::Char('c') => return Some(Cmd::ConditionTraces),
         _ => {}
     }
     None
+}
+
+/// Resolve the selected scope with the runtime's demo boundary before opening any history.
+pub fn condition(s: &mut AppState, demo: bool) -> Option<Cmd> {
+    if !demo && s.here().is_some() && s.scope_key() == s.here() {
+        Some(Cmd::PreviewLearning)
+    } else {
+        let repo = if demo { None } else { s.scope_key().map(String::from) };
+        s.modal = Some(Modal::Form(Form::condition_repository(repo)));
+        None
+    }
 }
 
 fn number(v: &Value) -> String {
@@ -62,6 +68,24 @@ fn number(v: &Value) -> String {
 
 pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let t = &ctx.theme;
+    // Keep the action above the scrollable inventory, even while loading or in a small terminal.
+    let [actions, area] = Layout::vertical([Constraint::Length(2), Constraint::Min(0)]).areas(area);
+    let target = match (ctx.demo, s.scope_key(), s.here()) {
+        (true, _, _) => "Open your repository, then preview its history.".into(),
+        (false, Some(repo), Some(here)) if repo == here => "Preview this repository's history before learning.".into(),
+        (false, Some(repo), _) => format!("Open {} to preview its history.", scope::friendly(repo)),
+        _ => "Choose one repository, then preview its history.".into(),
+    };
+    f.render_widget(
+        Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled(" c Condition ", t.selected().patch(t.bold())),
+                Span::styled("  h History sources", t.accent()),
+            ]),
+            Line::from(Span::styled(t.fit(&target, actions.width as usize), t.dim())),
+        ]),
+        actions,
+    );
     let data = match &s.traces.data {
         None => {
             f.render_widget(Paragraph::new(" Loading recorded sessions and conditioning history…"), area);
@@ -82,7 +106,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let rows = sessions(s);
     let mut summary = vec![
         Line::from(Span::styled(
-            format!(" Recorded activity: {}", crate::helpers::plural(rows.len(), "session", "sessions")),
+            format!(" Recorded hook activity: {}", crate::helpers::plural(rows.len(), "session", "sessions")),
             t.bold(),
         )),
         Line::from(Span::styled(" Hook observations and Adage decisions, not all agent transcripts.", t.ink2())),
@@ -100,8 +124,20 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         for row in histories {
             let repo = row["repo"].as_str().unwrap_or("");
             let prefix = if s.scope_key().is_none() { format!("{} · ", scope::friendly(repo)) } else { String::new() };
+            let when = row["last_conditioned_at"]
+                .as_u64()
+                .map(|ts| {
+                    format!(
+                        " · {}",
+                        s.live
+                            .anim
+                            .now_ms
+                            .map_or_else(|| view::clock(ts, ctx.tz, true), |now| crate::helpers::ago(now, ts))
+                    )
+                })
+                .unwrap_or_default();
             summary.push(Line::raw(format!(
-                " {prefix}Last conditioning: {} sessions used / {} files read",
+                " {prefix}Last conditioning{when}: {} sessions used / {} files read",
                 number(&row["sessions_used"]),
                 number(&row["files_read"])
             )));
@@ -111,7 +147,6 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         " Counts describe each repository's latest retained run, not a lifetime total.",
         t.dim(),
     )));
-    summary.push(Line::from(Span::styled(" h History sources · c Condition now (open checkout)", t.accent())));
     let summary = view::wrap_lines(t.lines(summary), area.width);
     let head_height = (summary.len() as u16).min(area.height.saturating_sub(4));
     let [head, rule, list] =

@@ -10,10 +10,21 @@ The development history is recorded in Git and the design documents under `docs/
 
 ## Unreleased
 
+### Changed
+
+- The terminal Traces view keeps **Condition** visible, previews the available history before
+  learning, and asks for a repository folder when the selected checkout is not open. It shows
+  when the latest conditioning run finished and refreshes its counts after a manual run.
+- History previews label discovered files separately from sessions used for learning, explain
+  subagent coverage, and leave evidence eligibility to the learner. Traces containing Adage
+  advice can still contribute unrelated unsteered work.
+
 ### Documentation
 
 - Standalone install links in the README, usage guide and website follow the latest stable
   release. The website describes the local browser review available in 0.1.1.
+- The upgrade guide explains how to refresh a local Claude Code plugin and move hooks when
+  switching from a source installation to npm.
 
 ## 0.1.1 - 2026-10-17
 

@@ -156,8 +156,10 @@ pub enum Cmd {
     OpenFailOpen,
     OpenTrace { session: String, repo: String },
     PreviewLearning,
+    ConditionTraces,
     PrepareTool(Tool),
     OpenRepository(PathBuf),
+    OpenRepositoryToCondition { directory: PathBuf, repo: Option<String> },
     OpenWeb { focus: Option<String>, traces: bool },
     CancelJob,
     Want(WantKind),
@@ -1098,7 +1100,8 @@ fn draw_status(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         spans.push(Span::raw("   "));
         spans.extend(super::kit::hints(&[("enter", "keep"), ("esc", "clear")], t, room));
     } else {
-        spans.extend(keys::bar(&[keys::GLOBAL, s.tab.keys()], t, room));
+        let tables = if s.tab == Tab::Traces { [s.tab.keys(), keys::GLOBAL] } else { [keys::GLOBAL, s.tab.keys()] };
+        spans.extend(keys::bar(&tables, t, room));
     }
     let used: usize = spans.iter().map(|s| s.width()).sum();
     spans.push(Span::raw(" ".repeat((area.width as usize).saturating_sub(used + 9))));
@@ -1286,11 +1289,14 @@ fn execute(
     dashboard: &mut Option<crate::map::Server>,
 ) -> bool {
     let t = &ctx.theme;
+    if ctx.demo && matches!(&cmd, Cmd::PreviewLearning) {
+        s.modal = Some(Modal::Form(Form::condition_repository(None)));
+        return false;
+    }
     if ctx.demo
         && matches!(
             &cmd,
             Cmd::PlanInstall { .. }
-                | Cmd::PreviewLearning
                 | Cmd::PrepareTool(_)
                 | Cmd::Do(Action::Install(_) | Action::FetchModel | Action::LearnNow | Action::SetConfig { .. })
         )
@@ -1304,6 +1310,7 @@ fn execute(
         if matches!(
             &cmd,
             Cmd::PreviewLearning
+                | Cmd::ConditionTraces
                 | Cmd::PrepareTool(_)
                 | Cmd::Do(Action::Tool(_) | Action::FetchModel | Action::LearnNow)
         ) {
@@ -1315,7 +1322,12 @@ fn execute(
         }
     }
     match cmd {
-        Cmd::OpenRepository(_) => unreachable!("handled by the event loop"),
+        Cmd::ConditionTraces => {
+            if let Some(cmd) = tabs::traces::condition(s, ctx.demo) {
+                return execute(cmd, s, ctx, loader, job, dashboard);
+            }
+        },
+        Cmd::OpenRepository(_) | Cmd::OpenRepositoryToCondition { .. } => unreachable!("handled by the event loop"),
         Cmd::CancelJob => { *job = None; s.pending_job_action = None; s.job_cancelable = false; s.modal = None; },
         Cmd::OpenWeb { focus, traces } => {
             let result = (|| -> Result<String> {
@@ -1335,7 +1347,7 @@ fn execute(
                 s.job_cancelable = true;
                 s.modal = Some(Modal::Progress {title:j.title.clone(),status:"Reading sources; Esc cancels".into(),ratio:0.0});
                 *job = Some(j);
-            } else { s.message("Open a repository", vec!["Choose Open repository from the palette, then Condition now.".into()],false); }
+            } else { s.modal = Some(Modal::Form(Form::condition_repository(None))); }
         },
         Cmd::PrepareTool(mut tool) => {
             let preview = (|| -> Result<Vec<String>> {
@@ -1581,11 +1593,17 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
             match j.poll() {
                 Some(done) => {
                     let title = j.title.clone();
+                    let conditioned = matches!(&done, Ok(jobs::Outcome::Conditioned(_)));
                     job = None;
                     s.complete_job(&title, done);
                     s.load_settings(&config::load(&ctx.paths));
                     loader.want(Want::Health);
                     loader.want(Want::Routes);
+                    // Keep the visible run summary current immediately after manual learning.
+                    // Background runs are already covered by the Traces worker's 10s refresh.
+                    if conditioned && (s.traces.data.is_some() || s.tab == Tab::Traces) {
+                        loader.want(Want::Traces);
+                    }
                 }
                 None => {
                     if let Some(Modal::Progress { status, ratio, .. }) = &mut s.modal {
@@ -1666,8 +1684,32 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
                 continue;
             }
             if let Some(cmd) = s.key(k.code, k.modifiers) {
-                if let Cmd::OpenRepository(directory) = cmd {
-                    match repository_context(&ctx, &directory) {
+                if matches!(&cmd, Cmd::OpenRepository(_) | Cmd::OpenRepositoryToCondition { .. }) {
+                    let (directory, condition, repo) = match cmd {
+                        Cmd::OpenRepository(directory) => (directory, false, None),
+                        Cmd::OpenRepositoryToCondition { directory, repo } => (directory, true, repo),
+                        _ => unreachable!(),
+                    };
+                    if let Some(j) = job.as_ref() {
+                        if j.stages.is_some() {
+                            s.modal = Some(progress_modal(j, &s));
+                            continue;
+                        }
+                        if condition {
+                            s.message(
+                                "Job running",
+                                vec!["Wait for the current job before opening another repository to condition.".into()],
+                                false,
+                            );
+                            continue;
+                        }
+                    }
+                    let next = if condition {
+                        repository_to_condition(&ctx, &directory, repo.as_deref())
+                    } else {
+                        repository_context(&ctx, &directory)
+                    };
+                    match next {
                         Ok(next) => {
                             // Stop the old server and demo player before changing any data source.
                             dashboard = None;
@@ -1681,10 +1723,20 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
                             s.rewrite_marker = Some(adage_hook::rewrite_off(&next.paths));
                             s.load_settings(&config::load(&next.paths));
                             ctx = next;
-                            s.message("Repository opened",vec![format!("Repository: {}",ctx.label),format!("Adage data: {}",ctx.paths.root.display()),"Choose Connect your agent, then History sources and Condition now from the palette.".into()],false);
+                            if condition {
+                                s.tab = Tab::Traces;
+                                loader.want(Want::Traces);
+                                execute(Cmd::PreviewLearning, &mut s, &ctx, &loader, &mut job, &mut dashboard);
+                            } else {
+                                s.message("Repository opened",vec![format!("Repository: {}",ctx.label),format!("Adage data: {}",ctx.paths.root.display()),"Choose Connect your agent, then History sources and Condition now from the palette.".into()],false);
+                            }
                         }
                         Err(e) => {
-                            let mut form = Form::new(FormKind::OpenRepository);
+                            let mut form = if condition {
+                                Form::condition_repository(repo)
+                            } else {
+                                Form::new(FormKind::OpenRepository)
+                            };
                             form.values[0] = directory.display().to_string();
                             form.error = Some(format!("{e:#}"));
                             s.modal = Some(Modal::Form(form));
@@ -1707,6 +1759,26 @@ fn run_inner(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>, from_watch: bo
 fn here_key(ctx: &Ctx) -> Option<String> {
     let root = ctx.root.as_deref()?;
     Some(super::health::repo_key(&ctx.paths, root, &adage_tracks::Index::load(&ctx.paths.index())))
+}
+
+/// A scope chosen from recorded history must not silently condition a different checkout.
+pub(super) fn repository_to_condition(
+    ctx: &Ctx,
+    directory: &std::path::Path,
+    expected_repo: Option<&str>,
+) -> Result<Ctx> {
+    let next = repository_context(ctx, directory)?;
+    if let Some(expected) = expected_repo {
+        let actual = here_key(&next).unwrap_or_default();
+        if actual != expected {
+            anyhow::bail!(
+                "This folder belongs to {}. Choose the checkout for {} shown in Traces.",
+                super::scope::friendly(&actual),
+                super::scope::friendly(expected)
+            );
+        }
+    }
+    Ok(next)
 }
 
 pub(super) fn repository_context(ctx: &Ctx, directory: &std::path::Path) -> Result<Ctx> {

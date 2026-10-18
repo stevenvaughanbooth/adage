@@ -91,9 +91,9 @@ pub const REFLEXES: &[Key] = &[
 ];
 
 pub const TRACES: &[Key] = &[
+    k("c", "condition", "preview history for this repository; open its checkout if needed", true),
     k("enter", "open session", "read all recorded hook events in this session", true),
     k("h", "history sources", "inspect agent history folders used for conditioning", true),
-    k("c", "condition now", "preview history and condition the open checkout", true),
     k("f", "repository", "choose whose recorded sessions and conditioning counts are shown", true),
     k("j/k ↑↓", "move", "select a recorded session", false),
     k("R", "reload", "reload recorded sessions and conditioning summaries", false),
