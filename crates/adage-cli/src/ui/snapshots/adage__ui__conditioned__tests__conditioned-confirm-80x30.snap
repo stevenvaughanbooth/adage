@@ -1,9 +1,8 @@
 ---
 source: crates/adage-cli/src/ui/conditioned.rs
+assertion_line: 1701
 expression: text
 ---
-
-
 
 
 
@@ -19,7 +18,11 @@ expression: text
   │                                                                          │
   │ Found 262 trace files                                                    │
   │   █████████████████████████▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░               │
-  │   █ 117 to learn from   ▒ 6 already steered   ░ 139 empty or unreadable  │
+  │   █ 117 unsteered   ▒ 6 steered   ░ 139 empty or unreadable              │
+  │ Discovery includes supported agent and subagent histories.               │
+  │ File counts are not sessions used for learning.                          │
+  │ Conditioning filters evidence and removes duplicate sessions.            │
+  │ Steered traces can still contribute unsteered work.                      │
   │                                                                          │
   │ Reads locally · never runs history commands                              │
   │ ──────────────────────────────────────────────────────────────────────── │

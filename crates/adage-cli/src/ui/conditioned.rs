@@ -763,11 +763,11 @@ fn confirm_lines(p: &Preview, repo: &str, w: usize, t: &Theme) -> (Vec<Line<'sta
     v.push(Line::from(vec![
         sp("Found ", t.bold()),
         sp(count(p.files, "trace file"), t.bold()),
-        sp(if p.instincts_only { " · none to learn from yet" } else { "" }, t.yellow()),
+        sp(if p.instincts_only { " · no non-empty history" } else { "" }, t.yellow()),
     ]));
     let parts = [
-        (p.usable, "to learn from", t.green(), t.ch("█", "#")),
-        (p.steered, "already steered", t.yellow(), t.ch("▒", "+")),
+        (p.usable, "unsteered", t.green(), t.ch("█", "#")),
+        (p.steered, "steered", t.yellow(), t.ch("▒", "+")),
         (p.unreadable, "empty or unreadable", t.dim(), t.ch("░", ".")),
     ];
     let total: usize = parts.iter().map(|x| x.0).sum();
@@ -794,6 +794,12 @@ fn confirm_lines(p: &Preview, repo: &str, w: usize, t: &Theme) -> (Vec<Line<'sta
             legend.push(sp(x.1, t.ink2()));
         }
         v.push(Line::from(legend));
+    }
+    for note in [crate::history::COVERAGE_NOTE, crate::history::INVENTORY_NOTE, crate::history::ELIGIBILITY_NOTE] {
+        v.push(Line::from(sp(note, t.ink2())));
+    }
+    if p.steered > 0 {
+        v.push(Line::from(sp(crate::history::STEERED_NOTE, t.ink2())));
     }
     if p.instincts_only {
         v.push(Line::from(sp("  Conditioning binds instincts from this repository's files instead.", t.ink2())));
@@ -1372,7 +1378,7 @@ pub(super) fn sample_sources(usable: usize) -> Preview {
         usable,
         steered: 6,
         unreadable: 139,
-        instincts_only: usable == 0,
+        instincts_only: false,
     }
 }
 
@@ -1693,7 +1699,9 @@ mod tests {
         let flow = Flow::confirm(sample_sources(117), ADAGE.into());
         let (text, _) = frame(&flow, 80, 30, &plain(), now);
         insta::assert_snapshot!("conditioned-confirm-80x30", text);
-        for want in ["✓ Claude Code", "117 to learn from", "6 already steered", "Reads locally", "enter  Condition"] {
+        for want in
+            ["✓ Claude Code", "117 unsteered", "6 steered", "not sessions used for learning", "enter  Condition"]
+        {
             assert!(text.contains(want), "{want}:\n{text}");
         }
         let mut s = AppState::new("config.toml".into());
@@ -1704,7 +1712,14 @@ mod tests {
         assert!(key(&mut s, Box::new(Flow::confirm(sample_sources(1), ADAGE.into())), KeyCode::Esc).is_none());
         assert!(s.modal.is_none(), "esc: nothing runs");
         let (text, _) = frame(&Flow::confirm(sample_sources(0), ADAGE.into()), 80, 30, &plain(), now);
-        assert!(text.contains("none to learn from yet") && text.contains("Bind instincts"), "{text}");
+        assert!(text.contains("6 steered") && text.contains("enter  Condition"), "{text}");
+        assert!(!text.contains("Bind instincts"), "steered files can still contain useful work: {text}");
+        let mut empty = sample_sources(0);
+        empty.files -= empty.steered;
+        empty.steered = 0;
+        empty.instincts_only = true;
+        let (text, _) = frame(&Flow::confirm(empty, ADAGE.into()), 80, 30, &plain(), now);
+        assert!(text.contains("no non-empty history") && text.contains("Bind instincts"), "{text}");
 
         // Running: reading is done, patterns are being found.
         let t0 = now;

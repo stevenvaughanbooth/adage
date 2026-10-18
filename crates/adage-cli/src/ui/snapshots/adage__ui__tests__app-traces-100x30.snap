@@ -4,12 +4,13 @@ expression: text
 ---
  adage  1 2 2  3 4 2  5 6 7 Traces                                       ◆ harbor-dispatch ▾ · LIVE
 ─────────────────────────━━━━━━━━━━─────────────────────────────────────────────────────────────────
- Recorded activity: 1 session
+ c Condition   h History sources
+Preview this repository's history before learning.
+ Recorded hook activity: 1 session
  Hook observations and Adage decisions, not all agent transcripts.
 
- Last conditioning: 6 sessions used / 12 files read
+ Last conditioning · 2 min ago: 6 sessions used / 12 files read
  Counts describe each repository's latest retained run, not a lifetime total.
- h History sources · c Condition now (open checkout)
 ─ RECORDED SESSIONS · enter opens all recorded events ──────────────────────────────────────────────
  > 12:04:00  first  2 events  claude-code  harbor-dispatch
 
@@ -29,6 +30,5 @@ expression: text
 
 
 
-
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-  ?  keys   :  palette   enter  open session   h  history sources   c  condition now        q  quit
+  c  condition   enter  open session   h  history sources   f  repository   ?  keys         q  quit

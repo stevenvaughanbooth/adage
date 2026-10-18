@@ -15,6 +15,7 @@ use ratatui::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     OpenRepository,
+    ConditionRepository,
     Evaluate,
     InstallModel,
     AddPack,
@@ -30,6 +31,7 @@ impl Kind {
     pub fn title(self) -> &'static str {
         match self {
             Self::OpenRepository => "Open repository",
+            Self::ConditionRepository => "Open repository to condition",
             Self::Evaluate => "Evaluate a dataset",
             Self::InstallModel => "Install a local model",
             Self::AddPack => "Import a signed pack",
@@ -44,7 +46,9 @@ impl Kind {
     }
     pub fn fields(self) -> &'static [(&'static str, &'static str)] {
         match self {
-            Self::OpenRepository => &[("Repository folder", "Git repository to inspect and condition")],
+            Self::OpenRepository | Self::ConditionRepository => {
+                &[("Repository folder", "Git repository to inspect and condition")]
+            }
             Self::Evaluate => &[("Dataset folder", "Folder containing evaluation sessions")],
             Self::InstallModel => &[("Model folder", "Existing local embedding model folder")],
             Self::AddPack => &[
@@ -77,6 +81,8 @@ pub struct Form {
     pub selected: usize,
     pub error: Option<String>,
     pub reflex: Option<(String, String)>,
+    /// The selected repository's identity, checked before opening its learning preview.
+    pub repository: Option<String>,
 }
 impl Form {
     pub fn new(kind: Kind) -> Self {
@@ -93,7 +99,10 @@ impl Form {
                 .into()
             })
             .collect();
-        Self { kind, values, selected: 0, error: None, reflex: None }
+        Self { kind, values, selected: 0, error: None, reflex: None, repository: None }
+    }
+    pub fn condition_repository(repository: Option<String>) -> Self {
+        Self { repository, ..Self::new(Kind::ConditionRepository) }
     }
 }
 pub fn key(s: &mut AppState, mut form: Form, code: KeyCode) -> Option<Cmd> {
@@ -118,6 +127,12 @@ pub fn key(s: &mut AppState, mut form: Form, code: KeyCode) -> Option<Cmd> {
                 let v = |i: usize| form.values[i].trim().to_string();
                 let tool = match form.kind {
                     Kind::OpenRepository => return Some(Cmd::OpenRepository(v(0).into())),
+                    Kind::ConditionRepository => {
+                        return Some(Cmd::OpenRepositoryToCondition {
+                            directory: v(0).into(),
+                            repo: form.repository.clone(),
+                        })
+                    }
                     Kind::Evaluate => Tool::Eval(v(0).into()),
                     Kind::InstallModel => Tool::InstallModel(v(0).into()),
                     Kind::HistoryClaude => {
@@ -156,7 +171,35 @@ pub fn key(s: &mut AppState, mut form: Form, code: KeyCode) -> Option<Cmd> {
     None
 }
 pub fn draw(f: &mut Frame, area: Rect, form: &Form, t: &Theme) {
-    let mut lines = vec![Line::raw("Tab / Shift-Tab moves between fields. Enter reviews the action."), Line::raw("")];
+    if form.kind == Kind::ConditionRepository && area.height < 12 {
+        // On a short terminal keep the editable folder and exit key visible together.
+        let area = f.area();
+        let width = area.width.saturating_sub(8) as usize;
+        let target =
+            form.repository.as_deref().map(super::scope::friendly).unwrap_or_else(|| "Choose a repository".into());
+        let value = super::words::fit_left(&form.values[0], width.saturating_sub(10), t.more());
+        let mut lines = vec![
+            Line::from(Span::styled(t.fit(&target, width), t.dim())),
+            Line::from(Span::styled(format!("Folder: > {value}{}", t.ch("▏", "_")), t.accent())),
+        ];
+        if let Some(error) = &form.error {
+            lines.push(Line::from(Span::styled(t.fit(error, width), t.red())));
+        }
+        lines.push(Line::raw("enter preview · esc cancel"));
+        view::popup(f, area, form.kind.title(), lines, t, 0);
+        return;
+    }
+    let mut lines = if form.kind == Kind::ConditionRepository {
+        vec![
+            Line::raw(match &form.repository {
+                Some(repo) => format!("Selected: {}", super::scope::friendly(repo)),
+                None => "Choose one repository to learn from.".into(),
+            }),
+            Line::from(Span::styled("Enter opens the history preview. Learning still needs confirmation.", t.dim())),
+        ]
+    } else {
+        vec![Line::raw("Tab / Shift-Tab moves between fields. Enter reviews the action."), Line::raw("")]
+    };
     for (i, (label, hint)) in form.kind.fields().iter().enumerate() {
         lines.push(Line::from(Span::styled(label.to_string(), t.bold())));
         lines.push(Line::from(Span::styled(hint.to_string(), t.dim())));

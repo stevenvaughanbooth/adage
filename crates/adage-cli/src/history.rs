@@ -100,21 +100,28 @@ pub fn summary(paths: &adage_store::Paths, root: Option<&Path>) -> Vec<String> {
     lines
 }
 
-/// What conditioning would read for a repository, counted before anything is learned.
+/// A discovery inventory before conditioning. Files are not deduplicated evidence or a promise
+/// that the learner can use every decoded session.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Preview {
     pub sources: Vec<Source>,
     /// Trace files found in the sources for this repository.
     pub files: usize,
-    /// Traces conditioning can learn from.
+    /// Files with a non-empty decoded session and no recorded Adage advice.
     pub usable: usize,
-    /// Traces that received Adage's directives: what those named is not their evidence.
+    /// Files with a non-empty decoded session that received Adage advice. Other work in the
+    /// same session can still contribute evidence; the learner decides that per candidate.
     pub steered: usize,
     /// Files with no session in them, or that could not be read.
     pub unreadable: usize,
-    /// Nothing to learn from yet: conditioning binds instincts from the repository's files.
+    /// No non-empty sessions were decoded and instincts are enabled.
     pub instincts_only: bool,
 }
+
+pub const COVERAGE_NOTE: &str = "Discovery includes supported agent and subagent histories.";
+pub const INVENTORY_NOTE: &str = "File counts are not sessions used for learning.";
+pub const ELIGIBILITY_NOTE: &str = "Conditioning filters evidence and removes duplicate sessions.";
+pub const STEERED_NOTE: &str = "Steered traces can still contribute unsteered work.";
 
 impl Preview {
     /// The preview as lines of text.
@@ -122,12 +129,16 @@ impl Preview {
         let mut lines: Vec<String> = self.sources.iter().map(Source::line).collect();
         lines.push(LOCAL_ONLY.into());
         lines.push(format!(
-            "{} files found: {} unsteered sessions, {} already steered, {} empty or unreadable.",
+            "{} trace files found: {} unsteered, {} steered, {} empty or unreadable.",
             self.files, self.usable, self.steered, self.unreadable
         ));
+        lines.extend([COVERAGE_NOTE.into(), INVENTORY_NOTE.into(), ELIGIBILITY_NOTE.into()]);
+        if self.steered > 0 {
+            lines.push(STEERED_NOTE.into());
+        }
         if self.instincts_only {
             lines.push(
-                "No unsteered history yet. Conditioning can still bind instincts from this repository's files.".into(),
+                "No non-empty history found. Conditioning can bind instincts from this repository's files.".into(),
             );
         }
         lines.push("Conditioning reads these sources locally. Counts can change if a session is still running.".into());
@@ -153,18 +164,22 @@ pub fn preview(paths: &adage_store::Paths, root: &Path) -> anyhow::Result<Previe
             _ => unreadable += 1,
         }
     }
-    if usable == 0 && !adage_store::config::load(paths).config.instincts_enabled {
-        anyhow::bail!("No unsteered history found and instincts are disabled. Configure a history source or enable instincts in Settings.");
-    }
+    // Discovery is not an eligibility gate: a steered session may contain unrelated unsteered
+    // work, and only the learner deduplicates and evaluates that evidence.
+    let instincts_only = usable + steered == 0 && adage_store::config::load(paths).config.instincts_enabled;
     Ok(Preview {
         sources: sources(paths, Some(&root)),
         files: files.len(),
         usable,
         steered,
         unreadable,
-        instincts_only: usable == 0,
+        instincts_only,
     })
 }
+
+#[cfg(test)]
+#[path = "history_tests.rs"]
+mod tests;
 
 pub fn set_source(paths: &adage_store::Paths, harness: &str, directory: &Path) -> anyhow::Result<Vec<String>> {
     let person = adage_app::person::require("config set history")?;

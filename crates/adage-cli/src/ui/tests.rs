@@ -2882,7 +2882,7 @@ fn conditioning_preflight_cannot_skip_to_mutation_or_survive_failure() {
     s.complete_job("Preview", Ok(super::conditioned::sample_sources(12).into()));
     let d = tempfile::tempdir().unwrap();
     let text = app_frame(&s, &ctx(Paths::at(d.path()), false), 100, 30);
-    assert!(text.contains("12 to learn from"), "{text}");
+    assert!(text.contains("12 unsteered"), "{text}");
     assert!(s.key(KeyCode::Esc, NONE).is_none());
     assert!(s.modal.is_none(), "esc cancels: nothing runs");
 }
@@ -3664,13 +3664,18 @@ fn traces_separate_recorded_activity_from_latest_conditioning_and_open_exact_ses
             {"session":"first","repo":"harbor-dispatch","end_ts":T0,"events_total":2,"harnesses":["claude-code"]},
             {"session":"other","repo":"another","end_ts":T0,"events_total":99,"harnesses":["codex"]}
         ],
-        "learning_history":{"repositories":[{"repo":"harbor-dispatch","sessions_used":6,"files_read":12}]}
+        "learning_history":{"repositories":[{"repo":"harbor-dispatch","sessions_used":6,"files_read":12,"last_conditioned_at":T0}]}
     })));
+    s.live.anim.now_ms = Some(T0 + 120_000);
     assert!(matches!(s.key(KeyCode::Char('7'), NONE), Some(Cmd::Want(app::WantKind::Traces))));
     let text = app_frame(&s, &c, 100, 30);
-    for want in
-        ["Recorded activity: 1 session", "6 sessions used / 12 files read", "not a lifetime total", "History sources"]
-    {
+    for want in [
+        "Recorded hook activity: 1 session",
+        "Last conditioning · 2 min ago",
+        "6 sessions used / 12 files read",
+        "not a lifetime total",
+        "History sources",
+    ] {
         assert!(text.contains(want), "missing {want:?}:\n{text}");
     }
     snap("app-traces-100x30", &text);
@@ -3681,7 +3686,8 @@ fn traces_separate_recorded_activity_from_latest_conditioning_and_open_exact_ses
         s.key(KeyCode::Char('h'), NONE),
         Some(Cmd::Do(app::Action::Tool(super::tools::Tool::HistorySources)))
     ));
-    assert!(matches!(s.key(KeyCode::Char('c'), NONE), Some(Cmd::PreviewLearning)));
+    assert!(matches!(s.key(KeyCode::Char('c'), NONE), Some(Cmd::ConditionTraces)));
+    assert!(matches!(tabs::traces::condition(&mut s, false), Some(Cmd::PreviewLearning)));
     let lines = tabs::traces::detail_lines(&json!({"session":"first","repo":"harbor-dispatch","events_total":3,"events":[
         {"ts":T0,"event":"PostToolUse","harness":"claude-code","arm":"treated","observed":["exec pwd"],"directives":[],"judgements":[]},
         {"ts":T0,"event":"Stop","harness":"claude-code","arm":"control","observed":[],"directives":[],"would_have":[{"route":"verify","text":"Run the check"}],"judgements":[]},
@@ -3709,4 +3715,112 @@ fn traces_separate_recorded_activity_from_latest_conditioning_and_open_exact_ses
         empty.contains("not recorded sessions used") && empty.contains("No hook sessions"),
         "unknown is not zero:\n{empty}"
     );
+}
+
+#[test]
+fn traces_condition_action_stays_visible_before_loaded_data_and_in_small_terminals() {
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    let mut s = app_state();
+    s.tab = Tab::Traces;
+    for data in [
+        None,
+        Some(Err("unreadable activity".into())),
+        Some(Ok(
+            json!({"trace_sessions":[],"learning_history":{"repositories":(0..40).map(|n|json!({"repo":format!("repo-{n}"),"sessions_used":6,"files_read":12})).collect::<Vec<_>>()}}),
+        )),
+    ] {
+        s.traces.data = data;
+        s.set_scope(None);
+        for (width, height) in [(100, 30), (80, 24), (40, 10)] {
+            let text = app_frame(&s, &c, width, height);
+            assert!(
+                text.lines().nth(2).is_some_and(|line| line.contains("c Condition")),
+                "the main action stays above every inventory at {width}x{height}:\n{text}"
+            );
+            assert!(
+                text.lines().last().is_some_and(|line| line.contains("condition")),
+                "the footer keeps the key at {width}x{height}:\n{text}"
+            );
+        }
+    }
+}
+
+#[test]
+fn traces_condition_opens_selected_checkout_and_never_skips_preview() {
+    fn condition(s: &mut AppState, demo: bool) -> Option<Cmd> {
+        assert!(matches!(s.key(KeyCode::Char('c'), NONE), Some(Cmd::ConditionTraces)));
+        tabs::traces::condition(s, demo)
+    }
+    use super::forms::Kind;
+    let mut s = app_state();
+    s.tab = Tab::Traces;
+    s.here = Some("harbor-dispatch".into());
+    s.set_scope(Some("other-repository".into()));
+    assert!(condition(&mut s, false).is_none());
+    assert!(
+        matches!(&s.modal,Some(Modal::Form(form)) if form.kind==Kind::ConditionRepository && form.repository.as_deref()==Some("other-repository"))
+    );
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    for (width, height) in [(80, 24), (40, 10)] {
+        let text = app_frame(&s, &c, width, height);
+        assert!(text.contains("other-repository") && text.contains("preview") && text.contains("cancel"), "{text}");
+        assert!(text.contains("Repository folder") || text.contains("Folder: >"), "input remains visible:\n{text}");
+    }
+    assert!(s.key(KeyCode::Enter, NONE).is_none(), "an empty folder cannot submit");
+    assert!(s.key(KeyCode::Esc, NONE).is_none());
+    assert!(s.modal.is_none());
+    condition(&mut s, false);
+    let Some(Modal::Form(form)) = s.modal.as_mut() else { panic!("folder form") };
+    form.values[0] = "/tmp/other project $(literal)".into();
+    assert!(
+        matches!(s.key(KeyCode::Enter,NONE),Some(Cmd::OpenRepositoryToCondition { directory, repo }) if directory==std::path::Path::new("/tmp/other project $(literal)") && repo.as_deref()==Some("other-repository"))
+    );
+    for here in [Some("harbor-dispatch".into()), None] {
+        s.here = here;
+        s.health = None;
+        s.set_scope(None);
+        assert!(condition(&mut s, false).is_none(), "all repositories never silently learns the open checkout");
+        assert!(
+            matches!(&s.modal,Some(Modal::Form(form)) if form.kind==Kind::ConditionRepository && form.repository.is_none())
+        );
+        s.key(KeyCode::Esc, NONE);
+    }
+    s.here = Some("harbor-dispatch".into());
+    s.set_scope(Some("harbor-dispatch".into()));
+    assert!(matches!(condition(&mut s, false), Some(Cmd::PreviewLearning)));
+    s.pending_job_action = Some(app::Action::LearnNow);
+    s.complete_job("Preview", Ok(super::conditioned::sample_sources(8).into()));
+    assert!(matches!(&s.modal, Some(Modal::Conditioning(_))));
+    assert!(s.key(KeyCode::Esc, NONE).is_none(), "c opens a preview, not a learning run");
+    assert!(s.modal.is_none());
+    // Demo identities are samples, never a constraint on the person's real checkout.
+    for scope in [Some("harbor-dispatch".into()), Some("other-sample".into()), None] {
+        s.set_scope(scope);
+        assert!(condition(&mut s, true).is_none());
+        assert!(matches!(&s.modal,Some(Modal::Form(form)) if form.repository.is_none()));
+        s.key(KeyCode::Esc, NONE);
+    }
+}
+
+#[test]
+fn traces_condition_rejects_a_different_repository_before_switching() {
+    let d = tempfile::tempdir().unwrap();
+    let selected = d.path().join("selected");
+    let other = d.path().join("other");
+    std::fs::create_dir_all(selected.join(".git")).unwrap();
+    std::fs::create_dir_all(other.join(".git")).unwrap();
+    let c = ctx(Paths::at(d.path().join("adage-data")), false);
+    let expected = adage_core::repo::repo_key(&selected);
+    let mismatch = app::repository_to_condition(&c, &other, Some(&expected));
+    assert!(mismatch.is_err());
+    assert!(mismatch.err().unwrap().to_string().contains("Choose the checkout for selected"));
+    let next = app::repository_to_condition(&c, &selected, Some(&expected)).unwrap();
+    assert_eq!(next.root.as_deref(), Some(selected.canonicalize().unwrap().as_path()));
+    assert!(
+        app::repository_to_condition(&c, &other, None).is_ok(),
+        "an explicit choice from all repositories is allowed"
+    );
+    assert!(!c.paths.root.exists(), "opening a folder to preview must not write Adage data");
 }
