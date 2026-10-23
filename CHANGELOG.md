@@ -10,6 +10,11 @@ The development history is recorded in Git and the design documents under `docs/
 
 ## Unreleased
 
+### Fixed
+
+- The website's Get started page keeps the installation instructions and commands fully visible;
+  the following section no longer shifts upward over them on desktop screens.
+
 ### Changed
 
 - The terminal Traces view keeps **Condition** visible, previews the available history before
