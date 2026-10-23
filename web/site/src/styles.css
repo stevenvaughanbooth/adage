@@ -659,8 +659,8 @@ math { color: inherit; font-family: "STIX Two Math", "Cambria Math", "Latin Mode
   .scenes main > section.alt { background-color: var(--raised); }
   /* Each new scene arrives as a sheet over the last. */
   .scenes main > section + section { border-top: 0; border-radius: 26px 26px 0 0; box-shadow: 0 -1px 0 var(--line-strong), 0 -20px 60px rgb(0 0 0 / 0.32); }
-  /* Nothing slides over the last scene but the footer, so it simply scrolls. */
-  .scenes main > section:last-child { position: relative; }
+  /* The last scene scrolls normally, without the sticky offset for tall sections. */
+  .scenes main > section:last-child { position: relative; top: auto; }
   .scenes .foot { position: relative; background: var(--night); }
   /* Two scenes under, it cannot show: it stops being drawn. */
   .scenes main > section[data-gone] { opacity: 0; }
