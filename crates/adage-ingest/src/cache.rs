@@ -79,8 +79,10 @@ pub enum Read {
 /// format 9: direct numeric-version Python pytest/unittest invocations normalize as Verify;
 /// format 10: native calls with no normalized actions retained as opaque boundaries;
 /// format 11: bounded literal Codex exec forwarders retain native command/result provenance;
-/// format 12: native Claude task-completion envelopes are not human task instructions).
-pub const SESSION_FORMAT: u32 = 12;
+/// format 12: native Claude task-completion envelopes are not human task instructions;
+/// format 13: a resumed Claude Code session's transcript is that session, from its own records,
+/// not the earlier session whose records it begins with copies of).
+pub const SESSION_FORMAT: u32 = 13;
 
 /// The identity of this parser: a cache written by any other build is not trusted.
 fn parser_id() -> String {

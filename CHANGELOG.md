@@ -12,6 +12,12 @@ The development history is recorded in Git and the design documents under `docs/
 
 ### Fixed
 
+- Conditioning no longer stops with "conflicting canonical records" when Claude Code has resumed
+  a session into a new transcript. Such a transcript begins with a copy of the earlier session's
+  records; Adage now reads it as the resumed session, from its own records, and keeps learning
+  from every other session.
+- `learn.repos` accepts every repository key Adage derives, including one with spaces or an
+  apostrophe in the folder name, so `adage init` can record the repositories chosen.
 - The website's Get started page keeps the installation instructions and commands fully visible;
   the following section no longer shifts upward over them on desktop screens.
 

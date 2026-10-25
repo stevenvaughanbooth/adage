@@ -479,9 +479,10 @@ fn from_text(kind: Kind, s: &str) -> Result<toml::Value, String> {
         Kind::Repos if s == "all" => Ok(toml::Value::String(s.into())),
         Kind::Repos => {
             let keys = split_ids(s);
-            let ok = |k: &String| {
-                k != "all" && k.len() <= 512 && !k.chars().any(|c| c.is_whitespace() || c.is_control() || c == '"')
-            };
+            // A key is derived from a directory's name or an origin URL (`adage_core::repo`), so
+            // it may hold spaces, quotes or an apostrophe (`Aaron's App@7656fd95b184`); only the
+            // list's own separator and control characters are refused.
+            let ok = |k: &String| k != "all" && k.len() <= 512 && !k.chars().any(char::is_control);
             if keys.len() > 256 || !keys.iter().all(ok) {
                 return Err(format!("{s:?} is not all, or a comma-separated list of repository keys"));
             }
@@ -813,6 +814,16 @@ mod tests {
             set(&paths, "learn.repos", "github.com/acme/billing, notes@1a2b3c4d5e6f").unwrap(),
             "github.com/acme/billing,notes@1a2b3c4d5e6f"
         );
+        // Every key Adage derives is accepted: a directory's name may hold spaces and quotes.
+        let named = "Aaron's App@7656fd95b184, my \"notes\"@path-1a2b3c4d5e6f";
+        assert_eq!(set(&paths, "learn.repos", named).unwrap(), named.replace(", ", ","));
+        let l = load_from(&paths.config(), &no_env);
+        assert!(l.config.learns("Aaron's App@7656fd95b184") && l.config.learns("my \"notes\"@path-1a2b3c4d5e6f"));
+        assert_eq!(l.problems, vec!["unknown key other.kept (ignored)".to_string()], "{named:?} reads back");
+        assert_eq!(
+            set(&paths, "learn.repos", "github.com/acme/billing, notes@1a2b3c4d5e6f").unwrap(),
+            "github.com/acme/billing,notes@1a2b3c4d5e6f"
+        );
         for (k, v) in [
             ("learn.min_interval_secs", "soon"),
             ("learn.min_interval_secs", "100000"),
@@ -829,7 +840,7 @@ mod tests {
             ("instincts.packs", "adage/python-env/x"),
             ("instincts.disabled", "../lockfiles"),
             ("learn.repos", "all, github.com/acme/billing"),
-            ("learn.repos", "github.com/acme/my billing"),
+            ("learn.repos", "github.com/acme/billing\tnotes"),
             ("update.check", "hourly"),
         ] {
             assert!(set(&paths, k, v).is_err(), "{k} = {v} must be refused");
