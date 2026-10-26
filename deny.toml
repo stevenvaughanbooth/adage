@@ -22,6 +22,13 @@ ignore = [
   # verifies with public keys only: no attacker can time private-key operations over a network,
   # which is the advisory's own stated safe case. Revisit when rsa ships a constant-time release.
   { id = "RUSTSEC-2023-0071", reason = "local, one-shot RSA signing only; no network-observable timing" },
+  # crypto-bigint 0.5 (secret-dependent branches in operations meant to be constant-time), via
+  # p256/p384/p521 under ssh-key's "crypto" feature in adage-sign: the same local, one-shot ECDSA
+  # signing and public-key-only verification as above, with no network-observable timing. The fix
+  # is crypto-bigint 0.7.6, which only ssh-key 0.7 (a release candidate) would bring, and
+  # ssh-agent-client-rs still requires ssh-key 0.6. Revisit when ssh-key 0.7 and an
+  # ssh-agent-client-rs built on it are released.
+  { id = "RUSTSEC-2026-0387", reason = "local, one-shot ECDSA signing only; no network-observable timing; no fixed stable ssh-key yet" },
 ]
 
 [licenses]
