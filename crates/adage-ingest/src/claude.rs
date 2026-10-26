@@ -7,6 +7,11 @@
 //! the directive named ([`Directed`]): learning never counts what a directive named, from its
 //! delivery on, as evidence (Design §11: never learn from your own influence; Track G §3.2,
 //! steering by influence).
+//!
+//! A resumed session gets a transcript of its own that begins with a copy of the earlier session's
+//! records (each still carrying the earlier `sessionId`), followed by its own. The copies are the
+//! earlier session's evidence, read from its own transcript; the file decodes to the session its
+//! last records belong to, from those records alone ([`decode`]).
 
 use crate::format::{Decode, Format};
 use crate::locate::{LocalCheckout, Located};
@@ -129,9 +134,51 @@ pub fn is_subagent(path: &Path) -> bool {
 
 /// Decode one Claude Code transcript from any reader: a local file, a remote store, memory. The
 /// repository is found by `cx.locator`; nothing else here touches the filesystem.
+///
+/// Records are read in segments of one `sessionId` each. A record whose `sessionId` differs from
+/// the segment's starts a new one, and the file is the session of its last segment: the records
+/// before it are copies a resume made of an earlier session, whose own transcript is their
+/// evidence. What that earlier context delivered (its directives) still steers the resumed
+/// session, so the directives found before the boundary are kept, at its first step.
 pub fn decode(reader: impl BufRead, cx: &Decode<'_>) -> Option<Session> {
+    let mut lines = reader.lines().map_while(Result::ok);
+    let mut first: Option<String> = None;
+    let mut prior = Signals::default();
+    loop {
+        match decode_segment(first.take(), &mut lines, cx, prior) {
+            Segment::Done(session) => return session.map(|s| *s),
+            Segment::Resumed { line, mut signals } => {
+                for d in &mut signals.found {
+                    d.at_step = 0;
+                }
+                first = Some(line);
+                prior = signals;
+            }
+        }
+    }
+}
+
+/// What reading one segment of a transcript ends in.
+enum Segment {
+    /// The transcript ended: its session, if it holds a usable one.
+    Done(Option<Box<Session>>),
+    /// A record of another session began: the record itself, to start the next segment with, and
+    /// the directives delivered so far.
+    Resumed { line: String, signals: Signals },
+}
+
+/// Decode records from `first` and then `lines` until they end or a record of another session
+/// begins. `prior` carries the directives delivered before this segment.
+fn decode_segment(
+    first: Option<String>,
+    lines: &mut impl Iterator<Item = String>,
+    cx: &Decode<'_>,
+    prior: Signals,
+) -> Segment {
     let (table, repo_override, subagent) = (cx.table, cx.repo_override, cx.subagent);
     let mut id = String::new();
+    // The `sessionId` this segment's records carry (`id` adds the agent for a sub-agent's).
+    let mut session_id = String::new();
     let mut cwd: Option<String> = None;
     let mut model: Option<String> = None;
     let mut day = String::new();
@@ -141,7 +188,7 @@ pub fn decode(reader: impl BufRead, cx: &Decode<'_>) -> Option<Session> {
     let mut issued_ids = BTreeSet::new();
     let mut results: HashMap<String, (String, bool)> = HashMap::new();
     let mut turn_of_msg: HashMap<String, u32> = HashMap::new();
-    let mut signals = Signals::default();
+    let mut signals = prior;
     let mut prompts = Prompts::default();
     // The last thing the transcript records: the agent's final reply (its text), or a tool call or
     // result with no reply after it.
@@ -151,17 +198,23 @@ pub fn decode(reader: impl BufRead, cx: &Decode<'_>) -> Option<Session> {
     let mut structured_handback = false;
     let mut delegation: Option<adage_trace::session::Delegation> = None;
 
-    for line in reader.lines() {
-        let Ok(line) = line else { break };
-        let line = line.as_str();
+    let mut pending = first;
+    while let Some(owned) = pending.take().or_else(|| lines.next()) {
+        let line = owned.as_str();
         let Ok(rec) = serde_json::from_str::<Value>(line) else { continue };
         if !subagent && rec.get("isSidechain").and_then(|v| v.as_bool()) == Some(true) {
             continue;
+        }
+        if let Some(s) = rec.get("sessionId").and_then(|v| v.as_str()) {
+            if !session_id.is_empty() && session_id != s {
+                return Segment::Resumed { line: owned, signals };
+            }
         }
         if id.is_empty() {
             // A sub-agent shares its parent's session id; its agent id tells the traces apart.
             let agent = rec.get("agentId").and_then(|v| v.as_str()).filter(|_| subagent);
             if let Some(s) = rec.get("sessionId").and_then(|v| v.as_str()) {
+                session_id = s.to_string();
                 id = match agent {
                     Some(a) => {
                         delegation = Some(adage_trace::session::Delegation {
@@ -338,8 +391,7 @@ pub fn decode(reader: impl BufRead, cx: &Decode<'_>) -> Option<Session> {
         }
     }
 
-    let cwd = cwd?;
-    let prompt = prompt?;
+    let (Some(cwd), Some(prompt)) = (cwd, prompt) else { return Segment::Done(None) };
     let Located { root, repo: repo_key } = cx.locator.locate(Path::new(&cwd), repo_override);
     let root_str = root.to_string_lossy().to_string();
     let mut steps = Vec::new();
@@ -400,7 +452,7 @@ pub fn decode(reader: impl BufRead, cx: &Decode<'_>) -> Option<Session> {
         cut_off: ends_on_tool && !structured_handback && !steps.is_empty(),
         structured_handback,
     };
-    Some(Session {
+    Segment::Done(Some(Box::new(Session {
         id,
         delegation,
         root,
@@ -417,7 +469,7 @@ pub fn decode(reader: impl BufRead, cx: &Decode<'_>) -> Option<Session> {
         prompts,
         identity: Default::default(),
         ending,
-    })
+    })))
 }
 
 /// Claude Code transcripts as a [`Format`]: the fallback, tried last (anything else is not a
@@ -619,6 +671,72 @@ mod tests {
         );
         let json = serde_json::to_string(&s.steps[0]).unwrap();
         assert!(!json.contains("\"by\""), "an agent's step reads as before: {json}");
+    }
+
+    /// A resumed session's transcript begins with copies of the earlier session's records (each
+    /// keeping its `sessionId`) before its own. It is the resumed session, from its own records
+    /// alone: never a second, conflicting record of the earlier session, whose own transcript is
+    /// its evidence. A directive the earlier context delivered still steers the resumed session.
+    #[test]
+    fn a_resumed_sessions_transcript_is_its_own_records_alone() {
+        let rec = |v: serde_json::Value| format!("{v}\n");
+        let user = |sid: &str, day: &str, t: &str| {
+            rec(serde_json::json!({"type":"user","sessionId":sid,"uuid":format!("{sid}-{t}"),"cwd":"/tmp/x",
+                "timestamp":format!("{day}T10:00:00Z"),"message":{"role":"user","content":t}}))
+        };
+        let tool = |sid: &str, mid: &str, id: &str, cmd: &str| {
+            rec(serde_json::json!({"type":"assistant","sessionId":sid,"uuid":format!("{sid}-{id}"),"cwd":"/tmp/x",
+                "message":{"id":mid,"role":"assistant","model":"claude-x",
+                "content":[{"type":"tool_use","id":id,"name":"Bash","input":{"command":cmd}}]}}))
+        };
+        let result = |sid: &str, id: &str| {
+            rec(serde_json::json!({"type":"user","sessionId":sid,"uuid":format!("{sid}-{id}-r"),"cwd":"/tmp/x",
+                "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":id,"content":"ok"}]}}))
+        };
+        let wrapper =
+            "<adage-reflex track=\"t@1\" route=\"r\" strength=\"fire\" kind=\"run\">\n  make gen\n</adage-reflex>";
+        let hook = |sid: &str| {
+            rec(serde_json::json!({"type":"attachment","sessionId":sid,
+                "attachment":{"type":"hook_additional_context","hookEvent":"UserPromptSubmit","content":[wrapper]}}))
+        };
+        let earlier = [user("a", "2026-09-01", "Fix the schema"), tool("a", "m1", "t1", "make gen"), result("a", "t1")];
+        let own =
+            [user("b", "2026-09-03", "now run the checks"), tool("b", "m2", "t2", "make check"), result("b", "t2")];
+        let cx = Decode {
+            table: CommandTable::load(),
+            locator: &crate::locate::AsRecorded,
+            repo_override: Some("r"),
+            subagent: false,
+        };
+        let keys = |s: &Session| s.steps.iter().map(|x| x.key.clone()).collect::<Vec<_>>();
+
+        let original = decode(earlier.concat().as_bytes(), &cx).unwrap();
+        assert_eq!((original.id.as_str(), original.day.as_str()), ("a", "2026-09-01"));
+        assert_eq!(keys(&original), ["exec make gen"]);
+
+        let resumed = decode((earlier.concat() + &own.concat()).as_bytes(), &cx).unwrap();
+        assert_eq!((resumed.id.as_str(), resumed.day.as_str()), ("b", "2026-09-03"));
+        assert_eq!(resumed.prompt, "now run the checks");
+        assert_eq!(resumed.prompt_count(), 1);
+        assert_eq!(keys(&resumed), ["exec make check"], "the copies are the earlier session's evidence");
+        assert!(!resumed.steered && resumed.influence.is_empty());
+
+        // Resumed twice: the last session's records.
+        let again = [user("c", "2026-09-04", "and lint"), tool("c", "m3", "t3", "make lint")];
+        let twice = decode((earlier.concat() + &own.concat() + &again.concat()).as_bytes(), &cx).unwrap();
+        assert_eq!((twice.id.as_str(), twice.prompt.as_str()), ("c", "and lint"));
+        assert_eq!(keys(&twice), ["exec make lint"]);
+
+        // A directive delivered in the earlier context steers the resumed session from its start.
+        let steered = decode((earlier.concat() + &hook("a") + &own.concat()).as_bytes(), &cx).unwrap();
+        assert_eq!((steered.id.as_str(), keys(&steered)), ("b", vec!["exec make check".to_string()]));
+        assert!(steered.steered);
+        assert_eq!(steered.directed, BTreeSet::from(["r".to_string()]));
+        assert_eq!(steered.influence.iter().map(|d| (d.route.as_str(), d.at_step)).collect::<Vec<_>>(), [("r", 0)]);
+
+        // Only the resumed session's own records: none with a prompt, no session.
+        let only_copies = earlier.concat() + &tool("b", "m2", "t2", "make check") + &result("b", "t2");
+        assert!(decode(only_copies.as_bytes(), &cx).is_none());
     }
 
     /// Only hook output steers: an edited file's snippet that quotes the wrapper (an edit to

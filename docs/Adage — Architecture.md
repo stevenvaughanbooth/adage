@@ -998,7 +998,7 @@ an attacker can influence), and **the agent itself**, which may be steered into 
 | **Binary provenance** | The plugin shim links a bundled binary only if it matches `dist/SHA256SUMS`, and never downloads. The model's digests are compiled into the binary, and `models fetch` uses HTTPS only with size caps | `plugin/claude-code/scripts/session-start`, `adage-intent/src/model.rs` |
 | **Map** | Bound to 127.0.0.1, GET and HEAD only, read-only. Requests whose `Host` is not that address are refused (DNS rebinding). A strict CSP | `crates/adage-cli/src/map/` |
 | **Data at rest** | Spools hold decisions, canonical keys and the directive text sent. No prompt text is stored. `sense` prints only short prompt snippets, with home paths and secret-looking strings scrubbed | `hook.rs`, `sense.rs`, `redact.rs` |
-| **Supply chain** | `cargo deny` in CI (one advisory ignored with a written reason), `--locked` builds, attestations, SBOMs, npm provenance, no install scripts | `deny.toml`, `dist-workspace.toml` |
+| **Supply chain** | `cargo deny` in CI (an advisory is ignored only with a written reason, revisited at each release), `--locked` builds, attestations, SBOMs, npm provenance, no install scripts | `deny.toml`, `dist-workspace.toml` |
 
 **Independent check.** The eval's safety oracle (`crates/adage-eval/src/safety.rs`) re-checks
 every directive without using the runtime's code. The adversarial dataset attacks every input
