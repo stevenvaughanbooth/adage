@@ -380,6 +380,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "adage-world"
+version = "0.1.1"
+dependencies = [
+ "adage-core",
+ "adage-intent",
+ "adage-trace",
+ "glob",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

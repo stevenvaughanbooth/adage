@@ -9,8 +9,16 @@
 use std::path::{Path, PathBuf};
 
 /// Crates behind the `adage` binary and its hooks.
-const CRATES: &[&str] =
-    &["adage-cli", "adage-app", "adage-hook", "adage-runtime", "adage-store", "adage-tracks", "adage-learn"];
+const CRATES: &[&str] = &[
+    "adage-cli",
+    "adage-app",
+    "adage-hook",
+    "adage-runtime",
+    "adage-store",
+    "adage-tracks",
+    "adage-learn",
+    "adage-world",
+];
 
 /// (file relative to `crates/`, occurrences, why it is allowed).
 const ALLOWED: &[(&str, usize, &str)] = &[

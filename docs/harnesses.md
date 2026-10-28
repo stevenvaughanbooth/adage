@@ -76,7 +76,7 @@ twice. Details: [usage](usage.md#installing-and-updating).
 
 Behaviour that differs between harnesses reads the harness's `Capabilities`
 (`adage_trace::harness`), never a name. Claude Code's command hooks have four; its mod (the plugin's
-module, `plugin/claude-code`) adds seven. The adapter reports the mod's set for a payload the mod
+module, `plugin/claude-code`) adds twelve. The adapter reports the mod's set for a payload the mod
 sent: one carrying `via: "mod"`, one of the events only the mod sends (`TurnStep`, `Standing`,
 `SkillPrompt`), or a `PreToolUse` carrying `dry_run` or `verdict`. OpenCode and Codex have no mod.
 
@@ -93,6 +93,11 @@ sent: one carrying `via: "mod"`, one of the events only the mod sends (`TurnStep
 | `cached_section` | Put the standing reflexes in a cached system-prompt section | no | yes | no | no |
 | `subagent_prompt` | Tell a subagent the conventions before it starts | no | yes | no | no |
 | `compaction` | Tell compaction what to keep | no | yes | no | no |
+| `world_pull` | Read the person's connectors for the world (calendar, pull requests, tickets) through the MCP servers the session connected | no | yes | no | no |
+| `world_push` | Append a row to the running conversation, or submit a prompt when idle (interrupts, autonomy messages) | no | yes | no | no |
+| `prompt_tail` | Place context after the prompt as typed, outside the cached prefix (hints, deltas) | no | yes | no | no |
+| `first_message_block` | A first-message block sent once and again after compaction (the world snapshot) | no | yes | no | no |
+| `cache_figures` | Per-request cache figures from the harness | no | yes | no | no |
 
 ## OpenCode
 

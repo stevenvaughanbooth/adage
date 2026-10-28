@@ -1,0 +1,66 @@
+{
+  "title": "a meeting just ended, its transcript landed, a ticket and a pull request were open in the browser",
+  "now": 1792000000000,
+  "tz_offset_min": 0,
+  "artifacts": [
+    {
+      "id": "calendar:evt-marketing",
+      "kind": "calendar_event",
+      "title": "Marketing sync",
+      "locator": "evt-marketing",
+      "ago_min": 12,
+      "people": ["Priya Natarajan", "Dana Ortiz", "Steven Booth", "Lee Park"],
+      "related": ["file:/home/u/Meetings/2026-10-27-marketing-sync.md"]
+    },
+    {
+      "id": "file:/home/u/Meetings/2026-10-27-marketing-sync.md",
+      "kind": "transcript",
+      "title": "2026-10-27 marketing sync",
+      "locator": "~/Meetings/2026-10-27-marketing-sync.md",
+      "summary": "Q4 campaign timeline; action items for Priya (copy), Steven (tracking spec), Dana (budget).",
+      "ago_min": 10
+    },
+    {
+      "id": "jira:MKT-1182",
+      "kind": "ticket",
+      "title": "Tracking spec for the Q4 campaign",
+      "locator": "MKT-1182",
+      "state": "open",
+      "ago_min": 30
+    },
+    {
+      "id": "github:pr:412",
+      "kind": "pr",
+      "title": "Schema evolution for invoices",
+      "locator": "#412",
+      "state": "ci:green",
+      "ago_min": 25
+    },
+    {
+      "id": "file:/home/u/src/billing/README.md",
+      "kind": "file",
+      "title": "README.md",
+      "locator": "/home/u/src/billing/README.md",
+      "ago_min": 180
+    }
+  ],
+  "blocks": [
+    { "id": "calendar:evt-marketing", "title": "Marketing sync", "start_min_ago": 42, "end_min_ago": 12, "busy": true, "attendees": 4 }
+  ],
+  "prompts": [
+    { "prompt": "file the follow-ups from the marketing sync", "expect": "attach", "any_of": ["calendar:evt-marketing", "file:/home/u/Meetings/2026-10-27-marketing-sync.md"] },
+    { "prompt": "what did Priya ask for in the meeting?", "expect": "attach", "any_of": ["calendar:evt-marketing", "file:/home/u/Meetings/2026-10-27-marketing-sync.md"] },
+    { "prompt": "summarize the notes", "expect": "attach", "artifact": "file:/home/u/Meetings/2026-10-27-marketing-sync.md" },
+    { "prompt": "review the PR", "expect": "attach", "artifact": "github:pr:412" },
+    { "prompt": "merge #412 when green", "expect": "attach", "artifact": "github:pr:412" },
+    { "prompt": "close MKT-1182", "expect": "attach", "artifact": "jira:MKT-1182" },
+    { "prompt": "start on the tracking spec ticket", "expect": "attach", "artifact": "jira:MKT-1182" },
+    { "prompt": "those action items from earlier, put them in a checklist", "expect": "attach", "any_of": ["calendar:evt-marketing", "file:/home/u/Meetings/2026-10-27-marketing-sync.md"] },
+    { "prompt": "add a currency field to the invoice model", "expect": "none" },
+    { "prompt": "run make test", "expect": "none" },
+    { "prompt": "read ~/Meetings/2026-10-27-marketing-sync.md and list the action items", "expect": "none" },
+    { "prompt": "open https://example.com/spec and summarize it", "expect": "none" },
+    { "prompt": "look at @README.md first", "expect": "none" },
+    { "prompt": "", "expect": "none" }
+  ]
+}

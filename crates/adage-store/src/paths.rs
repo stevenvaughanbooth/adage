@@ -128,6 +128,37 @@ impl Paths {
         self.root.join("plugin")
     }
 
+    // The world: the situational awareness layer's store, shared by every session on the machine
+    // (`adage_trace::world`). One directory, so `adage world pause` and retention have one place.
+
+    pub fn world(&self) -> PathBuf {
+        self.root.join("world")
+    }
+    /// The activity timeline: one `ActivityEvent` per frame, append-only, every source a writer.
+    pub fn world_activity(&self) -> PathBuf {
+        self.world().join("activity.spool")
+    }
+    /// The artifacts the timeline names, bounded, as a two-slot state file.
+    pub fn world_artifacts(&self) -> PathBuf {
+        self.world().join("artifacts.state")
+    }
+    /// The calendar blocks in the window a source last looked at, as a two-slot state file.
+    pub fn world_calendar(&self) -> PathBuf {
+        self.world().join("calendar.state")
+    }
+    /// Held by the one `adage world follow` child that polls local sources; a second child reads.
+    pub fn world_lock(&self) -> PathBuf {
+        self.world().join("lock")
+    }
+    /// `adage world pause`'s marker: with it present every source stops and no hint is delivered.
+    pub fn world_paused(&self) -> PathBuf {
+        self.world().join("paused")
+    }
+    /// The held-out prompt set the person labels (`adage world eval`): one line per prompt.
+    pub fn world_eval(&self) -> PathBuf {
+        self.world().join("eval.jsonl")
+    }
+
     // The switches kept as marker files: present means the switch is thrown. Per-machine settings
     // live in `config.toml`; these are the ones that predate it or belong to one repository.
 
@@ -188,6 +219,20 @@ mod tests {
         assert_eq!(p.update_cache(), Path::new("/data/cache/latest.json"));
         assert_eq!(p.previous(), Path::new("/data/previous"));
         assert_eq!(p.channel_file(), Path::new("/data/channel.json"));
+    }
+
+    /// The world's files are written by the hook, the follow child and the mod's ingest, and read
+    /// by every surface: their paths never move either.
+    #[test]
+    fn the_world_keeps_its_paths() {
+        let p = Paths::at("/data");
+        assert_eq!(p.world(), Path::new("/data/world"));
+        assert_eq!(p.world_activity(), Path::new("/data/world/activity.spool"));
+        assert_eq!(p.world_artifacts(), Path::new("/data/world/artifacts.state"));
+        assert_eq!(p.world_calendar(), Path::new("/data/world/calendar.state"));
+        assert_eq!(p.world_lock(), Path::new("/data/world/lock"));
+        assert_eq!(p.world_paused(), Path::new("/data/world/paused"));
+        assert_eq!(p.world_eval(), Path::new("/data/world/eval.jsonl"));
     }
 
     #[test]

@@ -28,12 +28,13 @@ pub const LAYERS: &[(&str, u8)] = &[
     // 2: the reflex model (tracks, the index) and the matching primitives over traces that the
     // learner and the live runtime share.
     ("adage-tracks", 2),
-    // 3: engines: ingestion, the graph learner, the live runtime, instincts.
+    // 3: engines: ingestion, the graph learner, the live runtime, instincts, the world's resolver.
     ("adage-ingest", 3),
     ("adage-graph", 3),
     ("adage-runtime", 3),
     ("adage-instincts", 3),
     ("adage-safety", 3),
+    ("adage-world", 3),
     // 4: distribution: packs, and the record of how instincts were bound.
     ("adage-pack", 4),
     // 5: learning orchestration.
@@ -55,6 +56,7 @@ pub const FORBIDDEN: &[(&str, &str, &str)] = &[
     ("adage-ingest", "adage-tracks", "ingestion produces sessions, not tracks"),
     ("adage-ingest", "adage-store", "ingestion reads traces, never Adage's own state"),
     ("adage-runtime", "adage-store", "the runtime decides; the hook does the I/O"),
+    ("adage-world", "adage-store", "the resolver decides; the hook and the follow child do the I/O"),
     ("adage-learn", "adage-runtime", "the learner and the live runtime are siblings over the canonical model"),
     ("adage-hook", "adage-learn", "the live hook must not link the learner"),
     ("adage-exec", "adage-eval", "execution must not link the offline evaluation harness"),

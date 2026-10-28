@@ -16,10 +16,14 @@ pub mod identity;
 pub mod session;
 mod verification;
 pub mod wire;
+pub mod world;
 
 pub use harness::{Capabilities, EventKind, Harness};
 pub use identity::{EvidenceGroup, EvidenceIdentity, GroupBasis};
 pub use session::{Directed, Ending, OutcomeBasis, OutcomeEvidence, PromptObs, Session, StepObs};
+pub use world::{
+    Action, ActivityEvent, Artifact, ArtifactKind, CalendarBlock, Injection, InjectionAt, InjectionClass, WorldView,
+};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

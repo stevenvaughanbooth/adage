@@ -120,6 +120,21 @@ pub struct Config {
     pub instincts_packs: Vec<String>,
     /// Instinct ids never to bind.
     pub instincts_disabled: Vec<String>,
+    /// `world.enabled`: the situational awareness layer (`adage world`): sources record the
+    /// person's activity and the hook delivers reference hints. Off by default.
+    pub world_enabled: bool,
+    /// `world.desktop`: the active app and window title, sampled by `adage world follow`. Off by
+    /// default; titles only, never pixels.
+    pub world_desktop: bool,
+    /// `world.roots`: directories whose recently edited files are artifacts.
+    pub world_roots: Vec<PathBuf>,
+    /// `world.transcripts`: directories where meeting tools write transcripts.
+    pub world_transcripts: Vec<PathBuf>,
+    /// `world.deny`: glob patterns over app names, titles, URLs and paths that are never recorded.
+    pub world_deny: Vec<String>,
+    /// `world.retention_days`: how long the activity timeline is kept (artifact summaries are
+    /// kept for six times as long; injection labels are kept).
+    pub world_retention_days: u32,
 }
 
 impl Config {
@@ -172,7 +187,18 @@ enum Kind {
     Model,
     /// A whole number from 0 to [`MAX_PREDICT_CAP`].
     Cap,
+    /// A list of directories (each as [`Kind::Dir`]), given on the command line comma-separated;
+    /// `""` for none.
+    Dirs,
+    /// A list of glob patterns over app names, window titles, URLs and paths (no control
+    /// characters, at most 256 characters each, at most 64 of them), comma-separated; `""` for none.
+    Patterns,
+    /// A whole number of days from 1 to [`MAX_RETENTION_DAYS`].
+    Days,
 }
+
+/// The longest `world.retention_days` a person can set.
+pub const MAX_RETENTION_DAYS: u32 = 365;
 
 /// The highest `runtime.predict_cap` a person can set.
 pub const MAX_PREDICT_CAP: u32 = 50;
@@ -387,6 +413,54 @@ pub const KEYS: &[Key] = &[
         doc: "after a background conditioning run, at most once a day, ask whether a newer Adage is out (one request, nothing sent but the request); or off",
         guarded: false,
     },
+    Key {
+        name: "world.enabled",
+        kind: Kind::Bool,
+        default: "false",
+        env: Some("ADAGE_WORLD"),
+        doc: "the situational awareness layer: record what you were doing (calendar, meetings, files, pull requests) and tell the agent what a prompt like \"the follow-ups from the marketing sync\" refers to; off records nothing and delivers nothing",
+        guarded: true,
+    },
+    Key {
+        name: "world.desktop",
+        kind: Kind::Bool,
+        default: "false",
+        env: None,
+        doc: "with world.enabled: sample the active app and window title (titles only, never pixels, never keystrokes); off samples nothing",
+        guarded: true,
+    },
+    Key {
+        name: "world.roots",
+        kind: Kind::Dirs,
+        default: "",
+        env: None,
+        doc: "with world.enabled: directories whose recently edited files are things a prompt may refer to, comma-separated; \"\" watches none",
+        guarded: true,
+    },
+    Key {
+        name: "world.transcripts",
+        kind: Kind::Dirs,
+        default: "",
+        env: None,
+        doc: "with world.enabled: directories where your meeting tools write transcripts, comma-separated; \"\" watches none",
+        guarded: true,
+    },
+    Key {
+        name: "world.deny",
+        kind: Kind::Patterns,
+        default: "1Password,Bitwarden,Keychain Access,LastPass,*bank*,*payroll*,*workday*,*gusto*,*secret*,*token*,*credential*,*/.ssh/*",
+        env: None,
+        doc: "app names, window titles, URLs and paths the world never records, as glob patterns, comma-separated",
+        guarded: false,
+    },
+    Key {
+        name: "world.retention_days",
+        kind: Kind::Days,
+        default: "14",
+        env: None,
+        doc: "how many days of activity the world keeps (1 to 365); artifact summaries are kept six times as long, and the labels the resolver learns from are kept",
+        guarded: false,
+    },
 ];
 
 pub fn key(name: &str) -> Option<&'static Key> {
@@ -448,6 +522,28 @@ fn from_text(kind: Kind, s: &str) -> Result<toml::Value, String> {
             Ok(n) if n <= MAX_PREDICT_CAP => Ok(toml::Value::Integer(i64::from(n))),
             _ => Err(format!("{s:?} is not a whole number between 0 and {MAX_PREDICT_CAP}")),
         },
+        Kind::Days => match s.parse::<u32>() {
+            Ok(n) if (1..=MAX_RETENTION_DAYS).contains(&n) => Ok(toml::Value::Integer(i64::from(n))),
+            _ => Err(format!("{s:?} is not a whole number of days between 1 and {MAX_RETENTION_DAYS}")),
+        },
+        Kind::Dirs => {
+            let dirs = split_ids(s);
+            if dirs.len() > 64 {
+                return Err(format!("{s:?} is more than 64 directories"));
+            }
+            for d in &dirs {
+                from_text(Kind::Dir, d)?;
+            }
+            Ok(toml::Value::Array(dirs.into_iter().map(toml::Value::String).collect()))
+        }
+        Kind::Patterns => {
+            let pats = split_ids(s);
+            let ok = |p: &String| p.len() <= 256 && !p.chars().any(char::is_control);
+            if pats.len() > 64 || !pats.iter().all(ok) {
+                return Err(format!("{s:?} is not a comma-separated list of patterns"));
+            }
+            Ok(toml::Value::Array(pats.into_iter().map(toml::Value::String).collect()))
+        }
         Kind::Share => match s.parse::<f64>() {
             Ok(x) if (0.0..=1.0).contains(&x) => Ok(toml::Value::Float(x)),
             _ => Err(format!("{s:?} is not a share between 0 and 1")),
@@ -499,14 +595,14 @@ fn split_ids(s: &str) -> Vec<String> {
 fn from_toml(kind: Kind, v: &toml::Value) -> Result<String, String> {
     let text = match (kind, v) {
         (Kind::Bool, toml::Value::Boolean(b)) => b.to_string(),
-        (Kind::Secs | Kind::Cap, toml::Value::Integer(n)) => n.to_string(),
+        (Kind::Secs | Kind::Cap | Kind::Days, toml::Value::Integer(n)) => n.to_string(),
         (Kind::Share, toml::Value::Float(x)) => x.to_string(),
         (Kind::Share, toml::Value::Integer(n)) => n.to_string(),
         (Kind::Thresholds | Kind::Dir | Kind::DirOrAuto | Kind::Notices | Kind::Model, toml::Value::String(s)) => {
             s.clone()
         }
-        (Kind::Ids | Kind::Repos, toml::Value::String(s)) => s.clone(),
-        (Kind::Ids | Kind::Repos, toml::Value::Array(a)) => {
+        (Kind::Ids | Kind::Repos | Kind::Dirs | Kind::Patterns, toml::Value::String(s)) => s.clone(),
+        (Kind::Ids | Kind::Repos | Kind::Dirs | Kind::Patterns, toml::Value::Array(a)) => {
             let ids: Option<Vec<&str>> = a.iter().map(|v| v.as_str()).collect();
             ids.ok_or_else(|| format!("{v} is not a list of ids"))?.join(",")
         }
@@ -646,6 +742,12 @@ fn from_values<'v>(text: &dyn Fn(&str) -> &'v str) -> Config {
         instincts_enabled: bool_of(text, "instincts.enabled"),
         instincts_packs: split_ids(text("instincts.packs")),
         instincts_disabled: split_ids(text("instincts.disabled")),
+        world_enabled: bool_of(text, "world.enabled"),
+        world_desktop: bool_of(text, "world.desktop"),
+        world_roots: split_ids(text("world.roots")).iter().filter_map(|d| home_relative(d)).collect(),
+        world_transcripts: split_ids(text("world.transcripts")).iter().filter_map(|d| home_relative(d)).collect(),
+        world_deny: split_ids(text("world.deny")),
+        world_retention_days: number_of(text, "world.retention_days"),
     }
 }
 
@@ -732,6 +834,31 @@ mod tests {
         assert_eq!((c.runtime_predict_cap, c.learn_card_threshold), (6, 0.811));
         assert!(c.runtime_rewrite && c.learn_cards && !c.skills_invoke && !c.ui_spinner);
         assert!(c.ui_start_screen, "adage ui opens on its start screen unless a person turns it off");
+        assert!(!c.world_enabled && !c.world_desktop, "the world records nothing until a person turns it on");
+        assert!(c.world_roots.is_empty() && c.world_transcripts.is_empty());
+        assert_eq!(c.world_retention_days, 14);
+        assert!(c.world_deny.iter().any(|p| p == "*secret*"), "secrets are denied by default");
+    }
+
+    /// The world's list keys: directories are validated one by one and read home-relative;
+    /// patterns are bounded; days are bounded.
+    #[test]
+    fn world_keys_validate_their_lists() {
+        let d = tempfile::tempdir().unwrap();
+        let paths = Paths::at(d.path());
+        assert_eq!(set(&paths, "world.roots", "~/src, /work").unwrap(), "~/src,/work");
+        assert!(set(&paths, "world.roots", "relative/dir").is_err());
+        assert_eq!(set(&paths, "world.deny", "*bank*,Keychain Access").unwrap(), "*bank*,Keychain Access");
+        assert!(set(&paths, "world.deny", "a\tb").is_err());
+        assert_eq!(set(&paths, "world.retention_days", "30").unwrap(), "30");
+        assert!(set(&paths, "world.retention_days", "0").is_err());
+        assert!(set(&paths, "world.retention_days", "366").is_err());
+        let l = load_from(&paths.config(), &no_env);
+        assert!(l.problems.is_empty(), "{:?}", l.problems);
+        assert_eq!(l.config.world_roots.len(), 2);
+        assert_eq!(l.config.world_roots[1], PathBuf::from("/work"));
+        assert_eq!(l.config.world_retention_days, 30);
+        assert_eq!(l.config.world_deny, vec!["*bank*".to_string(), "Keychain Access".to_string()]);
     }
 
     #[test]

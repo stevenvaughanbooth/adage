@@ -55,7 +55,7 @@ A crate links only crates in strictly lower layers. Tests (dev-dependencies) are
 | 0 | `adage-core`, `adage-sign`, `adage-term`, `adage-store`, `adage-sim`, `xtask` | Kernel primitives: the shell normaliser and command table, signing, terminal tokens, file primitives |
 | 1 | `adage-trace`, `adage-intent` | The canonical trace model; the intent model |
 | 2 | `adage-tracks` | The reflex model (tracks, the index) and the matching primitives the learner and the runtime share |
-| 3 | `adage-ingest`, `adage-graph`, `adage-runtime`, `adage-instincts`, `adage-safety` | Engines. Siblings never link each other: ingestion knows no learning, the runtime knows no learner |
+| 3 | `adage-ingest`, `adage-graph`, `adage-runtime`, `adage-instincts`, `adage-safety`, `adage-world` | Engines. Siblings never link each other: ingestion knows no learning, the runtime knows no learner, the world's resolver knows no store |
 | 4 | `adage-pack` | Distribution, and the record of how instincts were bound |
 | 5 | `adage-learn` | Learning orchestration: ingest → mine → write tracks and the index |
 | 6 | `adage-hook`, `adage-eval` | The live pipeline; offline evaluation |

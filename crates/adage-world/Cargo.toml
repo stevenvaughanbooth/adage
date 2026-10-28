@@ -1,0 +1,16 @@
+[package]
+name = "adage-world"
+description = "The situational awareness layer's decisions: resolve what a prompt refers to, classify what changed, schedule around the calendar"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+adage-core = { path = "../adage-core" }
+adage-trace = { path = "../adage-trace" }
+adage-intent = { path = "../adage-intent" }
+serde.workspace = true
+serde_json.workspace = true
+glob.workspace = true
+sha2.workspace = true

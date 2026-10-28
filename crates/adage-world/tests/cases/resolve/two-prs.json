@@ -1,0 +1,19 @@
+{
+  "title": "two open pull requests viewed in the last hour, no meeting, no ticket",
+  "now": 1792000000000,
+  "tz_offset_min": -420,
+  "artifacts": [
+    { "id": "github:pr:412", "kind": "pr", "title": "Schema evolution for invoices", "locator": "#412", "state": "ci:green", "ago_min": 20 },
+    { "id": "github:pr:418", "kind": "pr", "title": "Retry budget for the ingest worker", "locator": "#418", "state": "ci:red", "ago_min": 15 },
+    { "id": "file:/home/u/src/billing/Makefile", "kind": "file", "title": "Makefile", "locator": "/home/u/src/billing/Makefile", "ago_min": 50 }
+  ],
+  "blocks": [],
+  "prompts": [
+    { "prompt": "review the PR", "expect": "disambiguate", "any_of": ["github:pr:412", "github:pr:418"] },
+    { "prompt": "review #418", "expect": "attach", "artifact": "github:pr:418" },
+    { "prompt": "why is the ingest worker PR red?", "expect": "attach", "artifact": "github:pr:418" },
+    { "prompt": "rebase the schema evolution branch", "expect": "attach", "artifact": "github:pr:412" },
+    { "prompt": "fix the ticket", "expect": "none" },
+    { "prompt": "file the follow-ups from the meeting", "expect": "none" }
+  ]
+}

@@ -57,6 +57,26 @@ pub struct Capabilities {
     /// Compaction may be told what to keep (`session.compact`).
     #[serde(default)]
     pub compaction: bool,
+    /// The harness can read the person's connectors for the world (the mod's `$.mcp.call` on the
+    /// MCP servers the session has connected): calendar, pull requests, tickets arrive.
+    #[serde(default)]
+    pub world_pull: bool,
+    /// A row can be appended to the running conversation, or a prompt submitted when idle (the
+    /// mod's `$.session.append`, `$.prompt.submit`): interrupts and autonomy messages.
+    #[serde(default)]
+    pub world_push: bool,
+    /// Context can be placed after the prompt as typed, where it never touches the cached prefix
+    /// (the mod's `prompt.submit` `context`): hints and deltas.
+    #[serde(default)]
+    pub prompt_tail: bool,
+    /// A block of the first message that the harness sends once and again after a compaction
+    /// (the mod's `prompt.context`): the world snapshot.
+    #[serde(default)]
+    pub first_message_block: bool,
+    /// Per-request cache figures from the harness (the mod's `turn.step` `usage`): the cache
+    /// instrument.
+    #[serde(default)]
+    pub cache_figures: bool,
 }
 
 impl Capabilities {
@@ -73,6 +93,11 @@ impl Capabilities {
         cached_section: false,
         subagent_prompt: false,
         compaction: false,
+        world_pull: false,
+        world_push: false,
+        prompt_tail: false,
+        first_message_block: false,
+        cache_figures: false,
     };
 }
 
@@ -270,7 +295,7 @@ impl Harness {
     }
 
     /// What the harness can do when the Claude Code mod is the one asking (its architecture §1b.3):
-    /// the command hooks' set plus the seven the mod adds, for Claude Code; every other harness has
+    /// the command hooks' set plus the twelve the mod adds, for Claude Code; every other harness has
     /// no mod and keeps its own set. A harness adapter reports this only for a payload the mod
     /// sent (`via: "mod"`, or an event only the mod sends), so nothing past the adapter asks which
     /// plugin is installed.
@@ -284,6 +309,11 @@ impl Harness {
                 cached_section: true,
                 subagent_prompt: true,
                 compaction: true,
+                world_pull: true,
+                world_push: true,
+                prompt_tail: true,
+                first_message_block: true,
+                cache_figures: true,
                 ..self.capabilities()
             },
             Harness::Codex | Harness::OpenCode => self.capabilities(),
@@ -352,10 +382,11 @@ mod tests {
         assert_eq!(serde_json::from_str::<Capabilities>(before).unwrap(), cc);
     }
 
-    /// T-C9-01 (per harness): Claude Code with the mod has every capability, its command hooks'
-    /// four included; the other harnesses have no mod, so asking for it changes nothing.
+    /// T-C9-01 (per harness), T-W0-04: Claude Code with the mod has every capability, its command
+    /// hooks' four included; the other harnesses have no mod, so asking for it changes nothing, and
+    /// the world's five are unset for every command-hook caller.
     #[test]
-    fn only_claude_code_has_a_mod_and_it_adds_the_seven() {
+    fn only_claude_code_has_a_mod_and_it_adds_the_rest() {
         let m = Harness::ClaudeCode.capabilities_with_mod();
         assert_eq!(
             m,
@@ -371,8 +402,20 @@ mod tests {
                 cached_section: true,
                 subagent_prompt: true,
                 compaction: true,
+                world_pull: true,
+                world_push: true,
+                prompt_tail: true,
+                first_message_block: true,
+                cache_figures: true,
             }
         );
+        for h in Harness::ALL {
+            let c = h.capabilities();
+            assert!(
+                !(c.world_pull || c.world_push || c.prompt_tail || c.first_message_block || c.cache_figures),
+                "{h}: a command hook has no world capability"
+            );
+        }
         for h in [Harness::Codex, Harness::OpenCode] {
             assert_eq!(h.capabilities_with_mod(), h.capabilities(), "{h}");
         }

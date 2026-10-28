@@ -1,0 +1,20 @@
+{
+  "title": "nothing recent: a meeting from this morning, files from yesterday, one open ticket",
+  "now": 1792000000000,
+  "tz_offset_min": 60,
+  "artifacts": [
+    { "id": "calendar:evt-standup", "kind": "calendar_event", "title": "Platform standup", "locator": "evt-standup", "ago_min": 300, "people": ["Dana Ortiz"] },
+    { "id": "file:/home/u/notes/plan.md", "kind": "file", "title": "plan.md", "locator": "/home/u/notes/plan.md", "ago_min": 1500 },
+    { "id": "jira:PLAT-77", "kind": "ticket", "title": "Rotate the signing key", "locator": "PLAT-77", "state": "in_review", "ago_min": 2000 }
+  ],
+  "blocks": [
+    { "id": "calendar:evt-standup", "title": "Platform standup", "start_min_ago": 315, "end_min_ago": 300, "busy": true, "attendees": 6 }
+  ],
+  "prompts": [
+    { "prompt": "those follow-ups from the meeting", "expect": "none" },
+    { "prompt": "what did Dana say?", "expect": "none" },
+    { "prompt": "close PLAT-77", "expect": "attach", "artifact": "jira:PLAT-77" },
+    { "prompt": "fix the ticket", "expect": "attach", "artifact": "jira:PLAT-77" },
+    { "prompt": "open the plan", "expect": "none" }
+  ]
+}
