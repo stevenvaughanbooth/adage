@@ -20,7 +20,7 @@ describe('T-B3-05, T-B2-08 · refresh', () => {
     f.m.rt.cli = '/data/bin/adage'
     f.m.rt.interactive = true
     await refresh(f.m, true)
-    expect(f.ran.map(r => r.argv.slice(1).join(' '))).toEqual(['graph --json', 'doctor --json', 'delegate status --json', 'status --json', '--json --for-session'])
+    expect(f.ran.map(r => r.argv.slice(1).join(' '))).toEqual(['graph --json', 'doctor --json', 'delegate status --json', 'status --json', '--json --for-session', 'world --json'])
     expect(f.ran.every(r => r.init?.cwd === '/w')).toBe(true)
     expect(f.state.reflexes.map(r => r.id)).toContain('codegen-after-schema')
     expect(f.state.checks).toHaveLength(4)
@@ -37,11 +37,11 @@ describe('T-B3-05, T-B2-08 · refresh', () => {
     f.m.rt.interactive = true
     await refresh(f.m)
     await refresh(f.m)
-    expect(f.ran).toHaveLength(5)
+    expect(f.ran).toHaveLength(6)
     f.tick(REFRESH_MS)
     await refresh(f.m)
     await refresh(f.m, true)
-    expect(f.ran).toHaveLength(15)
+    expect(f.ran).toHaveLength(18)
     expect(f.toasts).toHaveLength(1)
   })
 

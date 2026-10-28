@@ -1042,6 +1042,23 @@ lowercase letter):
   terminal command in `review_command`'s exact form, dim, with `Copy` for persona (b).
 - **Health**: `adage doctor --json`, lamps and the fixing command; `Enter` runs only what the
   binary allows from a session (`condition now`); the rest copies the command.
+- **World** (the situational awareness layer, `adage world`; ux-design §6.3b): what the person
+  was doing beside what the agent did. The day's calendar as a strip of quarter hours, the
+  activity timeline, the sources with their lamps, and the hints the command hook delivered this
+  session. Its data comes from three places the mod alone can reach: `adage world --json` at each
+  refresh; a second follow child, `adage world follow --session <id> --stdin ignore`, started
+  with the feed's and ended with the session (`hooks/world/follow.ts`, the same reconnect loop as
+  the feed's), which runs the local sources where it holds the world's lock and prints the
+  timeline and the sources' health as JSON lines; and the connector sources, which the mod polls
+  itself through `$.mcp.call(server, tool, args)` with the engine's own connection and
+  credentials (`hooks/world/poll.ts`): the descriptors come from `adage world descriptors
+  --json`, each is matched to a connected server by `$.tool.list()` (`hooks/world/sources.ts`),
+  the result is mapped by the descriptor's JSON pointers (`hooks/world/map.ts`) and piped to
+  `adage world ingest --source <name>`, which checks every field again, so Adage holds no token
+  and the Rust binary never reaches the network. A failed call backs off (1, 2, 4, 8 minutes,
+  then hourly) and is reported with `--error`. Nothing in the tab is a press: `adage world on` is
+  a person's decision at a terminal, and the allow-list carries `world` only in its read, ingest
+  and follow shapes.
 - A `Link` to the running map, `http://localhost:<port>`, when `adage map` is up.
 
 The feed child, `adage watch --follow --json --session <id>` (plan A3: the same `tail`, `learnlog`

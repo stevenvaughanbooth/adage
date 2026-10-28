@@ -34,7 +34,7 @@ describe('T-B3-09 · the verb', () => {
     expect(verbOf('  Review now')).toBe('review')
     expect(verbOf('frobnicate')).toBe('card')
     expect(['graph', 'watch', 'reflexes', 'review', 'health', 'doctor', 'why', 'off', 'on', 'pause', 'map', 'status', 'savings'].map(v => verbOf(v))).toEqual(['graph', 'watch', 'reflexes', 'review', 'health', 'doctor', 'why', 'off', 'on', 'pause', 'map', 'status', 'savings'])
-    expect([tabOf('card'), tabOf('graph'), tabOf('watch'), tabOf('reflexes'), tabOf('review'), tabOf('health'), tabOf('doctor'), tabOf('why')]).toEqual(['graph', 'graph', 'live', 'reflexes', 'reflexes', 'health', 'health', undefined])
+    expect([tabOf('card'), tabOf('graph'), tabOf('watch'), tabOf('reflexes'), tabOf('review'), tabOf('health'), tabOf('doctor'), tabOf('world'), tabOf('why')]).toEqual(['graph', 'graph', 'live', 'reflexes', 'reflexes', 'health', 'health', 'world', undefined])
   })
 })
 

@@ -20,7 +20,7 @@ import { BIN, CLI } from './plugin'
  * literal to architecture §2's list, plus `condition` (the Health tab's one action, ux-design §6.3)
  * and `delegate` (only `delegate status --json`: the lapsed grants the band and Health list).
  */
-export const ALLOWED_VERBS: readonly string[] = ['hook', 'version', 'watch', 'graph', 'doctor', 'status', 'ledger', 'off', 'map', 'condition', 'delegate']
+export const ALLOWED_VERBS: readonly string[] = ['hook', 'version', 'watch', 'graph', 'doctor', 'status', 'ledger', 'off', 'map', 'condition', 'delegate', 'world']
 
 /** `$.process.run`, as register.ts hands it over. */
 export type Run = (argv: readonly string[], init?: ProcessRunInit) => Promise<ProcessRunResult>
@@ -52,7 +52,10 @@ export function headOf(argv: readonly string[]): string {
  * `version`; `hook claude <Event>` (an event name of letters only); `watch --follow --json --stdin
  * ignore --repo <dir> --session <id> [--since <cursor>]`; `graph --json`; `doctor --json`; `status --json`;
  * `--json --for-session` (the status card); `ledger note`; `off`; `map --port 0`; `condition`;
- * `delegate status --json`.
+ * `delegate status --json`; the world's reads and writes: `world --json`, `world descriptors
+ * --json`, `world ingest --source <name> [--error <text>]`, `world follow --session <id> --stdin
+ * ignore [--since <cursor>]` (never `world on`, a person's decision, nor `pause`/`resume`, the
+ * person's own verbs at a terminal).
  */
 export function isAllowed(argv: readonly string[]): boolean {
   const verb = argv[1]
@@ -76,6 +79,22 @@ export function isAllowed(argv: readonly string[]): boolean {
       return isExact(argv, ['map', '--port', '0'])
     case 'delegate':
       return isExact(argv, ['delegate', 'status', '--json'])
+    case 'world': {
+      if (isExact(argv, ['world', '--json']) || isExact(argv, ['world', 'descriptors', '--json'])) return true
+      if (argv[2] === 'ingest') {
+        const source = argv[4] ?? ''
+        if (argv[3] !== '--source' || source === '' || source.startsWith('-')) return false
+        if (argv.length === 5) return true
+        return argv.length === 7 && argv[5] === '--error' && (argv[6] ?? '') !== ''
+      }
+      if (argv[2] === 'follow') {
+        const session = argv[4] ?? ''
+        if (argv[3] !== '--session' || session === '' || session.startsWith('-') || argv[5] !== '--stdin' || argv[6] !== 'ignore') return false
+        if (argv.length === 7) return true
+        return argv.length === 9 && argv[7] === '--since' && /^\d+$/.test(argv[8] ?? '')
+      }
+      return false
+    }
     case 'watch': {
       const fixed = ['watch', '--follow', '--json', '--stdin', 'ignore', '--repo']
       if (!fixed.every((t, i) => argv[i + 1] === t)) return false

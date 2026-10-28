@@ -358,6 +358,15 @@ export type WorldOptions = {
   verdict?: (tool: string, input: Record<string, unknown>) => { decision: 'allow' | 'ask' | 'deny'; reason?: string; rule?: string } | typeof FAIL.exit | undefined
   /** The Bash tool beneath prints `ran <command>` (else `ok`). */
   echo?: boolean
+  /** What `world --json` prints (the world off, nothing known, otherwise) and `world descriptors --json`. */
+  world_json?: unknown
+  descriptors?: unknown
+  /** The tools `$.tool.list()` lists (none otherwise): which MCP servers are connected. */
+  tools?: readonly { name: string; description?: string; mcp?: boolean }[]
+  /** What `$.mcp.call` answers (its structured content; a thrown Error denies the call; undefined is a server error). */
+  mcp?: (server: string, tool: string, args: Record<string, unknown>) => unknown
+  /** The world's follow child's lines (printed by every child, which then stays up). */
+  worldFeed?: readonly string[]
 }
 
 /** The ways `answer` makes a run fail: a non-zero exit, or a run that cannot start. */
@@ -418,6 +427,35 @@ export type World = {
   notices: { tool_use_id: string; text: string | undefined }[]
   /** The subagents started beneath (`agent.spawn`). */
   agents: { prompt: string; description: string; subagentType: string }[]
+  /** Every `$.mcp.call`, and every batch piped to `adage world ingest` (its `--error`, when one). */
+  mcpCalls: { server: string; tool: string; args: Record<string, unknown> }[]
+  ingested: { source: string; body: Record<string, unknown>; error: string | undefined }[]
+}
+
+/** The world off and empty, as `adage world --json` prints it before `adage world on`. */
+export const WORLD_OFF_JSON = { enabled: false, paused: false, desktop: false, retention_days: 14, sources: [], artifacts: {}, artifacts_total: 0, blocks: [], next_block: null, events_24h: 0, eval_cases: 0, now: T0 }
+
+/** The calendar descriptor as `adage world descriptors --json` prints it (packs/world/calendar.toml, its first provider). */
+export const DESCRIPTORS = {
+  descriptors: [
+    {
+      source: { name: 'calendar', kind: 'calendar_event', needs: 'connector', every: '300s', lookback: '2h', lookahead: '8h' },
+      provider: [
+        {
+          server: 'claude.ai Google Calendar',
+          tool: 'list_events',
+          args: { timeMin: '{{now-lookback}}', timeMax: '{{now+lookahead}}', singleEvents: true, orderBy: 'startTime' },
+          map: { id: '/items/*/id', title: '/items/*/summary', start: '/items/*/start/dateTime', end: '/items/*/end/dateTime', attendees: '/items/*/attendees/*/email', busy: '/items/*/transparency', accepted: '/items/*/attendees/*/responseStatus', links: '/items/*/attachments/*/fileUrl', busy_when: ['opaque', ''], accepted_when: ['accepted', 'tentative', ''] },
+        },
+      ],
+    },
+    {
+      source: { name: 'github', kind: 'pr', needs: 'connector', every: '600s', lookback: '7d' },
+      provider: [{ server: 'github*', tool: 'search_pull_requests', args: { query: 'is:pr involves:@me updated:>={{now-lookback}}' }, map: { id: '/items/*/number', title: '/items/*/title', locator: '/items/*/html_url', state: '/items/*/state', updated: '/items/*/updated_at', people: '/items/*/user/login' } }],
+    },
+    { source: { name: 'meetings', kind: 'transcript', needs: 'local', every: '30s' }, provider: [] },
+  ],
+  problems: [],
 }
 
 /** The verbs only a press runs, by their head: the kit answers them as the binary does after a spend. */
@@ -449,6 +487,8 @@ export function world(on: On, o: WorldOptions = {}): World {
     checked: [],
     notices: [],
     agents: [],
+    mcpCalls: [],
+    ingested: [],
   }
   mock.env(on, { ...(o.data === undefined && 'data' in o ? {} : { CLAUDE_PLUGIN_DATA: o.data ?? DATA }), ...o.env })
   on('store.get', ($, e) => ({ value: store[e.key] }))
@@ -469,6 +509,17 @@ export function world(on: On, o: WorldOptions = {}): World {
     const head = e.argv[1] === '--json' ? 'card' : (e.argv[1] ?? '')
     if (o.failing?.includes(head)) return { value: { exitCode: 1, stdout: '', stderr: 'x', isStdoutTruncated: false, isStderrTruncated: false } }
     if (head === 'ledger') return exited(o.ledgerExit ?? 0, '', o.ledgerExit ? 'error  note not recorded: x\n' : '')
+    if (head === 'world') {
+      if (e.argv[2] === 'ingest') {
+        const body = JSON.parse(e.init?.stdin ?? '{}') as Record<string, unknown>
+        const source = e.argv[4] ?? ''
+        const error = e.argv[5] === '--error' ? e.argv[6] : undefined
+        w.ingested.push({ source, body, error })
+        const n = (k: string) => (Array.isArray(body[k]) ? (body[k] as unknown[]).length : 0)
+        return exited(0, `${json({ source, events: n('events'), artifacts: n('artifacts'), blocks: n('blocks'), skipped: 0, problems: [] })}\n`)
+      }
+      return exited(0, `${json(e.argv[2] === 'descriptors' ? (o.descriptors ?? DESCRIPTORS) : (o.world_json ?? WORLD_OFF_JSON))}\n`)
+    }
     if (head === 'hook' && e.argv[3] !== 'Press' && o.answer !== undefined) {
       const said = o.answer(e.argv[3] ?? '', JSON.parse(e.init?.stdin ?? '{}') as Record<string, unknown>)
       if (said === FAIL.start) return { deny: 'ENOENT' }
@@ -523,6 +574,13 @@ export function world(on: On, o: WorldOptions = {}): World {
       await w.clock.sleep(1e9)
       return { value: { code: 0, signal: null } }
     }
+    if (e.argv[1] === 'world') {
+      // The world's follow child: prints its lines (a fresh one), then stays up as a live one does.
+      const lines = e.argv.includes('--since') ? [] : (o.worldFeed ?? [])
+      if (lines.length > 0) yield { stream: 'stdout' as const, text: lines.join('\n') + '\n' }
+      await w.clock.sleep(1e9)
+      return { value: { code: 0, signal: null } }
+    }
     if (!e.argv.includes('--since')) {
       const lines = o.feed ?? []
       if (lines.length > 0) yield { stream: 'stdout' as const, text: lines.join('\n') + '\n' }
@@ -552,6 +610,14 @@ export function world(on: On, o: WorldOptions = {}): World {
     if (e.key !== 'mode') w.sets.push({ key: e.key, value: e.value })
     return next(e)
   })
+  on('tool.list', () => ({ value: (o.tools ?? []).map(t => ({ name: t.name, description: t.description ?? '', mcp: t.mcp ?? t.name.startsWith('mcp__') })) }) as never)
+  on('mcp.call', ($, e) => {
+    w.mcpCalls.push({ server: e.server, tool: e.tool, args: e.args })
+    if (o.mcp === undefined) return { deny: `no server ${e.server}` } as never
+    const said = o.mcp(e.server, e.tool, e.args)
+    if (said === undefined) return { value: { content: [{ type: 'text', text: 'failed' }], isError: true } } as never
+    return { value: { content: [{ type: 'text', text: JSON.stringify(said) }], structuredContent: said } } as never
+  })
   on('tool.check', ($, e) => {
     const input = (isRecord(e.input) ? e.input : {}) as Record<string, unknown>
     const command = typeof input.command === 'string' ? input.command : ''
@@ -573,6 +639,7 @@ export function world(on: On, o: WorldOptions = {}): World {
     return { model: 'm', agentId: 'agent-1' } as never
   })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('session.end', ($, e) => ({ sessionId: e.sessionId }))
   on('command.register', ($, e) => {
     w.registered.push(e)
     return { value: { command: 'adage' } }
@@ -932,6 +999,9 @@ export type FakeOptions = {
   store?: Record<string, unknown>
   /** What `on`'s options hold (`band`, `pane`). */
   options?: Record<string, unknown>
+  /** The tools `$.tool.list()` lists, and what `$.mcp.call` answers (a thrown Error denies). */
+  tools?: readonly { name: string; description?: string; mcp?: boolean }[]
+  mcp?: (server: string, tool: string, args: Record<string, unknown>) => unknown
 }
 
 export type Fake = {
@@ -950,7 +1020,9 @@ export type Fake = {
   copies: unknown[]
   registered: unknown[]
   invalidated: number
-  timers: { kind: 'every' | 'after'; ms: number; cancelled: boolean }[]
+  timers: { kind: 'every' | 'after'; ms: number; cancelled: boolean; fire: () => void }[]
+  /** Every `$.mcp.call`. */
+  mcpCalls: { server: string; tool: string; args: Record<string, unknown> }[]
   /** Moves the fake clock on. */
   tick: (ms: number) => void
 }
@@ -965,7 +1037,7 @@ export function fake(o: FakeOptions = {}): Fake {
   const state = { ...STATE0, ...o.state } as AdageState
   const store: Record<string, unknown> = { ...o.store }
   let now = o.now ?? T0
-  const f: Omit<Fake, 'm'> = { state, store, ran: [], spawned: [], toasts: [], statuses: [], notices: [], opened: [], closed: [], asked: [], copies: [], registered: [], invalidated: 0, timers: [], tick: ms => void (now += ms) }
+  const f: Omit<Fake, 'm'> = { state, store, ran: [], spawned: [], toasts: [], statuses: [], notices: [], opened: [], closed: [], asked: [], copies: [], registered: [], invalidated: 0, timers: [], mcpCalls: [], tick: ms => void (now += ms) }
   const cell = <K extends keyof AdageState>(k: K): Cell<AdageState[K]> => ({
     read: async () => state[k],
     update: async change => (state[k] = change(state[k])),
@@ -976,8 +1048,9 @@ export function fake(o: FakeOptions = {}): Fake {
     if (r instanceof Error) throw r
     return r
   }
-  const timer = (kind: 'every' | 'after', ms: number) => {
-    const t = { kind, ms, cancelled: false }
+  const timer = (kind: 'every' | 'after', ms: number, fn: () => void) => {
+    // A fired `after` timer is done, as the engine's is; `every` keeps going.
+    const t = { kind, ms, cancelled: false, fire: () => void (t.cancelled || ((t.cancelled = kind === 'after'), fn())) }
     f.timers.push(t)
     return { cancel: () => void (t.cancelled = true) } as never
   }
@@ -1023,13 +1096,23 @@ export function fake(o: FakeOptions = {}): Fake {
       usage: async () => ({ startedAt: T0 - 1000, context: {}, rateLimits: [], cost: { usd: 0.5 } }) as never,
       version: async () => ({ version: o.harness ?? '2.1.288' }) as never,
     },
-    clock: { now: async () => now, every: ms => timer('every', ms), after: ms => timer('after', ms) },
+    clock: { now: async () => now, every: (ms, fn) => timer('every', ms, fn), after: (ms, fn) => timer('after', ms, fn) },
     checkBash: async command => o.rules?.[command] ?? 'allow',
     checkTool: async (tool, input) => {
       const said = o.verdict?.(tool, input)
       if (typeof said === 'symbol') throw new Error('no verdict')
       return said ?? { decision: tool === 'Bash' ? (o.rules?.[String(input.command)] ?? 'allow') : 'allow' }
     },
+    mcp: {
+      call: async (server, tool, args) => {
+        f.mcpCalls.push({ server, tool, args })
+        if (o.mcp === undefined) throw new Error(`no server ${server}`)
+        const said = o.mcp(server, tool, args)
+        if (said === undefined) return { content: [{ type: 'text', text: 'failed' }], isError: true }
+        return { content: [{ type: 'text', text: JSON.stringify(said) }], structuredContent: said }
+      },
+    },
+    tool: { list: async () => (o.tools ?? []).map(t => ({ name: t.name, description: t.description ?? '', mcp: t.mcp ?? t.name.startsWith('mcp__') })) as never },
     ui: {
       status: text => void f.statuses.push(text),
       toast: text => void f.toasts.push(text),

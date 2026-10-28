@@ -12,6 +12,7 @@ describe('T-B1-01 · the state and store tables', () => {
     expect(STATE0.view).toMatchObject({ tab: 'graph', history: false, paused: false, selected: null })
     expect(STATE0.press).toEqual({ session: '', token: '', state: 'none', issued: 0, chain: 0 })
     expect(STATE0.feed).toEqual({ status: 'off', cursor: '', failures: 0 })
+    expect(STATE0.world).toMatchObject({ status: 'off', enabled: false, paused: false, sources: [], events: [], blocks: [], hints: [], titles: {} })
     expect([STATE0.health, STATE0.learner, STATE0.allow]).toEqual([null, null, null])
     for (const k of ['fired', 'predicted', 'marks', 'batches', 'rows', 'ticks', 'reflexes', 'checks', 'lapsed', 'packs', 'asked', 'skills', 'candidates', 'dag'] as const) expect(STATE0[k]).toEqual([])
   })

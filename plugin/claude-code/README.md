@@ -65,7 +65,8 @@ short:
 | The session and the feed | `session.ts`, `feed.ts`, `follower.ts`, `notify.ts` |
 | Observing and deciding at the hooks | `observe.ts`, `marks.ts`, `dag.ts`, `reflex.ts`, `step.ts`, `predict.ts`, `ledger.ts`, `call.ts`, `receipt.ts`, `substitute.ts`, `attach.ts`, `skill.ts`, `notice.ts` |
 | The person's decisions | `dialog.ts`, `ask.ts`, `token.ts`, `kept.ts`, `allow.ts`, `grant.ts`, `commands.ts`, `actions.ts` |
-| What is drawn | `view/{text,lines,band,pane,card,graph}.ts` (the words; `graph.ts` lays out the Graph tab), `draw/sites.ts` (one function per site), `draw/{rows,band,card,pane,graph,allow}.tsx` (the trees), `tokens.ts` (generated) |
+| The world (what you were doing) | `world/sources.ts`, `world/map.ts`, `world/poll.ts` (the connector sources through `$.mcp.call`), `world/follow.ts` (the follow child), `world/hints.ts` |
+| What is drawn | `view/{text,lines,band,pane,card,graph,world}.ts` (the words; `graph.ts` lays out the Graph tab, `world.ts` the World tab), `draw/sites.ts` (one function per site), `draw/{rows,band,card,pane,graph,allow}.tsx` (the trees), `tokens.ts` (generated) |
 | Shared | `mod.ts` (the `Mod`), `plugin.ts` (constants and the tables), `shape.ts` (reading JSON) |
 
 ### The capability object

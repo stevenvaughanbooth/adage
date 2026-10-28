@@ -482,6 +482,15 @@ mod through the MCP servers you have already connected to Claude Code (a claude.
 `/mcp` stops the source. Codex and OpenCode sessions read the same store and get the same hints,
 from the local sources alone.
 
+**In the pane.** `/adage world` opens the World tab: the lamp and state word, the day's calendar
+as a strip of quarter hours (the block under way in the accent, the present quarter marked, a
+line naming the next block and how long until it), the activity timeline newest first, each
+source with its lamp (`●` polled, `○` not yet, `✗` with the error), and the hints the agent was
+given this session. With the world off the tab says so and what `adage world on` would do, and
+nothing else: no press turns it on. The connector sources start with the session and poll on
+their descriptors' intervals through the servers `/mcp` lists; a server that fails backs off
+(1, 2, 4, 8 minutes, then hourly) and its row says why.
+
 **What the agent reads.** One `<adage-world kind="hint">` block after the reflexes' text: the
 likely reference (a meeting, its transcript's path, a pull request, a ticket), a summary of at
 most 300 characters made locally, and a line saying it is from Adage. When two or three things
@@ -691,13 +700,16 @@ filter, `enter` to read a directive as the agent read it, `p` pause, `v` shows t
 per kind, each sentence whole with its two answers beneath; then every reflex by its step and
 when, with its strength, stage and evidence; an expanded row has `e enable`, `n not
 this one` and `d details`, where the four more verbs and the equivalent `adage review` command,
-with `c Copy`, wait) and **Health** (`t`, every doctor check; `enter` conditions the repository
-when a check asks for it, any other fix is a command to copy). Every tab ends with **Explore in
+with `c Copy`, wait), **Health** (`t`, every doctor check; `enter` conditions the repository
+when a check asks for it, any other fix is a command to copy) and **World** (`w`, what you were
+doing beside what the agent did, once `adage world on`: the day's calendar as a strip of quarter
+hours with the block under way or next, the activity timeline, each source with its lamp, and the
+hints Adage gave the agent this session; see "The world"). Every tab ends with **Explore in
 browser**, which starts `adage map` once and links to it. `/adage why` shows the last directive
 of this session (or the verified skill's steps), `/adage off` turns Adage off in this repository,
 `/adage on` opens the ask `Adage is off in this repository. Turn it on?`, `/adage pause` pauses the
-feed and the band, and `/adage watch`, `reflexes`, `review` and `health` open the pane on that
-tab. In `/config` the plugin has two rows: **Band above the prompt** (on) and **Watch pane**
+feed and the band, and `/adage watch`, `reflexes`, `review`, `health` and `world` open the pane on
+that tab. In `/config` the plugin has two rows: **Band above the prompt** (on) and **Watch pane**
 (`manual`; `auto` opens the pane unasked in a terminal 144 columns wide); there is no switch for
 asking: a decision is never hidden behind a setting. Nothing is drawn or asked in `claude -p`, the
 SDK or the VS Code panel, where `/adage` answers as text. `ADAGE_ASCII=1` draws every glyph as

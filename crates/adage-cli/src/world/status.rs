@@ -19,7 +19,7 @@ pub struct Status {
     pub sources: Vec<adage_world::SourceHealth>,
     pub artifacts: BTreeMap<String, usize>,
     pub artifacts_total: usize,
-    pub blocks: usize,
+    pub blocks: Vec<adage_trace::CalendarBlock>,
     pub next_block: Option<adage_trace::CalendarBlock>,
     pub events_24h: usize,
     pub eval_cases: usize,
@@ -50,8 +50,8 @@ pub fn read(paths: &Paths) -> Status {
         sources: health.sources.into_values().collect(),
         artifacts_total: arts.artifacts.len(),
         artifacts: by_kind,
-        blocks: cal.blocks.len(),
         next_block,
+        blocks: cal.blocks,
         events_24h: events.iter().filter(|e| e.ts >= since).count(),
         eval_cases,
         now,
@@ -106,7 +106,7 @@ pub fn status(args: &[String], paths: &Paths) -> Result<()> {
             format!(": {}", kinds.join(", "))
         }),
     )?;
-    let mut cal = Line::new().text(format!("{} blocks in the window", s.blocks));
+    let mut cal = Line::new().text(format!("{} blocks in the window", s.blocks.len()));
     if let Some(b) = &s.next_block {
         cal = cal.sep().quiet(format!("next: {} \"{}\" ({})", hhmm(b.start, 0), b.title, until(s.now, b.start)));
     }

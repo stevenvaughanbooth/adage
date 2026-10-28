@@ -80,7 +80,7 @@ describe('T-B1-01 · ask', () => {
 describe('T-X-04, T-B1-05 · guard: the allow-list and the environment', () => {
   const CLI = '/data/bin/adage'
   test('every verb in its one exact shape (T-X-04); the person-only verbs, install and config never', () => {
-    expect(ALLOWED_VERBS).toEqual(['hook', 'version', 'watch', 'graph', 'doctor', 'status', 'ledger', 'off', 'map', 'condition', 'delegate'])
+    expect(ALLOWED_VERBS).toEqual(['hook', 'version', 'watch', 'graph', 'doctor', 'status', 'ledger', 'off', 'map', 'condition', 'delegate', 'world'])
     for (const argv of [
       [BIN, 'version'],
       [BIN, 'hook', 'claude', 'TurnStep'],
@@ -95,6 +95,12 @@ describe('T-X-04, T-B1-05 · guard: the allow-list and the environment', () => {
       [CLI, 'map', '--port', '0'],
       [CLI, 'condition'],
       [CLI, 'delegate', 'status', '--json'],
+      [CLI, 'world', '--json'],
+      [CLI, 'world', 'descriptors', '--json'],
+      [CLI, 'world', 'ingest', '--source', 'calendar'],
+      [CLI, 'world', 'ingest', '--source', 'calendar', '--error', 'call failed: 401'],
+      [CLI, 'world', 'follow', '--session', 's1', '--stdin', 'ignore'],
+      [CLI, 'world', 'follow', '--session', 's1', '--stdin', 'ignore', '--since', '42'],
     ]) {
       expect(isAllowed(argv), argv.join(' ')).toBe(true)
     }
@@ -123,6 +129,21 @@ describe('T-X-04, T-B1-05 · guard: the allow-list and the environment', () => {
       [CLI, 'delegate', 'on'],
       [CLI, 'delegate', 'policy', '--max-level', 'e2'],
       [CLI, 'delegate', 'predict', 'on'],
+      // The world: never `on` (a person's decision), `pause`, `resume`, `eval`; the follow child reads no stdin.
+      [CLI, 'world'],
+      [CLI, 'world', 'on'],
+      [CLI, 'world', 'pause'],
+      [CLI, 'world', 'resume'],
+      [CLI, 'world', 'eval', 'record'],
+      [CLI, 'world', 'ingest'],
+      [CLI, 'world', 'ingest', '--source', ''],
+      [CLI, 'world', 'ingest', '--source', '--error'],
+      [CLI, 'world', 'ingest', '--source', 'calendar', '--error', ''],
+      [CLI, 'world', 'ingest', '--source', 'calendar', '--force'],
+      [CLI, 'world', 'follow', '--session', 's1'],
+      [CLI, 'world', 'follow', '--session', 's1', '--stdin', 'eof'],
+      [CLI, 'world', 'follow', '--session', 's1', '--stdin', 'ignore', '--since', 'x'],
+      [CLI, 'world', 'follow', '--session', '', '--stdin', 'ignore'],
       [CLI, 'review', 'approve', 'acme/learned', 'r'],
       [CLI, 'install'],
       [CLI, 'install', 'claude-code', '--write'],

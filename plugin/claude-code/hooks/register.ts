@@ -27,6 +27,7 @@ import { guardPress } from './press'
 import * as session from './session'
 import * as skill from './skill'
 import * as step from './step'
+import * as worldPoll from './world/poll'
 
 // The state table (plugin.ts `STATE0`, types/index.d.ts): one atom per `$.state` key.
 const FIRED = atom({ plugin: 'adage', key: 'fired' } as const, STATE0.fired)
@@ -52,6 +53,7 @@ const ALLOW = atom({ plugin: 'adage', key: 'allow' } as const, STATE0.allow)
 const SKILLS = atom({ plugin: 'adage', key: 'skills' } as const, STATE0.skills)
 const CANDIDATES = atom({ plugin: 'adage', key: 'candidates' } as const, STATE0.candidates)
 const DAG = atom({ plugin: 'adage', key: 'dag' } as const, STATE0.dag)
+const WORLD = atom({ plugin: 'adage', key: 'world' } as const, STATE0.world)
 
 /** What one load of the module keeps between hooks (mod.ts `Runtime`). */
 const rt = runtime()
@@ -85,6 +87,7 @@ function mod($: EngineInterface, options: Options): Mod {
       skills: { read: () => read($, SKILLS), update: f => update($, SKILLS, f) },
       candidates: { read: () => read($, CANDIDATES), update: f => update($, CANDIDATES, f) },
       dag: { read: () => read($, DAG), update: f => update($, DAG, f) },
+      world: { read: () => read($, WORLD), update: f => update($, WORLD, f) },
     },
     // The store table (plugin.ts `STORE_KEYS`): one cell per `$.store` key.
     store: {
@@ -115,6 +118,8 @@ function mod($: EngineInterface, options: Options): Mod {
     clock: { now: () => $.clock.now(), every: (ms, fn) => $.clock.every(ms, fn), after: (ms, fn) => $.clock.after(ms, fn) },
     checkBash: async command => (await $.tool.check({ tool: 'Bash', input: { command } })).decision,
     checkTool: (tool, input) => $.tool.check({ tool, input }),
+    mcp: { call: (server, tool, args) => $.mcp.call(server, tool, args) },
+    tool: { list: () => $.tool.list() },
     ui: {
       status: text => $.ui.status(text),
       toast: text => $.ui.toast(text),
@@ -166,4 +171,5 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: 'adage-allow' }, async ($, e, next) => sites.onAllowPane(mod($, options), e, next))
   on('ui.open', { id: 'adage' }, async ($, e, next) => actions.onPaneOpen(mod($, options), e, next))
   on('ui.close', { id: 'adage' }, async ($, e, next) => actions.onPaneClose(mod($, options), e, next))
+  on('session.end', async ($, e, next) => worldPoll.onEnd(mod($, options), e, next))
 }

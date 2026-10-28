@@ -196,7 +196,7 @@ export type AdageUpdate = {
 
 /** What the person did in the pane. */
 export type AdageView = {
-  tab: 'graph' | 'live' | 'reflexes' | 'health'
+  tab: 'graph' | 'live' | 'reflexes' | 'health' | 'world'
   /** The Graph tab shows the whole session (the person scrolls) instead of following the newest node. */
   history: boolean
   filter: string
@@ -321,6 +321,47 @@ export type AdageNode =
   /** The agent stopped: the turn's end, or the finish line asking it to continue once (`gate`). */
   | { kind: 'stop'; at: number; gate: boolean }
 
+/** One source of the world (`adage world follow`'s health line): where it ran, when it last polled, how it stands. */
+export type AdageWorldSource = { name: string; server: string; lastPoll: number; ok: boolean; error: string; events: number }
+
+/** One event of the activity timeline, as the follow child prints it (no content: an id, a kind, an action). */
+export type AdageWorldEvent = { ts: number; source: string; kind: string; artifact: string; action: string; detail: string }
+
+/** One calendar block of the day, as `adage world --json` lists it. */
+export type AdageWorldBlock = { id: string; start: number; end: number; title: string; busy: boolean; accepted: boolean; focus: boolean; attendees: number }
+
+/** One hint the command hook delivered this session (its first line), at which prompt. */
+export type AdageWorldHint = { ts: number; prompt: number; cls: 'hint' | 'disambiguation'; text: string }
+
+/**
+ * The world as the World tab draws it (the situational awareness layer): what `adage world
+ * --json` says of it, the follow child's timeline and sources, and the hints this session.
+ */
+export type AdageWorld = {
+  /** The follow child, as the feed's `status` reads. */
+  status: 'off' | 'following' | 'reconnecting' | 'stopped'
+  cursor: string
+  failures: number
+  /** `world.enabled`, and `world/paused`, as the binary last said. */
+  enabled: boolean
+  paused: boolean
+  /** Whether this session's child polls the local sources (it holds the lock) and the world is live. */
+  polling: boolean
+  live: boolean
+  /** Connector sources this session resolved against its MCP servers. */
+  resolved: number
+  sources: AdageWorldSource[]
+  /** The timeline, newest first, capped. */
+  events: AdageWorldEvent[]
+  /** Titles by artifact id, for the timeline's lines (from the events the mod ingested). */
+  titles: Record<string, string>
+  blocks: AdageWorldBlock[]
+  hints: AdageWorldHint[]
+  /** Artifacts the store holds, and labelled prompts. */
+  artifacts: number
+  evalCases: number
+}
+
 declare module 'claude-code' {
   interface PluginState {
     adage: {
@@ -347,6 +388,7 @@ declare module 'claude-code' {
       skills: AdageSkill[]
       candidates: AdageCandidate[]
       dag: AdageNode[]
+      world: AdageWorld
     }
   }
 }

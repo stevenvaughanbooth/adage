@@ -16,6 +16,8 @@ import type { View } from './plugin'
 import { COMMAND, PANE, TESTED, TURN0 } from './plugin'
 import { refresh } from './refresh'
 import { versionLine } from './view/band'
+import { startWorldFeed, stopWorldFeed } from './world/follow'
+import { startWorld, stopWorld } from './world/poll'
 
 /** Probes the binary the shim linked; the mod is active only while it answers. */
 async function activate(m: Mod): Promise<void> {
@@ -45,7 +47,7 @@ async function activate(m: Mod): Promise<void> {
   const view = await m.state.view.read()
   m.rt.paused = view.paused
   const kept = await m.store.tab.get().catch(() => undefined)
-  const tab: View['tab'] | undefined = kept === 'graph' || kept === 'live' || kept === 'reflexes' || kept === 'health' ? kept : undefined
+  const tab: View['tab'] | undefined = kept === 'graph' || kept === 'live' || kept === 'reflexes' || kept === 'health' || kept === 'world' ? kept : undefined
   if (tab !== undefined && tab !== view.tab) await m.state.view.update(v => ({ ...v, tab }))
 }
 
@@ -66,6 +68,7 @@ async function newSession(m: Mod): Promise<void> {
   await m.state.dag.update(() => [])
   await m.state.turn.update(() => TURN0)
   await m.state.rows.update(rows => rows.map(r => ({ ...r, mine: false })))
+  await m.state.world.update(w => ({ ...w, hints: [] }))
   m.rt.failures = 0
   await m.state.mode.update(x => ({ ...x, warned: [] }))
 }
@@ -82,11 +85,21 @@ export async function onStart(m: Mod, e: EventAt<'session.start'>, next: NextAt<
   await activate(m)
   if (m.rt.bin !== undefined) quietly(standing(m))
   if (m.rt.bin !== undefined && m.rt.interactive) {
-    await startFeed(m, await m.session.id(), e.cwd)
-    quietly(refresh(m, true))
+    const session = await m.session.id()
+    await startFeed(m, session, e.cwd)
+    quietly(refresh(m, true).then(() => world(m, session, e.cwd)))
     if (m.options.pane === 'auto') quietly(m.ui.open({ id: PANE, title: 'adage' }))
   }
   return started
+}
+
+/**
+ * The world for a session, once the refresh read whether it is on: its connector sources through
+ * this session's MCP servers (world/poll.ts), and its follow child (world/follow.ts).
+ */
+async function world(m: Mod, session: string, cwd: string): Promise<void> {
+  await startWorld(m)
+  await startWorldFeed(m, session, cwd)
 }
 
 /**
@@ -104,10 +117,13 @@ export async function onShimStart(m: Mod, e: EventAt<'classic.SessionStart'>, ne
     if (session !== m.rt.feedSession) {
       if (m.rt.feedSession !== '') {
         stopFeed(m)
+        stopWorld(m)
+        stopWorldFeed(m)
         await newSession(m)
       }
-      await startFeed(m, session, await m.session.cwd())
-      quietly(refresh(m, true))
+      const cwd = await m.session.cwd()
+      await startFeed(m, session, cwd)
+      quietly(refresh(m, true).then(() => world(m, session, cwd)))
     }
   }
   return answered

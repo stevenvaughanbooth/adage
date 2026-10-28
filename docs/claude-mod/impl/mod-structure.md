@@ -117,6 +117,12 @@ module-level object. After, by what each file does (lines):
 | `notice.ts`, `skill.ts` | 79, 93 | Noticed (words, count, candidates' words); verified skills (`skillTextOf`, `skill.prompt`, markers) |
 | `view/text.ts`, `lines.ts`, `band.ts`, `pane.ts`, `card.ts` | 56, 173, 139, 209, 83 | Every drawn word (was `view.ts`, 744 lines) |
 | `view/graph.ts` | 542 | The Graph tab's layout: the session's nodes as lines of styled pieces (boxes from 60 columns, one line per node beneath), following the newest |
+| `view/world.ts` | 150 | The World tab's words: the header, the day strip's cells and labels, the block line, the timeline, source and hint lines |
+| `world/sources.ts` | 92 | The descriptors read (`adage world descriptors --json`) and resolved against `$.tool.list()`'s MCP tools |
+| `world/map.ts` | 200 | A connector result mapped by a descriptor's JSON pointers into artifacts, events and calendar blocks |
+| `world/poll.ts` | 160 | The connector sources' timers: `$.mcp.call`, the map, `adage world ingest`; the backoff; `session.end` |
+| `world/follow.ts` | 130 | The world's follow child (the feed's `follow` loop reused): its lines into `$.state.world` |
+| `world/hints.ts` | 21 | The hints read off the command hook's answer, for the tab |
 | `draw/sites.ts` | 222 | Every `ui.render` hook body, one per site |
 | `draw/graph.tsx` | 62 | The Graph tab's tree |
 | `draw/els.ts`, `rows.tsx`, `band.tsx`, `card.tsx`, `pane.tsx`, `allow.tsx` | 7, 75, 30, 48, 350, 67 | The trees (`rule`, once, in `rows.tsx`) |

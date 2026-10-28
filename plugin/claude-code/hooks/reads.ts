@@ -3,8 +3,8 @@
 // --json`'s lapsed grants, `status --json`'s packs awaiting trust and candidates, and the map's
 // address. Each keeps only what a drawing reads (never a field that would name the arm, ux-design
 // §1.7); anything malformed reads as nothing. refresh.ts makes the reads.
-import type { Candidate, Check, Lapse, Pack, Reflex, Update } from './plugin'
-import { isRecord, records, str, strings } from './shape'
+import type { Candidate, Check, Lapse, Pack, Reflex, Update, WorldBlock } from './plugin'
+import { isRecord, num, records, str, strings } from './shape'
 
 /** The status card as `adage --json --for-session` gives it (A5). */
 export type Card = {
@@ -174,4 +174,13 @@ export function candidatesOf(status: Record<string, unknown>): Candidate[] {
 export function mapUrl(text: string): string | undefined {
   const m = /http:\/\/127\.0\.0\.1:(\d{1,5})\//.exec(text)
   return m === null ? undefined : `http://localhost:${m[1]}/`
+}
+
+/** What `adage world --json` says of the world: on, paused, the day's blocks, what it holds. */
+export function worldOf(v: unknown): { enabled: boolean; paused: boolean; blocks: WorldBlock[]; artifacts: number; evalCases: number } {
+  if (!isRecord(v)) return { enabled: false, paused: false, blocks: [], artifacts: 0, evalCases: 0 }
+  const blocks = records(v.blocks)
+    .map(b => ({ id: str(b.id), start: num(b.start), end: num(b.end), title: str(b.title), busy: b.busy !== false, accepted: b.accepted !== false, focus: b.focus === true, attendees: num(b.attendees) }))
+    .filter(b => b.id !== '' && b.end > b.start)
+  return { enabled: v.enabled === true, paused: v.paused === true, blocks, artifacts: num(v.artifacts_total), evalCases: num(v.eval_cases) }
 }

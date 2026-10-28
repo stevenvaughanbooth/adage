@@ -33,6 +33,11 @@ import type {
   AdageTurn,
   AdageUpdate,
   AdageView,
+  AdageWorld,
+  AdageWorldBlock,
+  AdageWorldEvent,
+  AdageWorldHint,
+  AdageWorldSource,
 } from '../types'
 
 /**
@@ -81,6 +86,11 @@ export type Skill = AdageSkill
 export type Candidate = AdageCandidate
 export type Update = AdageUpdate
 export type GraphNode = AdageNode
+export type WorldState = AdageWorld
+export type WorldSource = AdageWorldSource
+export type WorldEvent = AdageWorldEvent
+export type WorldBlock = AdageWorldBlock
+export type WorldHint = AdageWorldHint
 
 /** Every `$.state` value of the plugin, by key, as types/index.d.ts declares them. */
 export type AdageState = PluginState['adage']
@@ -121,6 +131,28 @@ export const MAP0: MapState = { url: '', starting: false }
 
 export const TURN0: Turn = { submits: 0, fired: 0, predicted: 0, marks: 0 }
 
+/** The most timeline events the World tab keeps. */
+export const MAX_WORLD_EVENTS = 200
+
+/** The world before the binary said anything: off, nothing followed, nothing known. */
+export const WORLD0: WorldState = {
+  status: 'off',
+  cursor: '',
+  failures: 0,
+  enabled: false,
+  paused: false,
+  polling: false,
+  live: false,
+  resolved: 0,
+  sources: [],
+  events: [],
+  titles: {},
+  blocks: [],
+  hints: [],
+  artifacts: 0,
+  evalCases: 0,
+}
+
 /** No press yet: before the first session start, the token is neither held nor refused. */
 const PRESS0: Press = { session: '', token: '', state: 'none', issued: 0, chain: 0 }
 
@@ -153,6 +185,7 @@ export const STATE0: AdageState = {
   skills: [],
   candidates: [],
   dag: [],
+  world: WORLD0,
 }
 
 /**

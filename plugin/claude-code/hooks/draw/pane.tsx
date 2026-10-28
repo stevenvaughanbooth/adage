@@ -1,11 +1,11 @@
-// The pane (ux-design §6): four tabs as plain Buttons with lowercase hotkeys (`g` Graph, the first
-// and the default, `l` Live, `r` Reflexes, `t` Health; `h` is `adage watch`'s help key), every tab
+// The pane (ux-design §6): five tabs as plain Buttons with lowercase hotkeys (`g` Graph, the first
+// and the default, `l` Live, `r` Reflexes, `t` Health, `w` World; `h` is `adage watch`'s help key), every tab
 // ending with `Explore in browser`. Strength and lifecycle words are allowed here and nowhere else (§1.3). A decision in
 // the pane is a press (§4.17): a Button's onPress reaches `press()` with the session's token, and
 // only through the handlers the actions carry (`press`, dialog.ts); until a person is at the prompt
 // they are not bound and, as before a press existed, a review verb is a command to copy. The one
 // action besides is `adage condition`, which the binary marks as allowed from a session.
-import type { Check, Fired, GraphNode, Health, Lapse, MapState, Mark, Predicted, Reflex, Row, Tick, Update, View } from '../plugin'
+import type { Check, Fired, GraphNode, Health, Lapse, MapState, Mark, Predicted, Reflex, Row, Tick, Update, View, WorldState } from '../plugin'
 import type { Offer } from '../reads'
 import { TRUST_LINE } from '../grant'
 import { ROLES } from '../tokens'
@@ -40,6 +40,7 @@ import {
 } from '../view/pane'
 import { graphLines } from '../view/graph'
 import { cut, g } from '../view/text'
+import { WORLD_EMPTY, WORLD_OFF, blockLine, dayStrip, eventLine, hintLine, sourceLine, worldHeader } from '../view/world'
 import type { Els, Tree } from './els'
 import { graphTree } from './graph'
 import { rule } from './rows'
@@ -117,6 +118,8 @@ export type PaneData = {
   motion: boolean
   /** The rows the pane's body has room for (`scroll.bodyRows`): the Graph follows its newest within them. */
   bodyRows: number
+  /** The world (the World tab): the day's calendar, the timeline, the sources, the hints. */
+  world: WorldState
 }
 
 /** The rows besides the graph's own lines: the tabs, its summary, its footer, `Explore in browser`. */
@@ -165,6 +168,7 @@ function tabs(els: Els, d: PaneData, a: PaneActions): Tree {
         {tab('live', 'l', 'Live')}
         {tab('reflexes', 'r', 'Reflexes')}
         {tab('health', 't', 'Health')}
+        {tab('world', 'w', 'World')}
       </Box>
       <Text dimColor>esc: close</Text>
     </Box>
@@ -475,9 +479,85 @@ function versionRow(els: Els, u: Update, ascii: boolean, a: PaneActions): Tree {
   )
 }
 
+/** The most timeline lines and hints the World tab draws. */
+const WORLD_EVENTS_DRAWN = 40
+const WORLD_HINTS_DRAWN = 8
+
+/**
+ * The World tab (the implementation plan's W3): the header (on, paused, off; the sources live and
+ * the hints this session), the day as a strip of quarter hours with the block under way or next
+ * beneath it, the activity timeline newest first, the sources with their lamps, and the hints the
+ * command hook delivered this session. Off, it says what `adage world on` would do, and nothing
+ * else: the world is a person's decision at a terminal.
+ */
+function world(els: Els, d: PaneData): Tree {
+  const { Box, Text } = els
+  const w = d.world
+  const head = worldHeader(w, d.ascii)
+  const sep = g('sep', d.ascii)
+  if (!w.enabled) {
+    return (
+      <Box flexDirection="column">
+        <Box flexDirection="row" gap={1}>
+          <Text color={ROLES[head.role]}>{`${g('off', d.ascii)} world ${head.word}`}</Text>
+          <Text dimColor wrap="truncate-end">{head.facts.join(` ${sep} `)}</Text>
+        </Box>
+        <Text dimColor wrap="wrap">{WORLD_OFF}</Text>
+      </Box>
+    )
+  }
+  const strip = dayStrip(w.blocks, d.now, Math.max(16, d.columns - 2), d.ascii)
+  const events = w.events.slice(0, WORLD_EVENTS_DRAWN)
+  const hints = w.hints.slice(-WORLD_HINTS_DRAWN).reverse()
+  const empty = w.sources.length === 0 && events.length === 0 && w.blocks.length === 0
+  return (
+    <Box flexDirection="column">
+      <Box flexDirection="row" gap={1}>
+        <Text color={ROLES[head.role]}>{`${g(w.paused || w.status === 'stopped' ? 'quiet' : 'lamp', d.ascii)} world ${head.word}`}</Text>
+        <Text dimColor wrap="truncate-end">{head.facts.join(` ${sep} `)}</Text>
+      </Box>
+      {w.status === 'reconnecting' ? <Text color={ROLES.prime}>{`feed stopped ${sep} reconnecting${d.ascii ? '...' : '…'}`}</Text> : null}
+      {w.status === 'stopped' ? <Text color={ROLES.prime}>{`feed stopped ${sep} run adage world`}</Text> : null}
+      {empty ? <Text dimColor wrap="wrap">{WORLD_EMPTY}</Text> : null}
+      <Box key="day" flexDirection="column">
+        <Box flexDirection="row">
+          {strip.cells.map((c, k) => (
+            <Text key={`q-${k}`} color={ROLES[c.role]} bold={c.now}>{c.ch}</Text>
+          ))}
+        </Box>
+        <Text dimColor>{strip.labels}</Text>
+        <Text wrap="truncate-end">{blockLine(w.blocks, d.now)}</Text>
+      </Box>
+      {events.length === 0 ? null : rule(els, 'what you were doing', d.columns)}
+      {events.map((e, k) => (
+        <Text key={`ev-${k}`} dimColor={k > 0 && e.ts < d.now - 3_600_000} wrap="truncate-end">{eventLine(e, w.titles, d.ascii)}</Text>
+      ))}
+      {w.sources.length === 0 ? null : rule(els, 'sources', d.columns)}
+      {w.sources.map(s => {
+        const l = sourceLine(s, d.now, d.ascii)
+        return (
+          <Box key={`src-${s.name}`} flexDirection="row">
+            <Text color={ROLES[l.role]}>{`${l.glyph} `}</Text>
+            <Text wrap="truncate-end">{l.text}</Text>
+          </Box>
+        )
+      })}
+      {hints.length === 0 ? null : rule(els, 'what Adage told the agent', d.columns)}
+      {hints.map((h, k) => (
+        <Text key={`hint-${k}`} wrap="truncate-end">{hintLine(h, d.ascii)}</Text>
+      ))}
+    </Box>
+  )
+}
+
 export function paneTree(els: Els, d: PaneData, a: PaneActions): Tree {
   const { Box } = els
-  const body = d.view.tab === 'graph' ? graph(els, d, a) : d.view.tab === 'reflexes' ? reflexes(els, d, a) : d.view.tab === 'health' ? health(els, d, a) : live(els, d, a)
+  const body =
+    d.view.tab === 'graph' ? graph(els, d, a)
+    : d.view.tab === 'reflexes' ? reflexes(els, d, a)
+    : d.view.tab === 'health' ? health(els, d, a)
+    : d.view.tab === 'world' ? world(els, d)
+    : live(els, d, a)
   return (
     <Box flexDirection="column">
       {tabs(els, d, a)}

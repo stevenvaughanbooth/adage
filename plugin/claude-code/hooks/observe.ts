@@ -10,6 +10,7 @@ import type { AnswerAt, EventAt, Mod, NextAt } from './mod'
 import type { Fired } from './plugin'
 import { parseReflexes } from './reflex'
 import { receiptOf, rewriteOf } from './view/lines'
+import { hintsOf } from './world/hints'
 
 type Answered = { additionalContext?: readonly string[]; block?: string }
 
@@ -40,6 +41,9 @@ export async function onPrompt(m: Mod, e: EventAt<'classic.UserPromptSubmit'>, n
   const predicted = await m.state.predicted.read()
   const marks = await m.state.marks.read()
   const turn = await m.state.turn.update(t => ({ submits: t.submits + 1, fired: fired.length, predicted: predicted.length, marks: marks.length }))
+  // The world's hint, when the command hook delivered one: kept for the World tab, never changed.
+  const hints = hintsOf(answered.additionalContext ?? [], await m.clock.now(), turn.submits)
+  if (hints.length > 0) await m.state.world.update(w => ({ ...w, hints: [...w.hints, ...hints].slice(-50) })).catch(() => undefined)
   await keepNodes(m, [{ kind: 'prompt', at: await m.clock.now(), n: turn.submits, text: e.prompt }]).catch(() => undefined)
   if ((await m.state.mode.read()).versionLine !== '') {
     const { version } = await m.session.version()

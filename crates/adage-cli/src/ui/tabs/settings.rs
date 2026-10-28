@@ -23,6 +23,7 @@ enum Section {
     Sources,
     Instincts,
     Display,
+    World,
     App,
     Advanced,
 }
@@ -34,6 +35,7 @@ impl Section {
             Section::Sources => "History sources",
             Section::Instincts => "Instincts & packs",
             Section::Display => "In Claude Code",
+            Section::World => "The world",
             Section::App => "In adage ui",
             Section::Advanced => "Advanced",
         }
@@ -180,6 +182,48 @@ const META: &[Meta] = &[
         "Habit hints",
         "A line under a batch of tool calls when Adage notices a habit it is still counting.",
         "on or off",
+    ),
+    m(
+        "world.enabled",
+        Section::World,
+        "Record what you do",
+        "Keep a timeline of what you were doing (meetings, pull requests, tickets, files) and tell the agent which one a prompt means. A person's decision: adage world on.",
+        "on or off",
+    ),
+    m(
+        "world.desktop",
+        Section::World,
+        "Desktop titles",
+        "Sample the active app and window title, titles only: never pixels, never keystrokes.",
+        "on or off",
+    ),
+    m(
+        "world.roots",
+        Section::World,
+        "Watched folders",
+        "Folders whose recently edited files are things a prompt may refer to.",
+        "absolute folders or ~/…, comma-separated; empty watches none",
+    ),
+    m(
+        "world.transcripts",
+        Section::World,
+        "Transcript folders",
+        "Folders where your meeting tools write transcripts.",
+        "absolute folders or ~/…, comma-separated; empty watches none",
+    ),
+    m(
+        "world.deny",
+        Section::World,
+        "Never recorded",
+        "App names, window titles, addresses and paths that are never recorded, as patterns.",
+        "glob patterns, comma-separated",
+    ),
+    m(
+        "world.retention_days",
+        Section::World,
+        "Keep activity for",
+        "How long the activity timeline is kept; the things it names keep only their titles.",
+        "1 to 365 days",
     ),
     m(
         "ui.start_screen",
@@ -406,6 +450,17 @@ fn shown(row: &SettingRow, t: &Theme) -> (String, Style) {
         ("runtime.routine_model", "") => quiet("the session's own model"),
         ("runtime.predict_cap", "0") => quiet("none"),
         ("runtime.predict_cap", _) => plain(format!("{v} per session")),
+        ("world.retention_days", _) => plain(format!("{v} days")),
+        ("world.roots" | "world.transcripts", _) if !v.is_empty() => plain(list(v)),
+        // The deny list is long by default: the first few, and how many more.
+        ("world.deny", _) if !v.is_empty() => {
+            let items: Vec<&str> = v.split(',').map(str::trim).filter(|x| !x.is_empty()).collect();
+            if items.len() > 3 {
+                plain(format!("{} +{} more", items[..3].join(", "), items.len() - 3))
+            } else {
+                plain(items.join(", "))
+            }
+        }
         (_, "") => quiet("none"),
         _ => plain(v.into()),
     }

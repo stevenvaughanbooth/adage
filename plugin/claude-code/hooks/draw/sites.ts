@@ -155,7 +155,7 @@ export async function onAbovePrompt(m: Mod, e: EventAt<'ui.render', { component:
   return b === undefined ? next(e) : bandTree(m.ui.resolve(e), b, mode.ascii ? '-' : '·')
 }
 
-/** The pane (§6): Graph, Live, Reflexes, Health; its presses once a person is at the prompt. */
+/** The pane (§6): Graph, Live, Reflexes, Health, World; its presses once a person is at the prompt. */
 export async function onPane(m: Mod, e: EventAt<'ui.render', { component: 'Pane'; requestId: 'adage' }>, next: NextAt<'ui.render', { component: 'Pane'; requestId: 'adage' }>): AnswerAt<'ui.render', { component: 'Pane'; requestId: 'adage' }> {
   if (!paneSurface(e)) return next(e)
   const mode = await m.state.mode.read()
@@ -186,6 +186,7 @@ export async function onPane(m: Mod, e: EventAt<'ui.render', { component: 'Pane'
       now: await m.clock.now(),
       motion: !mode.reducedMotion,
       bodyRows: e.props.scroll.bodyRows,
+      world: await m.state.world.read(),
     },
     { ...paneActions(m), press: m.rt.pressBound ? pressHandlers(m) : undefined },
   )

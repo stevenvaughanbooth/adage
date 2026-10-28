@@ -15,7 +15,7 @@ use super::ingest::{self, Batch};
 use crate::ui::follow::lifeline::Lifeline;
 use adage_store::{config, lock, spool, state, Paths};
 use adage_trace::{Action, ActivityEvent, Artifact, ArtifactKind};
-use adage_world::state::HealthState;
+use adage_world::state::{ArtifactsState, HealthState};
 use adage_world::Descriptor;
 use anyhow::{bail, Result};
 use serde_json::json;
@@ -86,8 +86,15 @@ fn run(paths: &Paths, session: &str, since: u64, watch_stdin: bool) -> Result<()
         }
         let mut lines: Vec<serde_json::Value> = Vec::new();
         if let Ok((events, next)) = spool::read_from::<ActivityEvent>(&paths.world_activity(), cursor) {
+            // Each event with its thing's title, for the pane's timeline (the event carries the id).
+            let titles = if events.is_empty() {
+                None
+            } else {
+                state::try_read::<ArtifactsState>(&paths.world_artifacts()).ok().flatten()
+            };
             for e in events {
-                lines.push(json!({ "cursor": next, "event": e, "session": session }));
+                let title = titles.as_ref().and_then(|t| t.artifacts.get(&e.artifact)).map(|a| a.title.clone());
+                lines.push(json!({ "cursor": next, "event": e, "title": title, "session": session }));
             }
             cursor = next;
         }

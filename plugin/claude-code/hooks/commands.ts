@@ -17,7 +17,7 @@ import { SAVINGS_ROWS, cardText, whyText } from './view/card'
 import { upToDate, updateHeadless } from './ask'
 
 /** The verbs `/adage` takes; anything else prints the card (ux-design §7). */
-const VERBS = ['status', 'graph', 'watch', 'reflexes', 'health', 'doctor', 'review', 'why', 'off', 'on', 'pause', 'map', 'savings', 'update'] as const
+const VERBS = ['status', 'graph', 'watch', 'reflexes', 'health', 'doctor', 'review', 'why', 'off', 'on', 'pause', 'map', 'savings', 'update', 'world'] as const
 export type Verb = (typeof VERBS)[number] | 'card'
 
 /** The hint after the name: the two verbs a person needs (ux-design §7). */
@@ -44,6 +44,8 @@ export function tabOf(verb: Verb): View['tab'] | undefined {
     case 'health':
     case 'doctor':
       return 'health'
+    case 'world':
+      return 'world'
     default:
       return undefined
   }
@@ -96,6 +98,7 @@ export async function runCommand(args: string, deps: CommandDeps): Promise<{ tex
     case 'review':
     case 'health':
     case 'doctor':
+    case 'world':
       await deps.open(tabOf(verb) ?? 'graph')
       return {}
     case 'why':

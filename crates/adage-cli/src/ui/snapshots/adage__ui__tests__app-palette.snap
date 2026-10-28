@@ -7,7 +7,7 @@ expression: text
   ▄███▄   Healthy · 4 checks passed · 2 to look at
   ██!██   ━━━━━━━━━━━━━━━━━━━━━━━━────────────  4 of 6 pass
   ▀███▀   The same checks as adag╭─ palette ────────────────────────────────────────────────────────────────────────╮
-                                 │ : str▌                                                                37 matches │
+                                 │ : str▌                                                                43 matches │
  Needs a look  2 · fix them here ├──────────────────────────────────────────────────────────────────────────────────┤─────────────────────── passes ─╮
  ╭─ ! Embedding model ───────────│ ACTIONS                                                                          │                                │
  │ No embedding model, so the has│ › Strengthen reflex…                   adage review strengthen                 s │                                │
@@ -21,9 +21,9 @@ expression: text
  Hooks & delivery  2 ────────────│   Settings · runtime.routine_model     adage config set runtime.routine_model    │
   + Claude Code hooks  set up in │   Settings · runtime.predict_cap       adage config set runtime.predict_cap      │
   + Hook errors        none in th│   Settings · learn.repos               adage config set learn.repos              │
-                                 │                                                                                  │
- Learning  1 ────────────────────│ ACTIONS                                                                          │
-  + Reflex index       4 route(s)│   Installed reflexes and evidence      Status report                             │
+                                 │   Settings · world.roots               adage config set world.roots              │
+ Learning  1 ────────────────────│   Settings · world.retention_days      adage config set world.retention_days     │
+  + Reflex index       4 route(s)│                                                                                  │
                                  ├──────────────────────────────────────────────────────────────────────────────────┤
  This install  1 ────────────────│  ↑↓  move   enter  run   tab  complete   esc  close                              │
 ▌ + Adage              adage 0.1.│ Choose an action here; no terminal command copying needed                        │

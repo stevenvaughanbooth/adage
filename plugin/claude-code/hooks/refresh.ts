@@ -5,7 +5,7 @@
 import { read } from './bridge'
 import type { Mod } from './mod'
 import { toastOnce } from './notify'
-import { checksOf, lapsedOf, optInOf, packsOf, reflexesOf, repoOf, routineModelOf, updateOf } from './reads'
+import { checksOf, lapsedOf, optInOf, packsOf, reflexesOf, repoOf, routineModelOf, updateOf, worldOf } from './reads'
 import type { Offer } from './reads'
 import { lapseToast } from './view/lines'
 
@@ -22,13 +22,18 @@ export async function refresh(m: Mod, force = false): Promise<void> {
   if (!force && now - m.rt.lastRefresh < REFRESH_MS) return
   m.rt.lastRefresh = now
   const cwd = await m.session.cwd()
-  const [graph, doctor, deleg, status, card] = await Promise.all([
+  const [graph, doctor, deleg, status, card, world] = await Promise.all([
     read(m.run, m.rt.cli, ['graph', '--json'], cwd),
     read(m.run, m.rt.cli, ['doctor', '--json'], cwd),
     read(m.run, m.rt.cli, ['delegate', 'status', '--json'], cwd),
     read(m.run, m.rt.cli, ['status', '--json'], cwd),
     read(m.run, m.rt.cli, ['--json', '--for-session'], cwd),
+    read(m.run, m.rt.cli, ['world', '--json'], cwd),
   ])
+  if (world.ok) {
+    const w = worldOf(world.json)
+    await m.state.world.update(x => ({ ...x, ...w }))
+  }
   // The graph holds every repository's reflexes; the pane, the band and the asks are about this one.
   if (card.ok) m.rt.repo = repoOf(card.json)
   if (graph.ok) await m.state.reflexes.update(() => reflexesOf(graph.json, m.rt.repo))

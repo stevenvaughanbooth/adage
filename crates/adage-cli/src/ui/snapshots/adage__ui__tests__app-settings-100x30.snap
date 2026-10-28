@@ -4,17 +4,16 @@ expression: text
 ---
  adage    1 Live   2 Reflexes  2   3 Map   4 Health  2   5 Settings   6 Home   7 Traces
 ────────────────────────────────────────────────────────━━━━━━━━━━━━────────────────────────────────
- 24 settings · 2 changed · same as adage config · /home/me/.local/share/adage/config.toml
+ 30 settings · 2 changed · same as adage config · /home/me/.local/share/adage/config.toml
  ! 1 setting is set by environment variables, which win over the file
 
-    Instinct packs           auto, defaults + added packs
-    Always leave out         none
-
-  In Claude Code  4
-    Session-start notice     daily
-    Spinner note             ○ off
-    Turn summary             ○ off
-    Habit hints              ○ off
+  The world  6
+    Record what you do       ○ off
+    Desktop titles           ○ off
+    Watched folders          none
+    Transcript folders       none
+    Never recorded           1Password, Bitwarden, Keychain Access +9 more
+    Keep activity for        14 days
 
   In adage ui  1
     Start screen             ● on
@@ -23,6 +22,7 @@ expression: text
     Fix Python test runs     ● on
 ▌   Measure savings          10% of sessions held out  env ADAGE_CONTROL
     Model for routine steps  the session's own model
+    Steps Adage may take     6 per session
 ─ Measure savings · runtime.control ────────────────────────────────────────────────────────────────
  Hold out a share of sessions where Adage stays silent, so adage savings can compare them with the
  rest.

@@ -4,7 +4,7 @@
 // presses since B4 (dialog.test.ts); T-B3-05 keeps the copy beside them for persona (b).
 import { describe, expect, test } from 'claude-code/testing'
 
-import { CARD, CLI, DELEGATE, GRAPH, LAPSED, LINE, PANE_PROPS, SURFACES, begin, mountPane, rowsOf, shown, start, world } from '../fixtures/kit'
+import { CARD, CLI, DELEGATE, GRAPH, LAPSED, LINE, PANE_PROPS, SURFACES, T0, WORLD_OFF_JSON, begin, mountPane, rowsOf, shown, start, world } from '../fixtures/kit'
 import { ROLES } from '../tokens'
 import { GRAPH_EMPTY } from '../view/graph'
 import { clock } from '../view/pane'
@@ -12,7 +12,7 @@ import { clock } from '../view/pane'
 const FEED = [LINE.learnerIdle, LINE.healthy, LINE.start, LINE.firedGen, LINE.firedLookup]
 
 describe('T-B3-01 … T-B3-07 · the pane', () => {
-  test('T-B3-01, T-B3-15: four tabs as lowercase hotkeys (no h), the Graph first and open; /adage opens the pane focused, as a dialog', async ($, on) => {
+  test('T-B3-01, T-B3-15: five tabs as lowercase hotkeys (no h), the Graph first and open; /adage opens the pane focused, as a dialog', async ($, on) => {
     const w = world(on, { feed: FEED })
     await start($, w)
     await $.command.run({ command: 'adage', args: '' } as never)
@@ -21,7 +21,7 @@ describe('T-B3-01 … T-B3-07 · the pane', () => {
       const ui = await mountPane($, surface)
       const tabs = await ui.findAll({ type: 'Button', key: undefined })
       const hot = tabs.filter(b => typeof b.props.hotkey === 'string').map(b => `${b.props.hotkey}:${b.props.label}`)
-      expect(hot.slice(0, 4)).toEqual(['g:Graph', 'l:Live', 'r:Reflexes', 't:Health'])
+      expect(hot.slice(0, 5)).toEqual(['g:Graph', 'l:Live', 'r:Reflexes', 't:Health', 'w:World'])
       expect(hot.some(h => h.startsWith('h:'))).toBe(false)
       expect((await ui.findAll({ key: 'tab-graph' }))[0]?.props.dimColor).toBe(false)
       await ui.press({ key: 'tab-reflexes' })
@@ -246,5 +246,58 @@ describe('T-B3-11 · the Reflexes flow through the engine', () => {
       expect((await narrow.findAll({ type: 'Text' })).some(t => t.text === ' ──▶ ')).toBe(false)
       await narrow.unmount()
     }
+  })
+})
+
+describe('T-W3-13 · the World tab', () => {
+  const iso = (ms: number) => new Date(ms).toISOString()
+  const TOOLS = [{ name: 'mcp__claude_ai_google_calendar__list_events', mcp: true }]
+  const CALENDAR = { items: [{ id: 'ev1', summary: 'Marketing sync', start: { dateTime: iso(T0 - 50 * 60_000) }, end: { dateTime: iso(T0 - 20 * 60_000) }, attendees: [{ email: 'ana@acme.com', responseStatus: 'accepted' }] }, { id: 'ev2', summary: 'Design review', start: { dateTime: iso(T0 + 30 * 60_000) }, end: { dateTime: iso(T0 + 90 * 60_000) } }] }
+  const BLOCKS = [
+    { id: 'calendar:ev1', start: T0 - 50 * 60_000, end: T0 - 20 * 60_000, title: 'Marketing sync', busy: true, accepted: true, focus: false, attendees: 1 },
+    { id: 'calendar:ev2', start: T0 + 30 * 60_000, end: T0 + 90 * 60_000, title: 'Design review', busy: true, accepted: true, focus: false, attendees: 0 },
+  ]
+
+  test('T-W3-13: off, the tab says what adage world on would do and draws nothing else', async ($, on) => {
+    const off = world(on, { feed: FEED })
+    await start($, off)
+    const ui0 = await mountPane($)
+    await ui0.press({ key: 'tab-world' })
+    const t0 = (await shown(ui0)).join('\n')
+    expect(t0).toContain('world off')
+    expect(t0).toContain('adage world on')
+    expect((await ui0.findAll({ key: 'day' }))).toHaveLength(0)
+    await ui0.unmount()
+  })
+
+  test('T-W3-13: on, the header, the day strip with its labels, the next block, the sources after the first poll', async ($, on) => {
+    const w = world(on, { feed: FEED, world_json: { ...WORLD_OFF_JSON, enabled: true, blocks: BLOCKS, artifacts_total: 3 }, tools: TOOLS, mcp: () => CALENDAR })
+    await begin($, w)
+    for (const surface of SURFACES) {
+      const ui = await mountPane($, surface)
+      await ui.press({ key: 'tab-world' })
+      const text = (await shown(ui)).join('\n')
+      expect(text).toContain('world on')
+      expect(text).toContain('1 source live')
+      expect(text).toContain('3 things it knows')
+      expect(text).toContain('07      09      11      13      15      17      19')
+      expect(text).toMatch(/next: \d\d:\d\d Design review \(in 30 min\)/)
+      expect(text).toContain('calendar  claude_ai_google_calendar')
+      // The strip: one cell per quarter hour, the blocks filled.
+      const cells = (await shown(ui)).filter(t => t === '█' || t === '╌' || t === '◆')
+      expect(cells).toHaveLength(52)
+      expect(cells.filter(c => c === '█').length).toBeGreaterThan(0)
+      await ui.unmount()
+    }
+  })
+
+  test('T-W3-13: /adage world opens the pane on the World tab, remembered across sessions', async ($, on) => {
+    const w = world(on, { feed: FEED })
+    await start($, w)
+    await $.command.run({ command: 'adage', args: 'world' } as never)
+    const ui = await mountPane($)
+    expect((await ui.findAll({ key: 'tab-world' }))[0]?.props.dimColor).toBe(false)
+    expect((await ui.findAll({ key: 'tab-graph' }))[0]?.props.dimColor).toBe(true)
+    await ui.unmount()
   })
 })

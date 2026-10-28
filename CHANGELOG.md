@@ -23,6 +23,13 @@ The development history is recorded in Git and the design documents under `docs/
   measures the resolver on prompts you label, `adage world pause` stops it. Nothing in it reaches
   the network from the Rust binary, and nothing records pixels, keystrokes or content beyond a
   300-character summary made locally (`docs/usage.md`, "The world").
+- **The World tab in the Claude Code pane** (`/adage world`, `w`): the day's calendar as a strip
+  of quarter hours with the block under way or next, the activity timeline, each source with its
+  lamp and the hints Adage gave the agent this session. The mod runs the connector sources
+  itself, through `$.mcp.call` on the servers you connected (the descriptors matched by
+  `$.tool.list()`), pipes each result to `adage world ingest`, and starts `adage world follow`
+  for the session's life; `adage world --json` lists the day's blocks. `adage ui`'s Settings tab
+  gained a "The world" section for the six `world.*` keys.
 
 ### Fixed
 

@@ -96,7 +96,7 @@ describe('T-X-04 · authority', () => {
     const pressed = w.ran.filter(r => typeof r.init?.stdin === 'string' && r.init.stdin.includes('"press"'))
     const others = w.ran.filter(r => !pressed.includes(r))
     const heads = new Set([...others.map(r => headOf(r.argv)), ...w.spawned.map(headOf)])
-    const allowed = new Set(['hook', 'version', 'watch', 'graph', 'doctor', 'status', 'ledger note', 'off', 'map', 'condition', 'delegate'])
+    const allowed = new Set(['hook', 'version', 'watch', 'graph', 'doctor', 'status', 'ledger note', 'off', 'map', 'condition', 'delegate', 'world'])
     for (const h of heads) expect(allowed.has(h), h).toBe(true)
     for (const h of ['install', 'config', 'review', 'on', 'add']) expect(heads.has(h)).toBe(false)
     for (const r of pressed) {
@@ -141,7 +141,7 @@ describe('T-X-04, T-O9-04 · authority, with presses', () => {
     await w.clock.settle()
     const pressed = presses(w)
     const others = w.ran.filter(r => !pressed.includes(r))
-    const allowed = new Set(['hook', 'version', 'watch', 'graph', 'doctor', 'status', 'ledger note', 'off', 'map', 'condition', 'delegate'])
+    const allowed = new Set(['hook', 'version', 'watch', 'graph', 'doctor', 'status', 'ledger note', 'off', 'map', 'condition', 'delegate', 'world'])
     for (const r of others) expect(allowed.has(headOf(r.argv)), headOf(r.argv)).toBe(true)
     for (const r of others) expect(['review', 'on', 'add', 'update'].includes(r.argv[1] ?? '')).toBe(false)
     expect(pressed.length).toBeGreaterThanOrEqual(4)

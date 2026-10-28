@@ -7,7 +7,7 @@
 // builds the capabilities over its `$`, one closure per call the mod makes, and hands modules the
 // `Mod`; no other file sees `$`. A module is a function of a `Mod`, which a test builds without the
 // engine (fixtures/kit.ts `fake`).
-import type { EngineInterface, HookFor, MatchedHook, Pattern, Register, RenderSurface, Timer } from 'claude-code'
+import type { EngineInterface, HookFor, MatchedHook, McpToolResult, Pattern, Register, RenderSurface, Timer, ToolInfo } from 'claude-code'
 
 import type { Run, Spawn } from './bridge'
 import type { Els } from './draw/els'
@@ -58,6 +58,13 @@ export type Caps = {
    * nothing runs, no dialog opens, auto mode's classifier is not asked).
    */
   checkTool: (tool: string, input: Record<string, unknown>) => Promise<unknown>
+  /**
+   * A connected MCP server's tool, called with the engine's own connection and credentials
+   * (`$.mcp.call`; the world's connector sources): Adage holds no token and signs in nowhere.
+   */
+  mcp: { call: (server: string, tool: string, args: Record<string, unknown>) => Promise<McpToolResult> }
+  /** The tools the model can call now, MCP tools included (`$.tool.list`): which servers are connected. */
+  tool: { list: () => Promise<ToolInfo[]> }
   ui: {
     status: (text: string) => void
     toast: (text: string) => void
@@ -149,6 +156,11 @@ export type Runtime = {
   withheld: Withheld[]
   /** The session whose band said why a step was held back, and the prompt count it was raised at (`band.withheld`). */
   withheldSaid: { session: string; submits: number } | undefined
+  /** The world's connector sources running this session (world/poll.ts), their generation, and its follow child's. */
+  worldRuns: { resolved: unknown; failures: number; timer: { cancel: () => void } | undefined; polls: number }[]
+  worldGen: number
+  worldFeedGen: number
+  worldChild: Stoppable | undefined
 }
 
 /** The runtime of a fresh load: inert, nothing followed, nothing asked. */
@@ -186,6 +198,10 @@ export function runtime(): Runtime {
     skill: undefined,
     withheld: [],
     withheldSaid: undefined,
+    worldRuns: [],
+    worldGen: 0,
+    worldFeedGen: 0,
+    worldChild: undefined,
   }
 }
 

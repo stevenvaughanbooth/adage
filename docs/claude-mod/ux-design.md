@@ -151,7 +151,7 @@ Q7). The permission prompt is not a render site and is never touched.
 | `Spinner` | `· adage ◠ n…` suffix (`ui.spinner`, off by default) | While a reflex was delivered this turn |
 | `TurnDuration` (terminal) | `· adage: …` summary (`ui.turn_line`, off by default) | Per turn with Adage activity |
 | `AbovePrompt` | The band, one line (two while something needs attention) | When any cell has something to say; otherwise `next(e)` |
-| `Pane` | `/adage` with Graph (this session's DAG, live), Live, Reflexes, Health | On demand; unasked only at ≥144 columns with `pane: auto` |
+| `Pane` | `/adage` with Graph (this session's DAG, live), Live, Reflexes, Health, World (what you were doing: the day strip, the timeline, the sources, the hints) | On demand; unasked only at ≥144 columns with `pane: auto` |
 | `CommandOutput` | `/adage`, `/adage why` drawn as a card | Per command |
 | Toast | The learner finished with a change; a grant lapsed; the finish line continuing; a copy confirmation | One per learn; one per lapse per session; one per gate; one per copy |
 | `$.ui.status` | Warnings only (the engine prefixes it `⚠ adage:`, so the text carries no prefix) | Until cleared |
@@ -474,10 +474,10 @@ true → `next(e)` (the engine's survey has the band; verify the prop in Q3).
 
 ## 6. The pane
 
-Opened by `/adage` (and `/adage graph|watch|reflexes|health|review`) with `focus: true, closeOnEscape:
+Opened by `/adage` (and `/adage graph|watch|reflexes|health|review|world`) with `focus: true, closeOnEscape:
 true, holdToasts: true, rows: 20`; unasked only with `pane: auto` and a 144-column fullscreen
-terminal. Four tabs as `plain` Buttons with hotkeys `g` (Graph), `l` (Live), `r` (Reflexes), `t`
-(Health): a `Button` hotkey is one digit or one lowercase letter, and `h` is `adage watch`'s help
+terminal. Five tabs as `plain` Buttons with hotkeys `g` (Graph), `l` (Live), `r` (Reflexes), `t`
+(Health), `w` (World): a `Button` hotkey is one digit or one lowercase letter, and `h` is `adage watch`'s help
 key, which persona (b) knows. The pane opens on **Graph**, this session drawn live (§6.0); the
 person's last tab is remembered across sessions. The open tab is in the accent, the others dim. Every tab's footer ends with one
 `Link`, **`Explore in browser`**, which starts `adage map` if it is not running and opens
@@ -494,7 +494,7 @@ hook delivered, each stop; joined with the feed's `followed`/`met` rows, the pre
 the tool-row markers. A subagent's own calls are its transcript's and are not drawn.
 
 ```text
- g: Graph   l: Live   r: Reflexes   t: Health                                         esc: close
+ g: Graph   l: Live   r: Reflexes   t: Health   w: World                              esc: close
  ◆ this session · adage fired 3 reflexes · 2 followed · 1 step without a model request · 2 prompts
 ╭─ PROMPT 1 ──────────────────────────────────────────────────────────────────────────── 14:02:01 ─╮
 │ fix W-2042 and add the currency field                                                            │
@@ -659,6 +659,54 @@ From `adage doctor --json`: every check as a lamp row with its label and detail;
 `Copy command`. Lapsed grants list here with their exact reapprove command behind `Copy command`.
 A `Link` to the map when `adage map` is serving (`http://localhost:<port>`).
 
+### 6.3b World
+
+What you were doing, beside what the agent did (the situational awareness layer, `adage world`;
+[docs/usage.md](../usage.md), "The world"). Drawn from
+`$.state.world`: `adage world --json` at each refresh (on, paused, the day's calendar blocks, the
+counts), the follow child's lines (the activity timeline and the sources' health,
+`hooks/world/follow.ts`), the mod's own connector polls (`hooks/world/poll.ts`) and the hints the
+command hook delivered this session (`hooks/world/hints.ts`).
+
+```text
+ g: Graph   l: Live   r: Reflexes   t: Health   w: World                              esc: close
+ ● world on   2 sources live · 1 hint this session · 41 things it knows
+ ╌╌╌╌╌╌╌╌████╌╌╌╌╌╌╌╌╌╌██◆█╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌████╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ 07      09      11      13      15      17      19
+ now: Design review until 12:30
+ ─ what you were doing ───────────────────────────────────────────────────────────────────────────
+ 11:52  github    pull request Fix the lockfile changed · ci red
+ 10:30  calendar  meeting Marketing sync ended
+ 10:02  meetings  transcript Marketing sync seen
+ ─ sources ───────────────────────────────────────────────────────────────────────────────────────
+ ● calendar  claude_ai_google_calendar · polled 2 min ago · 14 events
+ ● github    github · polled 4 min ago · 3 events
+ ○ meetings  not polled yet
+ ─ what Adage told the agent ─────────────────────────────────────────────────────────────────────
+ 10:41  ◠ hint  "Marketing sync" (meeting, ended 11 min ago, 4 attendees)
+```
+
+- **The header**: the lamp and the state word (`on`, `paused`, `feed stopped`, `off`), then the
+  sources live, the hints this session and how many things the store holds.
+- **The day strip**: the working day (07:00 to 20:00) as one cell per quarter hour, a busy block
+  filled (`█`; the one under way in the accent, the past dim, what is ahead in the prime role, a
+  focus block in the inhibit role), free time a dim rail (`╌`), the present quarter `◆`, hour
+  labels every two hours beneath, and one line: the block under way until its end, or the next
+  one and how long until it. Off the strip (before 07:00, after 20:00) the line alone says it.
+- **The timeline**: the activity events newest first (40 drawn, 200 kept), each `HH:MM`, its
+  source, the thing's kind and title (the follow child names it; a connector's title lands when
+  the mod ingested it) and the action; the detail after a separator (`ci red`). Lines older than
+  an hour are dim after the first.
+- **The sources**: one lamp row each, the connector ones with their server as the tool name
+  spells it: `●` polled and well, `○` not polled yet, `✗` with the error (`call failed: 401`).
+- **The hints**: what Adage told the agent at a prompt, the first line of each `<adage-world>`
+  block (`hint` or `asked`), newest first, eight drawn.
+
+Off (`world.enabled` false): the header says `○ world off · adage world on · record what you do,
+for the agent` and one dim line, `pane.world.off`; nothing else is drawn, since turning it on is a
+person's decision at a terminal and the pane has no press for it. On with nothing yet:
+`pane.world.empty`. Nothing in the tab is a Button: the world has no verb a session may run.
+
 ### 6.4 Empty states
 
 Graph with nothing yet: `Nothing yet. This graph grows as the agent works: each prompt, each step,
@@ -793,7 +841,9 @@ lines of about 40 columns.
 | `status.binary` | `{the shim's reason from $DATA/status}` | 1 line |
 | `status.unanswering` | `hooks are not answering; run adage doctor` | 1 line |
 | `status.recovery` | `an action was interrupted; inspect the worktree, then run {recover command} in a terminal` | 1 line |
-| `pane.tabs` | `g: Graph   l: Live   r: Reflexes   t: Health` / `esc: close` | |
+| `pane.tabs` | `g: Graph   l: Live   r: Reflexes   t: Health   w: World` / `esc: close` | |
+| `pane.world.off` | `The world is off: Adage records nothing of what you do. adage world on turns it on, a person at a terminal.` | |
+| `pane.world.empty` | `Nothing yet. Connect a calendar or GitHub to Claude Code (/mcp) and set world.transcripts to where your meetings land.` | |
 | `pane.graph.empty` | `Nothing yet. This graph grows as the agent works: each prompt, each step, and every reflex Adage fires.` | |
 | `pane.graph.desktop` | `the graph needs the terminal · adage watch` | |
 | `pane.graph.footer` | `a: whole session` / `a: follow the newest` | |

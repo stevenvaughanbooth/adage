@@ -2763,7 +2763,8 @@ fn settings_group_into_sections_with_plain_labels_and_one_card() {
     assert!(mid.contains("ADAGE_CONTROL wins over config.toml"), "{mid}");
     assert!(mid.contains("1 setting is set by environment variables"), "{mid}");
     snap("app-settings-100x30", &mid);
-    // Without Unicode, the toggles and marks fall back to ASCII.
+    // Without Unicode, the toggles and marks fall back to ASCII (the world's section has both).
+    s.setting_sel = at(&s, "ui.notices");
     let ascii = Ctx { theme: Theme::with_color(false).ascii(), ..ctx(Paths::at(d.path()), false) };
     let text = app_frame(&s, &ascii, 80, 24);
     assert!(text.contains("* on") && text.contains("o off") && !text.contains('●'), "{text}");

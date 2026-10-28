@@ -4,7 +4,7 @@ expression: text
 ---
  adage  1 2 2  3 4 2  5 Settings  6 7                    harbor-dispatch · LIVE
 ─────────────────────━━━━━━━━━━━━───────────────────────────────────────────────
- 24 settings · 2 changed · same as adage config · …ocal/share/adage/config.toml
+ 30 settings · 2 changed · same as adage config · …ocal/share/adage/config.toml
  ! 1 setting is set by environment variables, which win over the file
 
   Learning  7 · 1 changed

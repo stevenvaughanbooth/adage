@@ -114,9 +114,10 @@ expect(!existsSync(path.join(repo, "plugin/claude-code-exec")), "plugin/claude-c
       const verbs = (list ?? "").split(",").map((v) => v.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean)
       // Person-only verbs, install and config never run from a hook (architecture §2, §6 3a). The
       // list is architecture §2's, plus `condition` (the Health tab's one action) and `delegate`
-      // (only `delegate status --json`, read for the lapsed grants), in this order: a change to it
-      // is a change here and to bridge.test.ts together (T-B1-05, T-X-04).
-      const allowed = ["hook", "version", "watch", "graph", "doctor", "status", "ledger", "off", "map", "condition", "delegate"]
+      // (only `delegate status --json`, read for the lapsed grants) and `world` (its reads, its
+      // ingest and its follow child; never `world on`), in this order: a change to it is a change
+      // here and to bridge.test.ts together (T-B1-05, T-X-04).
+      const allowed = ["hook", "version", "watch", "graph", "doctor", "status", "ledger", "off", "map", "condition", "delegate", "world"]
       for (const v of verbs) {
         expect(allowed.includes(v), `${pluginDir}/hooks/bridge.ts: verb ${v} may not be in the allow-list`)
       }
