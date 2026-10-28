@@ -1,0 +1,45 @@
+# The person's calendar, read in the Claude Code mod through a connected MCP server (the
+# `world_pull` capability). Events in the window are `calendar_event` artifacts and calendar
+# blocks; an event that ended is the thing a prompt like "the follow-ups from the marketing sync"
+# refers to, with its attachments as related artifacts.
+[source]
+name = "calendar"
+kind = "calendar_event"
+needs = "connector"
+every = "300s"
+lookback = "2h"
+lookahead = "8h"
+
+[[provider]]
+server = "claude.ai Google Calendar"
+tool = "list_events"
+args = { timeMin = "{{now-lookback}}", timeMax = "{{now+lookahead}}", singleEvents = true, orderBy = "startTime" }
+
+[provider.map]
+id = "/items/*/id"
+title = "/items/*/summary"
+start = "/items/*/start/dateTime"
+end = "/items/*/end/dateTime"
+attendees = "/items/*/attendees/*/email"
+busy = "/items/*/transparency"
+accepted = "/items/*/attendees/*/responseStatus"
+links = "/items/*/attachments/*/fileUrl"
+busy_when = ["opaque", ""]
+accepted_when = ["accepted", "tentative", ""]
+
+[[provider]]
+server = "google-calendar*"
+tool = "list_events"
+args = { timeMin = "{{now-lookback}}", timeMax = "{{now+lookahead}}", singleEvents = true, orderBy = "startTime" }
+
+[provider.map]
+id = "/items/*/id"
+title = "/items/*/summary"
+start = "/items/*/start/dateTime"
+end = "/items/*/end/dateTime"
+attendees = "/items/*/attendees/*/email"
+busy = "/items/*/transparency"
+accepted = "/items/*/attendees/*/responseStatus"
+links = "/items/*/attachments/*/fileUrl"
+busy_when = ["opaque", ""]
+accepted_when = ["accepted", "tentative", ""]

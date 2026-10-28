@@ -1,0 +1,16 @@
+# Meeting transcripts landing on disk, watched by `adage world follow` in the directories
+# `world.transcripts` names (Granola, Zoom, Gong and other tools' export folders). A file that
+# lands is a `transcript` artifact; its title is the file's stem and its summary the first 300
+# characters, made locally; the agent reads the file itself if it needs it.
+[source]
+name = "meetings"
+kind = "transcript"
+needs = "local"
+every = "15s"
+lookback = "2h"
+lookahead = "0s"
+
+[watch]
+dirs = "world.transcripts"
+glob = "*.{md,txt,vtt,srt,json}"
+debounce = "5s"

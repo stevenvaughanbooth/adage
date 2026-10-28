@@ -1,0 +1,15 @@
+# Recently edited files under the roots `world.roots` names, watched by `adage world follow`:
+# the documents and notes a prompt like "that file I was editing" refers to. Paths and
+# modification times only; no content is read.
+[source]
+name = "files"
+kind = "file"
+needs = "local"
+every = "30s"
+lookback = "4h"
+lookahead = "0s"
+
+[watch]
+dirs = "world.roots"
+glob = "*"
+debounce = "10s"

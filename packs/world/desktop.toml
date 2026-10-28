@@ -1,0 +1,15 @@
+# The active application and its window title, sampled by `adage world follow` only while
+# `world.desktop` is on. Titles only, never pixels, keystrokes or audio; `world.deny` drops
+# password managers, banking and anything that looks like a secret before it is written.
+[source]
+name = "desktop"
+kind = "doc"
+needs = "local"
+every = "5s"
+lookback = "4h"
+lookahead = "0s"
+
+[watch]
+dirs = ""
+glob = ""
+debounce = "5s"

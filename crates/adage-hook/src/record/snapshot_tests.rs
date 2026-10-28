@@ -329,7 +329,79 @@ fn every_record_kind_as_the_spool_holds_it() {
     bash_call(&sa, &NO_EXTENSION, "toolu_s2", PYTEST, verdict);
     section(&mut out, "failure, batch, pretool: a subagent's calls", lines(&sa.paths, "s", &sa.root));
 
+    // The world: a hint at a prompt (`injection`), its label at the batch that opens the pull
+    // request it named (`injection_label`), and the hint withheld in the control arm.
+    let ww = world_world(Arm::Treated);
+    event(&ww, "claude", &NO_EXTENSION, "s", "UserPromptSubmit", json!({ "prompt": "review the PR" }));
+    let open = json!({ "tool_calls": [{ "tool_name": "Bash", "tool_use_id": "w1", "tool_response": "",
+                       "tool_input": { "command": "gh pr view #412" } }] });
+    event(&ww, "claude", &NO_EXTENSION, "s", "PostToolBatch", open);
+    section(&mut out, "injection, injection_label", world_lines(&ww.paths, "s", &ww.root));
+    let wc = world_world(Arm::Control);
+    event(&wc, "claude", &NO_EXTENSION, "s", "UserPromptSubmit", json!({ "prompt": "review the PR" }));
+    section(&mut out, "injection: withheld", world_lines(&wc.paths, "s", &wc.root));
+
     insta::assert_snapshot!("every_record_kind", out);
+}
+
+/// A session in `arm` with the world on and one open pull request in its store.
+fn world_world(arm: Arm) -> ObligationWorld {
+    let w = dead_end_world(arm);
+    std::fs::write(w.paths.config(), "[learn]\nauto = false\n\n[world]\nenabled = true\n").unwrap();
+    state::update::<adage_world::ArtifactsState, _>(&w.paths.world_artifacts(), |s| {
+        s.upsert(adage_trace::Artifact {
+            id: "github:pr:412".into(),
+            kind: adage_trace::ArtifactKind::Pr,
+            title: "Schema evolution for invoices".into(),
+            locator: "#412".into(),
+            summary: None,
+            embedding: None,
+            first_seen: 1_792_000_000_000,
+            last_touched: 1_792_000_000_000,
+            related: vec![],
+            state: Some("ci:green".into()),
+            people: vec![],
+        });
+    })
+    .unwrap();
+    w
+}
+
+/// The world's records alone, with the fields that depend on the clock or the model made stable:
+/// the hint's id and confidence, the scores, the recency-dependent text.
+fn world_lines(paths: &Paths, session: &str, root: &Path) -> Vec<String> {
+    lines(paths, session, root)
+        .into_iter()
+        .filter(|l| l.contains("\"kind\":\"injection\"") || l.contains("\"kind\":\"injection_label\""))
+        .map(|l| {
+            let mut l = l;
+            for (field, stand_in) in
+                [("\"id\":\"w", "\"id\":\"[id]"), ("\"injection_id\":\"w", "\"injection_id\":\"[id]")]
+            {
+                while let Some(i) = l.find(field) {
+                    let end = i + field.len() + l[i + field.len()..].find('"').unwrap();
+                    l.replace_range(i..end, stand_in);
+                }
+            }
+            for field in ["\"confidence\":", "\"score\":", "\"sim\":", "\"recency\":", "\"entity\":", "\"kind\":"] {
+                let mut from = 0;
+                while let Some(i) = l[from..].find(field).map(|i| i + from) {
+                    let start = i + field.len();
+                    let end = start
+                        + l[start..]
+                            .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == 'e' || c == '-'))
+                            .unwrap_or(l.len() - start);
+                    if end > start {
+                        l.replace_range(start..end, "[n]");
+                        from = start + "[n]".len();
+                    } else {
+                        from = start;
+                    }
+                }
+            }
+            l
+        })
+        .collect()
 }
 
 /// A command hook's Bash call in `session`.

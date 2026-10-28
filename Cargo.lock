@@ -46,6 +46,7 @@ dependencies = [
  "adage-trace",
  "adage-tracks",
  "adage-train",
+ "adage-world",
  "anyhow",
  "clap",
  "clap_complete",
@@ -159,6 +160,7 @@ dependencies = [
  "adage-store",
  "adage-trace",
  "adage-tracks",
+ "adage-world",
  "getrandom 0.2.17",
  "insta",
  "serde",
@@ -390,6 +392,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "toml",
 ]
 
 [[package]]

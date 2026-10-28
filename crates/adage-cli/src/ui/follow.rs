@@ -506,7 +506,7 @@ pub fn learner_json(paths: &Paths, repo: &str, now: u64) -> Value {
 
 /// Ends the stream: stdin closed (only when it is a pipe and `watch_stdin`: a stream started with no
 /// stdin at all, or told to ignore it, follows until it is stopped), the parent gone, or SIGTERM.
-mod lifeline {
+pub(crate) mod lifeline {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
 

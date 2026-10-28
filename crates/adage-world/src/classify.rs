@@ -5,7 +5,6 @@
 //! a compaction, by the harness's own rule.
 
 use crate::render;
-use crate::text::until;
 use crate::window::is_open;
 use crate::WorldCtx;
 use adage_trace::{ArtifactKind, WorldView};
@@ -114,8 +113,9 @@ pub fn classify(ctx: &WorldCtx<'_>, prev: &WorldView, focus: &[String]) -> Chang
         focus: focus.to_vec(),
         interrupts: sent,
         last_delta_ts: if delta.is_some() { ctx.now } else { prev.last_delta_ts },
+        pending: prev.pending.clone(),
+        hints: prev.hints,
     };
-    let _ = until;
     Changes { delta, interrupts, next, changes }
 }
 

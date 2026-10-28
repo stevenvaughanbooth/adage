@@ -30,6 +30,7 @@ adage-sign = { path = "../adage-sign" }
 adage-pack = { path = "../adage-pack" }
 adage-eval = { path = "../adage-eval" }
 adage-hook = { path = "../adage-hook" }
+adage-world = { path = "../adage-world" }
 # Approvals are written through adage-exec's API (the library only: `adage` never runs a route).
 adage-exec = { path = "../adage-exec" }
 # The operations front ends share: the review queue and decisions (`adage_app`).

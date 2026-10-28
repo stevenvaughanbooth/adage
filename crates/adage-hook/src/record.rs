@@ -52,6 +52,11 @@ pub(crate) enum RecordKind {
     PressSpent,
     /// A Bash call named the press.
     Tripwire,
+    /// The world's hint (or disambiguation) delivered at a prompt, or withheld in the control arm.
+    Injection,
+    /// A delivered hint's label: used by the agent within the next tool batches, or not, or
+    /// overridden by the person's next prompt.
+    InjectionLabel,
 }
 
 impl RecordKind {
@@ -71,6 +76,8 @@ impl RecordKind {
             RecordKind::PressIssued => "press_issued",
             RecordKind::PressSpent => "press_spent",
             RecordKind::Tripwire => "tripwire",
+            RecordKind::Injection => "injection",
+            RecordKind::InjectionLabel => "injection_label",
         }
     }
 

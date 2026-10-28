@@ -115,6 +115,19 @@ The press (`adage_hook::press`). Facts, never the token:
 | `press_spent` | `Press` | `chain` (the link the spend moved to), `verb` (the person-only verb) |
 | `tripwire` | `PreToolUse` | `warned` (this was the session's one warning) |
 
+### `injection`, `injection_label`
+
+The world (`adage_hook::world`; the situational awareness layer, `docs/usage.md` "The world").
+Written only while `world.enabled` is set and `world/paused` is absent.
+
+| Kind | `event` | Fields |
+| --- | --- | --- |
+| `injection` | `UserPromptSubmit` | `injection` (`adage_trace::Injection`: `id`, `session`, `at`, `cls` = `hint` or `disambiguation`, `artifacts`, `tokens`, `confidence`), `scored` (the top three candidates' scores and terms), `arm`, `repo`; `withheld: true` and `would_hint: true` in the control arm |
+| `injection_label` | the batch's or prompt's event | `injection_id`; `used` (the agent opened a named artifact within three tool batches, or did not); `overridden: true` (the next prompt named its own artifact) |
+
+Neither holds the prompt, the hint's text or an artifact's content: the ids, the scores and the
+label are what the resolver learns from.
+
 ## Readers
 
 | Reader | Kinds | Fields it uses |
@@ -129,6 +142,7 @@ The press (`adage_hook::press`). Facts, never the token:
 | `adage report` (`adage-cli` `main.rs`) | decided kinds | `arm`, `decision.directives`, `decision.would_have` |
 | The harness ledger (`adage_app::harness_ledger`) | `session_start` | `kind`, `repo`: a usage note is accepted only for a session that started in that repository |
 | `adage-exec doctor`, `adage review` (`adage_exec::last_withheld`) | decided kinds | `ts`, `exec[].withheld`, `route`, `level` |
+| `adage world status`, `adage world eval` (`adage-cli` `world/`) | `injection`, `injection_label` | `injection.artifacts`, `injection.cls`, `scored`, `used`, `overridden`, `would_hint` |
 
 ## Adding a record kind
 

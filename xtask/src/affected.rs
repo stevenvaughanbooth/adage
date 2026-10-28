@@ -38,6 +38,7 @@ pub const READS: &[(&str, &[&str])] = &[
     ("sim/", &["adage-sim"]),
     ("plugin/", &["adage-cli", "adage-hook", "xtask"]),
     ("packs/", &["adage-pack"]),
+    ("packs/world/", &["adage-world"]),
     (".claude-plugin/", &["adage-pack", "xtask"]),
     ("docs/instincts.md", &["adage-instincts"]),
     ("design/", &["xtask"]),

@@ -10,6 +10,20 @@ The development history is recorded in Git and the design documents under `docs/
 
 ## Unreleased
 
+### Added
+
+- **The world: a situational awareness layer, off by default.** `adage world on` records what
+  you were doing beside what the agent did: meetings from your calendar, transcripts your meeting
+  tool writes, files you edited, pull requests and tickets in your name. At a prompt like "file
+  the follow-ups from the marketing sync", every harness's hook delivers one hint naming the
+  likely reference, or lists two or three for the agent to confirm, before the model spends tool
+  calls finding out. Sources are descriptors (`packs/world/*.toml`), not code; local ones run in
+  `adage world follow`, connector ones in the Claude Code mod through the MCP servers you already
+  connected, so Adage holds no token. `adage world` shows what it holds, `adage world eval`
+  measures the resolver on prompts you label, `adage world pause` stops it. Nothing in it reaches
+  the network from the Rust binary, and nothing records pixels, keystrokes or content beyond a
+  300-character summary made locally (`docs/usage.md`, "The world").
+
 ### Fixed
 
 - The website's Get started page keeps the installation instructions and commands fully visible;

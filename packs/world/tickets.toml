@@ -1,0 +1,33 @@
+# Tickets assigned to the person, read in the Claude Code mod through a connected Linear or Jira
+# MCP server. An assigned ticket is a candidate whatever its age; one that moves is a delta.
+[source]
+name = "tickets"
+kind = "ticket"
+needs = "connector"
+every = "300s"
+lookback = "24h"
+lookahead = "0s"
+
+[[provider]]
+server = "*linear*"
+tool = "list_issues"
+args = { assignee = "me", state = "open", limit = 25 }
+
+[provider.map]
+id = "/issues/*/identifier"
+title = "/issues/*/title"
+locator = "/issues/*/url"
+state = "/issues/*/state/name"
+updated = "/issues/*/updatedAt"
+
+[[provider]]
+server = "*jira*"
+tool = "search_issues"
+args = { jql = "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC", maxResults = 25 }
+
+[provider.map]
+id = "/issues/*/key"
+title = "/issues/*/fields/summary"
+locator = "/issues/*/self"
+state = "/issues/*/fields/status/name"
+updated = "/issues/*/fields/updated"

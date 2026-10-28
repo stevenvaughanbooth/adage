@@ -285,6 +285,30 @@ pub struct WorldView {
     /// When the last delta was delivered.
     #[serde(default)]
     pub last_delta_ts: u64,
+    /// The hint delivered at the latest prompt, waiting to be labelled: `used` once the agent
+    /// opens one of its artifacts within the next three tool batches, else not.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending: Option<PendingHint>,
+    /// Hints delivered this session, for the record's ids.
+    #[serde(default)]
+    pub hints: u32,
+}
+
+impl WorldView {
+    pub fn is_empty(&self) -> bool {
+        *self == WorldView::default()
+    }
+}
+
+/// A hint waiting for its label ([`WorldView::pending`]).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PendingHint {
+    /// [`Injection::id`].
+    pub id: String,
+    /// `(artifact id, locator)` of each artifact the hint named.
+    pub artifacts: Vec<(String, String)>,
+    /// Tool batches left before the hint counts as unused.
+    pub batches_left: u32,
 }
 
 #[cfg(test)]

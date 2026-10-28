@@ -415,6 +415,7 @@ adage map              # local browser view, with review actions when started fr
 adage ui               # the full terminal app: reflexes, traces, map, health, settings
 adage doctor           # check binary, data dir, index, tracks, model, hooks, kill switches
 adage review           # evidence, advice previews, and routine candidates awaiting execution approval
+adage world            # the situational awareness layer: what you were doing, for the agent (off by default)
 ```
 
 Then, when you want to:
@@ -453,6 +454,46 @@ See [How Adage works](how-it-works.md) for the current behavior and limits, and
 [live learning](live-learning.md) for discovery and background learning. Conditioning and
 advisory hooks are automatic after setup. CPU execution of learned actions requires the separate
 execution policy and local approval described in [execution](execution.md).
+
+## The world
+
+The world is the situational awareness layer: a second time series beside the agent's trace,
+what *you* were doing. With it on, Adage records the meetings on your calendar, the transcripts
+your meeting tool writes, the files you edited, the pull requests and tickets open in your name,
+and tells the agent what a prompt like "file the follow-ups from the marketing sync" refers to,
+at the prompt, before the model spends tool calls finding out. It is off by default.
+
+```bash
+adage world on                                   # a person's decision: record what you do
+adage config set world.transcripts ~/Meetings    # where Granola, Zoom or Gong write transcripts
+adage config set world.roots ~/src,~/notes       # directories whose recent edits count
+adage world                                      # sources, artifacts, the calendar, activity
+adage world eval record "review the PR" --meant github:pr:412   # label what you meant, fifty times
+adage world eval report                          # hit@1 and false attaches on your prompts
+adage world pause                                # stop every source and every hint; resume starts them
+```
+
+**What arrives, and from where.** Each source is a descriptor, a TOML file (`packs/world/`, or
+your own under `$ADAGE_HOME/packs/world/`), never code. Local sources (`meetings`, `files`,
+`desktop`) run on this machine in `adage world follow`, which the Claude Code mod starts for a
+session's life. Connector sources (`calendar`, `github`, `tickets`) run inside the Claude Code
+mod through the MCP servers you have already connected to Claude Code (a claude.ai connector, a
+`claude mcp add` server): Adage holds no token and signs in nowhere; disconnecting the server in
+`/mcp` stops the source. Codex and OpenCode sessions read the same store and get the same hints,
+from the local sources alone.
+
+**What the agent reads.** One `<adage-world kind="hint">` block after the reflexes' text: the
+likely reference (a meeting, its transcript's path, a pull request, a ticket), a summary of at
+most 300 characters made locally, and a line saying it is from Adage. When two or three things
+could be meant, a `disambiguation` lists them and the agent asks in one line. Nothing when the
+prompt names its own file or URL, when nothing scores high enough, and in a control session.
+
+**What is kept.** Titles, paths, keys, a short summary and timestamps, under `$ADAGE_HOME/world/`;
+never pixels, keystrokes, audio or an artifact's content beyond its summary. `world.deny` drops
+password managers, banking, HR and anything that looks like a secret before it is written.
+Activity is kept `world.retention_days` (14), artifact summaries six times as long, and the
+labels the resolver learns from (which hints the agent used) indefinitely; they hold no content.
+`world.desktop` (off) adds the active window's title, sampled every five seconds.
 
 ## Watch it live
 

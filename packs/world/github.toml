@@ -1,0 +1,23 @@
+# Pull requests the person authored or reviews, with their check state, read in the Claude Code
+# mod through a connected GitHub MCP server. An open pull request is a candidate whatever its
+# age; a check that goes red on the session's own branch is an interrupt.
+[source]
+name = "github"
+kind = "pr"
+needs = "connector"
+every = "60s"
+lookback = "24h"
+lookahead = "0s"
+
+[[provider]]
+server = "github*"
+tool = "search_pull_requests"
+args = { query = "is:open is:pr involves:@me", perPage = 20 }
+
+[provider.map]
+id = "/items/*/number"
+title = "/items/*/title"
+locator = "/items/*/html_url"
+state = "/items/*/state"
+updated = "/items/*/updated_at"
+people = "/items/*/user/login"

@@ -60,6 +60,7 @@ mod train;
 mod tty;
 mod ui;
 mod update;
+mod world;
 
 // Commands run on the hook's stack size (`adage_hook::STACK`).
 use adage_hook::on_big_stack;
@@ -242,6 +243,7 @@ fn run(args: &[String]) -> Result<()> {
         Some("eval") => adage_eval::cli::run(rest),
         Some("models") => models::run(rest, &paths),
         Some("sense") => sense::sense(rest, &paths),
+        Some("world") => world::run(rest, &paths),
         Some("init") => init::init(rest, &paths),
         Some("doctor") => doctor::doctor(rest, &paths),
         Some("watch") => ui::watch(rest, &paths),

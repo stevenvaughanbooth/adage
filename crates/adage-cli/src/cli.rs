@@ -71,6 +71,9 @@ pub enum Command {
     Off,
     /// Turn Adage back on in this repository (a person's decision).
     On,
+    /// What you were doing, for the agent: calendar, meetings, files and pull requests, and what a prompt refers to.
+    #[command(args_conflicts_with_subcommands = true)]
+    World(WorldArgs),
 
     // ------------------------------------------------------------------ learning
     /// What your agents actually do, read from past traces (read-only).
@@ -623,6 +626,87 @@ pub enum MarketplaceAction {
 }
 
 #[derive(Args, Debug)]
+pub struct WorldArgs {
+    /// With no subcommand: the status, as machine-readable output.
+    #[arg(long)]
+    pub json: bool,
+    /// With no subcommand, `status`.
+    #[command(subcommand)]
+    pub action: Option<WorldAction>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum WorldAction {
+    /// What the world holds: sources, artifacts, the calendar, activity.
+    Status {
+        /// Machine-readable output.
+        #[arg(long)]
+        json: bool,
+    },
+    /// The source descriptors in effect: built in, plus any under $ADAGE_HOME/packs/world/.
+    Descriptors {
+        /// Machine-readable output.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Events, artifacts and calendar blocks on stdin (the Claude Code mod's connector sources).
+    Ingest {
+        /// The source they come from (default: the events' own).
+        #[arg(long, value_name = "NAME")]
+        source: Option<String>,
+        /// The source's failure instead: recorded in its health, nothing written.
+        #[arg(long, value_name = "TEXT")]
+        error: Option<String>,
+    },
+    /// The local sources and the timeline as JSON lines, for a session's life.
+    Follow {
+        /// The repository the session runs in.
+        #[arg(long, value_name = "DIR")]
+        repo: Option<PathBuf>,
+        /// The session's id.
+        #[arg(long, value_name = "ID")]
+        session: Option<String>,
+        /// End when stdin closes (`eof`, the default) or never read it (`ignore`).
+        #[arg(long, value_name = "eof|ignore")]
+        stdin: Option<String>,
+        /// Resume from a cursor printed earlier.
+        #[arg(long, value_name = "CURSOR")]
+        since: Option<String>,
+    },
+    /// The prompts you label, and the resolver's score on them.
+    #[command(subcommand)]
+    Eval(WorldEval),
+    /// Stop every source and every hint until `resume`.
+    Pause,
+    /// Start the sources and hints again.
+    Resume,
+    /// Record what you do and resolve references (world.enabled; a person's decision).
+    On,
+    /// Record nothing and deliver nothing.
+    Off,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum WorldEval {
+    /// A prompt and what you meant by it.
+    Record {
+        /// The prompt, as you would type it.
+        prompt: String,
+        /// The artifact id you meant (`adage world --json` lists them), or `none`.
+        #[arg(long, value_name = "ID")]
+        meant: String,
+    },
+    /// hit@1 and false attaches over the labelled prompts.
+    Report {
+        /// Machine-readable output.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Every labelled prompt.
+    List,
+}
+
+#[derive(Args, Debug)]
 pub struct DelegateArgs {
     /// With no subcommand: the status, as machine-readable output.
     #[arg(long)]
@@ -979,6 +1063,7 @@ fn overview(t: &Theme) -> StyledStr {
         (
             "Conditioning",
             &[
+                ("world", "what you were doing, for the agent: sources, hints, labels"),
                 ("sense", "what your agents actually do (read-only)"),
                 ("condition", "condition reflexes from traces now"),
                 ("corpus", "import, inspect and learn canonical trace collections"),
@@ -1150,6 +1235,7 @@ mod tests {
             ("share.rs", &["share"]),
             ("share_pack.rs", &["share"]),
             ("sense.rs", &["sense"]),
+            ("world/mod.rs", &["world"]),
             ("savings.rs", &["savings"]),
             ("models.rs", &["models"]),
             ("update.rs", &["update"]),

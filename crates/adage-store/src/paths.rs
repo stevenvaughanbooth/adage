@@ -158,6 +158,10 @@ impl Paths {
     pub fn world_eval(&self) -> PathBuf {
         self.world().join("eval.jsonl")
     }
+    /// Every source's health (last poll, last error, events written), as a two-slot state file.
+    pub fn world_health(&self) -> PathBuf {
+        self.world().join("health.state")
+    }
 
     // The switches kept as marker files: present means the switch is thrown. Per-machine settings
     // live in `config.toml`; these are the ones that predate it or belong to one repository.
@@ -233,6 +237,7 @@ mod tests {
         assert_eq!(p.world_lock(), Path::new("/data/world/lock"));
         assert_eq!(p.world_paused(), Path::new("/data/world/paused"));
         assert_eq!(p.world_eval(), Path::new("/data/world/eval.jsonl"));
+        assert_eq!(p.world_health(), Path::new("/data/world/health.state"));
     }
 
     #[test]

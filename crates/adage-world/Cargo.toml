@@ -12,5 +12,6 @@ adage-trace = { path = "../adage-trace" }
 adage-intent = { path = "../adage-intent" }
 serde.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 glob.workspace = true
 sha2.workspace = true

@@ -24,7 +24,7 @@ pub(crate) mod demo;
 mod diff;
 mod feed;
 mod flow;
-mod follow;
+pub(crate) mod follow;
 mod forms;
 mod fuzzy;
 pub(crate) mod health;

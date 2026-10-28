@@ -18,20 +18,25 @@
 
 pub mod classify;
 pub mod decide;
+pub mod descriptor;
 pub mod gate;
+pub mod ingest;
 pub mod params;
 pub mod render;
 pub mod schedule;
 pub mod score;
+pub mod state;
 pub mod text;
 pub mod window;
 
 pub use classify::{classify, Change, Changes};
 pub use decide::{decide, Decision, Hint};
+pub use descriptor::{Descriptor, Needs, Provider};
 pub use gate::{gate, Signal};
 pub use params::Params;
 pub use schedule::{schedule, Autonomy, Liveness, Plan, Review, Ttl};
 pub use score::{score, Scored};
+pub use state::{ArtifactsState, CalendarState, EvalCase, HealthState, SourceHealth};
 pub use window::candidates;
 
 pub use adage_trace::{

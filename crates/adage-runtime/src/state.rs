@@ -211,6 +211,11 @@ pub struct SessionState {
     /// [`SessionState::pending`] is not): a rebuilt state predicts nothing at the first step.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub at_prompt: Vec<String>,
+    /// The world as this session last saw it (`adage_trace::world`): the snapshot's hash, the
+    /// states a delta is computed against, the interrupts sent, the hint waiting for its label.
+    /// Never rebuilt from the spool: a rebuilt session takes a fresh snapshot.
+    #[serde(default, skip_serializing_if = "adage_trace::WorldView::is_empty")]
+    pub world: adage_trace::WorldView,
 }
 
 /// The 64-bit hash a call's harness identity is kept as in the session state

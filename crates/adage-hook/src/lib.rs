@@ -52,6 +52,7 @@ mod standing;
 mod stop;
 #[cfg(test)]
 mod testkit;
+pub mod world;
 
 pub use extension::{
     stimuli, Delivery, Extension, PreCall, PreNote, ReceiptCard, SessionTexts, Site, Stimulus, StopCall, StopGate, Turn,
@@ -231,9 +232,27 @@ pub fn handle(
         Event::Stop { stop_hook_active } => Some(stop_hook_active),
         _ => None,
     };
+    // The world reads a prompt's text and a batch's calls beside the decision (`world`).
+    let prompt_text = match &ev {
+        Event::Prompt { text } => Some(text.clone()),
+        _ => None,
+    };
+    let batch_calls = match &ev {
+        Event::Batch { calls } => Some(calls.clone()),
+        _ => None,
+    };
     // Decide first, always: the session's bookkeeping (a learned obligation's Stop request, an
     // at-Stop action) must not depend on what the finish-line gate finds (review F1).
     let responded = respond(&ctx, ev);
+    // Then the world: a hint rides after the reflexes' text at a prompt; a batch labels the hint
+    // before it. Neither changes a decision, and both fail open.
+    let responded = match prompt_text {
+        Some(text) => responded.map(|r| world::with_hint(&ctx, r, &text)),
+        None => responded,
+    };
+    if let Some(calls) = batch_calls {
+        world::at_batch(&ctx, &calls);
+    }
     let out = match (stop, opts.extension) {
         (Some(stop_hook_active), Some(x)) if in_repo => stop::gated(&ctx, x, stop_hook_active, responded),
         _ => responded.map(|r| r.out.and_then(|o| adapter.render(event, o))),

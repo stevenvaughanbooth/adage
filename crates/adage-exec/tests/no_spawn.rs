@@ -51,6 +51,14 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     // (`claude plugin marketplace add`, `install`, `list`), at a person's request (`--yes
     // --hooks`, or the wizard's choice); `adage update` refreshes it the same way.
     ("adage-cli/src/claude_plugin.rs", 1, "`claude plugin …` to install Adage's own plugin"),
+    // The world's desktop source, off by default (`world.desktop`): the platform's own tool reads
+    // the active window's title (osascript on macOS, xdotool on Linux), in the follow child a
+    // session spawns, never in a hook. Titles only; no command from anywhere else is run.
+    (
+        "adage-cli/src/world/follow.rs",
+        3,
+        "the import, then osascript or xdotool reading the active window's title for the desktop source",
+    ),
     // Terminal mode switching for the interactive UI (stty on the controlling terminal).
     ("adage-cli/src/tty.rs", 1, "stty for the terminal UI"),
     // `adage map`: opens the person's browser on the local page (`open`, `cmd /c start` or

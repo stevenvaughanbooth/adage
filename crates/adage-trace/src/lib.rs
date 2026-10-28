@@ -22,7 +22,8 @@ pub use harness::{Capabilities, EventKind, Harness};
 pub use identity::{EvidenceGroup, EvidenceIdentity, GroupBasis};
 pub use session::{Directed, Ending, OutcomeBasis, OutcomeEvidence, PromptObs, Session, StepObs};
 pub use world::{
-    Action, ActivityEvent, Artifact, ArtifactKind, CalendarBlock, Injection, InjectionAt, InjectionClass, WorldView,
+    Action, ActivityEvent, Artifact, ArtifactKind, CalendarBlock, Injection, InjectionAt, InjectionClass, PendingHint,
+    WorldView,
 };
 
 use serde::{Deserialize, Serialize};

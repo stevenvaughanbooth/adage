@@ -76,6 +76,7 @@ adage condition --repo-root .  # learn from this repository's existing sessions
 adage review                   # inspect reflexes and their evidence
 adage ui                       # review decisions and explore recorded sessions
 adage                         # see status and recent activity
+adage world on                 # optional: let the agent know what you were doing (calendar, meetings, files, PRs)
 ```
 
 In the terminal app, select a reflex and press `Enter` to review it. The list keeps a brief

@@ -14,6 +14,7 @@ adage-trace = { path = "../adage-trace" }
 adage-store = { path = "../adage-store" }
 adage-tracks = { path = "../adage-tracks" }
 adage-intent = { path = "../adage-intent" }
+adage-world = { path = "../adage-world" }
 adage-runtime = { path = "../adage-runtime" }
 adage-ingest = { path = "../adage-ingest" }
 adage-pack = { path = "../adage-pack" }
