@@ -122,7 +122,7 @@ pub fn affected(members: &[Member], changed: &[String]) -> Affected {
 /// The workspace members, from `cargo metadata`.
 pub fn members(root: &Path) -> Result<Vec<Member>> {
     let out = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()))
-        .args(["metadata", "--format-version", "1", "--no-deps"])
+        .args(["metadata", "--format-version", "1", "--no-deps", "--locked"])
         .current_dir(root)
         .output()
         .context("running cargo metadata")?;
@@ -157,38 +157,91 @@ pub fn members(root: &Path) -> Result<Vec<Member>> {
     Ok(members)
 }
 
-/// Paths changed since the merge base of `base` and `HEAD`, plus uncommitted ones.
+/// Paths changed since the merge base of `base` and `HEAD`, including staged, unstaged and
+/// untracked files. Ignored build output is excluded. Git's NUL-delimited form preserves spaces,
+/// non-ASCII names and embedded newlines; its default quoted, line-delimited form does not.
 fn changed_since(root: &Path, base: &str) -> Result<Vec<String>> {
     let git = |args: &[&str]| -> Result<String> {
         let out = Command::new("git").args(args).current_dir(root).output().context("running git")?;
         if !out.status.success() {
             bail!("git {}: {}", args.join(" "), String::from_utf8_lossy(&out.stderr).trim());
         }
-        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+        String::from_utf8(out.stdout).context("git returned a non-UTF-8 path; cannot safely select affected packages")
     };
-    let merge_base = git(&["merge-base", base, "HEAD"])?;
+    let merge_base = git(&["merge-base", "--", base, "HEAD"])?;
     let mut paths: BTreeSet<String> = BTreeSet::new();
     // `--no-renames`: a moved file is listed at both paths, so the package it left is tested too.
     for args in [
-        vec!["diff", "--name-only", "--no-renames", merge_base.trim()],
-        vec!["diff", "--name-only", "--no-renames", "HEAD"],
+        vec!["diff", "--name-only", "-z", "--no-renames", merge_base.trim(), "--"],
+        vec!["diff", "--name-only", "-z", "--no-renames", "HEAD", "--"],
+        // A staged edit can be undone in the working tree. Comparing HEAD with the working
+        // tree then sees no change, but that staged version still belongs to the next commit.
+        vec!["diff", "--cached", "--name-only", "-z", "--no-renames", "HEAD", "--"],
+        vec!["ls-files", "--others", "--exclude-standard", "-z"],
     ] {
-        paths.extend(git(&args)?.lines().filter(|l| !l.is_empty()).map(str::to_string));
+        paths.extend(git(&args)?.split('\0').filter(|p| !p.is_empty()).map(str::to_string));
     }
     Ok(paths.into_iter().collect())
 }
 
-pub fn run(root: &Path, args: &[String]) -> Result<()> {
-    let flag = |name: &str| args.iter().position(|a| a == name);
-    let changed: Vec<String> = match flag("--files") {
-        Some(i) => args[i + 1..].iter().take_while(|a| !a.starts_with("--")).cloned().collect(),
-        None => {
-            let base = flag("--base").and_then(|i| args.get(i + 1)).map(String::as_str).unwrap_or("origin/main");
-            changed_since(root, base)?
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Options {
+    base: Option<String>,
+    files: Option<Vec<String>>,
+    json: bool,
+}
+
+fn parse_options(args: &[String]) -> Result<Options> {
+    let mut options = Options::default();
+    let mut args = args.iter().peekable();
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--base" => {
+                if options.base.is_some() {
+                    bail!("--base may only be provided once");
+                }
+                options.base = Some(
+                    args.next()
+                        .filter(|value| !value.starts_with("--") && !value.is_empty())
+                        .context("--base requires a Git reference")?
+                        .clone(),
+                );
+            }
+            "--files" => {
+                if options.files.is_some() {
+                    bail!("--files may only be provided once");
+                }
+                let mut files = Vec::new();
+                while args.peek().is_some_and(|value| !value.starts_with("--")) {
+                    let file = args.next().unwrap();
+                    if file.is_empty() {
+                        bail!("--files requires nonempty paths");
+                    }
+                    files.push(file.clone());
+                }
+                if files.is_empty() {
+                    bail!("--files requires at least one path");
+                }
+                options.files = Some(files);
+            }
+            "--json" => options.json = true,
+            _ => bail!("unknown affected argument: {arg}"),
         }
+    }
+    if options.base.is_some() && options.files.is_some() {
+        bail!("use either --base or --files, not both");
+    }
+    Ok(options)
+}
+
+pub fn run(root: &Path, args: &[String]) -> Result<()> {
+    let options = parse_options(args)?;
+    let changed = match options.files {
+        Some(files) => files,
+        None => changed_since(root, options.base.as_deref().unwrap_or("origin/main"))?,
     };
     let result = affected(&members(root)?, &changed);
-    if flag("--json").is_some() {
+    if options.json {
         let (all, packages) = match &result {
             Affected::All => (true, vec![]),
             Affected::Some(p) => (false, p.iter().cloned().collect()),
@@ -281,6 +334,140 @@ mod tests {
             Member { name: "b".into(), dir: "crates/b".into(), deps: ["a".to_string()].into(), links: BTreeSet::new() },
         ];
         assert_eq!(affected(&ws, &["crates/a/src/lib.rs".into()]), Affected::All);
+    }
+
+    #[test]
+    fn malformed_options_cannot_silently_skip_tests() {
+        let parse = |args: &[&str]| parse_options(&args.iter().map(|arg| arg.to_string()).collect::<Vec<_>>());
+        assert_eq!(parse(&[]).unwrap(), Options::default());
+        assert_eq!(
+            parse(&["--files", "crates/core/src/lib.rs", "README.md", "--json"]).unwrap(),
+            Options { files: Some(vec!["crates/core/src/lib.rs".into(), "README.md".into()]), json: true, base: None }
+        );
+        assert_eq!(
+            parse(&["--json", "--base", "origin/release"]).unwrap(),
+            Options { base: Some("origin/release".into()), json: true, files: None }
+        );
+        for args in [
+            vec!["--files"],
+            vec!["--files", "--json"],
+            vec!["--files", ""],
+            vec!["--base"],
+            vec!["--base", "--json"],
+            vec!["--bsae", "main"],
+            vec!["--files", "README.md", "--files", "Cargo.toml"],
+            vec!["--base", "main", "--base", "other"],
+            vec!["--base", "main", "--files", "README.md"],
+        ] {
+            assert!(parse(&args).is_err(), "accepted {args:?}");
+        }
+    }
+
+    fn git(root: &Path, args: &[&str]) {
+        let out = Command::new("git")
+            .args([
+                "-c",
+                "user.name=Adage test",
+                "-c",
+                "user.email=test@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "core.quotepath=true",
+            ])
+            .arg("-c")
+            .arg(format!("core.hooksPath={}", root.join("no-hooks").display()))
+            .args(args)
+            .current_dir(root)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+    }
+
+    fn write(root: &Path, path: &str, contents: &str) {
+        let path = root.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, contents).unwrap();
+    }
+
+    #[test]
+    fn git_changes_include_every_worktree_state_and_both_sides_of_moves() {
+        let scratch = crate::release::Scratch::new("affected").unwrap();
+        let root = &scratch.0;
+        git(root, &["init", "--quiet"]);
+        for path in
+            ["crates/core/moved.rs", "crates/ingest/deleted.rs", "crates/trace/staged.rs", "crates/learn/dirty.rs"]
+        {
+            write(root, path, "original\n");
+        }
+        write(root, ".gitignore", "/target/\n");
+        git(root, &["add", "."]);
+        git(root, &["commit", "--quiet", "-m", "base"]);
+        git(root, &["tag", "base"]);
+        std::fs::create_dir_all(root.join("crates/sign")).unwrap();
+        git(root, &["mv", "crates/core/moved.rs", "crates/sign/moved.rs"]);
+        git(root, &["commit", "--quiet", "-m", "move"]);
+        write(root, "crates/trace/staged.rs", "staged\n");
+        git(root, &["add", "crates/trace/staged.rs"]);
+        write(root, "crates/learn/dirty.rs", "unstaged\n");
+        std::fs::remove_file(root.join("crates/ingest/deleted.rs")).unwrap();
+        write(root, "crates/sign/new file.rs", "untracked\n");
+        write(root, "target/generated.rs", "ignored\n");
+
+        assert_eq!(
+            changed_since(root, "base").unwrap(),
+            [
+                "crates/core/moved.rs",
+                "crates/ingest/deleted.rs",
+                "crates/learn/dirty.rs",
+                "crates/sign/moved.rs",
+                "crates/sign/new file.rs",
+                "crates/trace/staged.rs",
+            ]
+        );
+        assert!(changed_since(root, "missing-reference").is_err(), "missing base must not mean no changes");
+    }
+
+    #[test]
+    fn git_paths_preserve_non_ascii_and_whitespace() {
+        let scratch = crate::release::Scratch::new("affected-paths").unwrap();
+        let root = &scratch.0;
+        git(root, &["init", "--quiet"]);
+        // A tracked non-ASCII path is quoted and escaped by Git unless -z is requested.
+        let path = "crates/core/café test.rs";
+        write(root, path, "original\n");
+        git(root, &["add", "."]);
+        git(root, &["commit", "--quiet", "-m", "base"]);
+        write(root, path, "changed\n");
+        let mut expected = vec![path.to_string()];
+        // Windows forbids newlines and tabs in filenames; Unix treats them as ordinary bytes.
+        #[cfg(unix)]
+        {
+            let unusual = "crates/core/line\nwith\ttab.rs";
+            write(root, unusual, "new\n");
+            expected.push(unusual.to_string());
+        }
+        expected.sort();
+        assert_eq!(changed_since(root, "HEAD").unwrap(), expected);
+        assert_eq!(affected(&ws(), &expected), some(&["core", "trace", "ingest", "learn", "cli"]));
+    }
+
+    #[test]
+    fn staged_changes_remain_affected_when_the_worktree_restores_head() {
+        let scratch = crate::release::Scratch::new("affected-staged").unwrap();
+        let root = &scratch.0;
+        git(root, &["init", "--quiet"]);
+        let path = "crates/core/src/lib.rs";
+        write(root, path, "original\n");
+        git(root, &["add", "."]);
+        git(root, &["commit", "--quiet", "-m", "base"]);
+        write(root, path, "staged\n");
+        git(root, &["add", path]);
+        write(root, path, "original\n");
+
+        let changed = changed_since(root, "HEAD").unwrap();
+        assert_eq!(changed, [path]);
+        assert_eq!(affected(&ws(), &changed), some(&["core", "trace", "ingest", "learn", "cli"]));
     }
 
     /// Every path a crate's code reads outside its own directory (`"../../<dir>/…"`, or the root

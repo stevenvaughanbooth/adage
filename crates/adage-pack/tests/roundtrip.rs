@@ -3,6 +3,7 @@
 mod common;
 
 use adage_pack::{digest_dir, sign_dir, verify_dir, Level, Pack, Shape, NAMESPACE};
+use ssh_key::{getrandom::SysRng, rand_core::UnwrapErr};
 use ssh_key::{LineEnding, PrivateKey};
 use std::time::SystemTime;
 
@@ -66,7 +67,7 @@ fn write_mirrors_the_pack_and_drops_a_stale_signature() {
 }
 
 fn key(dir: &std::path::Path) -> (std::path::PathBuf, ssh_key::PublicKey) {
-    let k = PrivateKey::random(&mut rand_core::OsRng, ssh_key::Algorithm::Ed25519).unwrap();
+    let k = PrivateKey::random(&mut UnwrapErr(SysRng), ssh_key::Algorithm::Ed25519).unwrap();
     let p = dir.join("id_test");
     std::fs::write(&p, k.to_openssh(LineEnding::LF).unwrap().as_bytes()).unwrap();
     (p, k.public_key().clone())

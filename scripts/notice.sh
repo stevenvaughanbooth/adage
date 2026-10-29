@@ -15,6 +15,13 @@ command -v cargo-about >/dev/null 2>&1 || {
   exit 1
 }
 cargo about generate --locked --fail -m crates/adage-cli/Cargo.toml -c about.toml -o "$OUT" about.hbs
+# Registry license files can use CRLF or trailing spaces. Normalize only line endings and
+# trailing whitespace so generated notices are reproducible and pass the repository's checks.
+NORMALIZED=$(mktemp)
+trap 'rm -f "$NORMALIZED"' EXIT
+awk '{ sub(/[[:space:]]+$/, ""); print }' "$OUT" > "$NORMALIZED"
+cat "$NORMALIZED" > "$OUT"
+rm -f "$NORMALIZED"
 echo "wrote $OUT"
 # adage-exec and adage-train ship too; the NOTICE covers them only while every third-party crate
 # they link is one adage links as well.

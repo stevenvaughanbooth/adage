@@ -1,10 +1,11 @@
 # Continuous integration (plan §6.1). Release builds are .github/workflows/release.yml (dist).
 name: CI
 
-# Kept fast while iterating: pushes and pull requests run fmt, clippy and the Linux x64 tests, plus
-# the cheap dco, deny and plugin checks. The full suite (macOS, Windows, Linux arm64, the musl
-# builds, NOTICE, the design and site e2e suites, the release-profile startup test) runs weekly and
-# on manual dispatch: `gh workflow run CI --ref <branch>`.
+# Pushes and pull requests run fmt, clippy, Linux x64 tests, dependency/plugin checks, and the
+# map/site type, contract, browser and accessibility checks. Signing also runs on macOS and
+# Windows on every change. Full cross-platform tests, musl builds, NOTICE and the release-profile
+# startup test also run weekly and on manual dispatch:
+# `gh workflow run CI --ref <branch>`.
 on:
   push:
     branches: [main]
@@ -199,6 +200,25 @@ jobs:
         # instrumentation is deliberately absent: the registered hooks must learn for real.
         run: cargo test --release --locked -p adage-cli --test zero_config_plugin release_plugin_startup -- --nocapture
 
+  # Signing is a small platform boundary: OpenSSH interoperability on macOS and the agent's
+  # named-pipe transport on Windows must not wait for the full weekly product matrix.
+  signing:
+    name: signing (${{ matrix.os }})
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: signing and platform transport contracts
+        run: cargo test --locked -p adage-sign
+
   # Release targets without a native CI test runner: the static musl builds dist ships for Linux,
   # each built natively (x64, and arm64 on GitHub's arm64 runner) with the distribution's musl-gcc.
   musl:
@@ -316,14 +336,16 @@ jobs:
         run: claude plugin test plugin/claude-code
 
   design:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    # The design tokens and the embedded web map are generated files: fail when either is stale.
+    # Web sources are inert to Rust's affected-package selection. Always check the frontend and
+    # its embedded assets before merge, including changes to the Rust map API that its e2e uses.
+    timeout-minutes: 20
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: tokens are current and pass contrast
         run: cargo xtask tokens --check
       - uses: pnpm/action-setup@v4
@@ -347,13 +369,27 @@ jobs:
       - name: browser for the e2e suite
         run: pnpm exec playwright install --with-deps chromium
         working-directory: web/map
-      - name: map e2e and axe (builds and starts the adage binary itself)
-        run: pnpm test:e2e
+      - name: build the binary used by map e2e
+        run: cargo build --locked -p adage-cli
+      - name: map e2e and axe
+        env:
+          ADAGE_BIN: ${{ github.workspace }}/target/debug/adage
+        run: pnpm test:e2e --trace retain-on-failure
         working-directory: web/map
+      - name: browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: map-playwright-results
+          path: |
+            web/map/playwright-report/
+            web/map/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
   site:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     # The public website (web/site): types, the build, and Playwright with axe in both themes.
+    timeout-minutes: 15
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -381,5 +417,15 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
         working-directory: web/site
       - name: site e2e and axe (builds and serves the site itself)
-        run: pnpm test:e2e
+        run: pnpm test:e2e --trace retain-on-failure
         working-directory: web/site
+      - name: browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-playwright-results
+          path: |
+            web/site/playwright-report/
+            web/site/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -188,6 +188,40 @@ representative histories and new tasks from your own repository.
   interventions. `adage delegate off --repo .` turns off automatic execution. Setup changes are
   shown before writing and backed up. [Removal instructions](docs/usage.md#removing-adage).
 
+## Engineering
+
+Adage is a Rust workspace with a local CLI, terminal UI and embedded React map. Its core design
+keeps learning, runtime decisions, storage and execution independently testable. Start with
+[components and boundaries](docs/architecture.md) for the current design and
+[testing](docs/testing.md) for the checks that enforce it.
+
+| Design choice | How it is checked |
+| --- | --- |
+| Crates depend only on lower layers; the live hook cannot link the learner | Dependency graph tests in `xtask/src/layers.rs` |
+| Harness-specific input becomes one canonical trace model | Byte-level importer tests and native hook fixtures for Claude Code, Codex and OpenCode |
+| Learning is deterministic; external reads go through explicit interfaces | Input-order determinism tests, in-memory learning stores and the runtime's `Checkout` port |
+| Session state survives interrupted writes; execution journals reject corrupt records | Two-slot state recovery, checksums and strict journal tests in `adage-store` |
+| CLI, terminal UI and HTTP API share application operations and reflex representations | `adage-app` plus cross-surface JSON contract tests |
+| User approval and sandboxed execution are separate from learning | Approval, confinement, stale-receipt and process-spawn guards |
+
+To inspect the product without connecting an agent, from a checkout:
+
+```sh
+cargo run --locked -p adage-cli -- ui --demo
+```
+
+To verify the learning-to-delivery path on macOS or Linux (requires Rust, a C compiler and `make`):
+
+```sh
+cargo test --locked -p adage-cli --test learning_delivery -- --nocapture
+```
+
+That proof imports native traces, learns and reviews a procedure, delivers it through the real
+hook, and checks the repaired state of a held-out task in a disposable repository. It uses no
+model API and measures no token savings. [The proof's scope](docs/learning-infrastructure.md#run-the-end-to-end-proof)
+and [security policy](SECURITY.md) describe the boundaries. Execution remains experimental,
+and live evaluation coverage is limited.
+
 ## Documentation
 
 Start with the [documentation index](docs/README.md), or go directly to:

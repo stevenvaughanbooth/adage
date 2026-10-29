@@ -11,6 +11,7 @@
 use adage_tracks::testkit::{self, kinds};
 use adage_tracks::*;
 use serde_json::{json, Value};
+use ssh_key::{getrandom::SysRng, rand_core::UnwrapErr};
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
@@ -390,7 +391,7 @@ const PACK: &str = "acme/billing";
 const VENDORED_WALL_MS: u32 = 5_000;
 
 fn keygen(dir: &Path) -> ssh_key::PublicKey {
-    let mut k = ssh_key::PrivateKey::random(&mut rand_core::OsRng, ssh_key::Algorithm::Ed25519).unwrap();
+    let mut k = ssh_key::PrivateKey::random(&mut UnwrapErr(SysRng), ssh_key::Algorithm::Ed25519).unwrap();
     k.set_comment("alice@example");
     std::fs::write(dir.join("id_ed25519"), k.to_openssh(ssh_key::LineEnding::LF).unwrap().as_bytes()).unwrap();
     k.public_key().clone()

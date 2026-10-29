@@ -7,6 +7,7 @@
 use adage_pack::digest::sha256_hex;
 use adage_tracks::Index;
 use serde_json::Value;
+use ssh_key::{getrandom::SysRng, rand_core::UnwrapErr};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -100,7 +101,7 @@ fn refused(o: Output, why: &str) -> String {
 }
 
 fn keygen(w: &World) -> ssh_key::PublicKey {
-    let mut k = ssh_key::PrivateKey::random(&mut rand_core::OsRng, ssh_key::Algorithm::Ed25519).unwrap();
+    let mut k = ssh_key::PrivateKey::random(&mut UnwrapErr(SysRng), ssh_key::Algorithm::Ed25519).unwrap();
     k.set_comment("alice@example");
     std::fs::write(w.p("keys/id_ed25519"), k.to_openssh(ssh_key::LineEnding::LF).unwrap().as_bytes()).unwrap();
     k.public_key().clone()

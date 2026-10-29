@@ -8,6 +8,7 @@
 //! A passphrase-protected key file is decrypted in memory with a passphrase the caller obtains
 //! (`adage share` asks at the terminal, echo off); the passphrase is zeroised after use.
 
+mod agent;
 pub mod allowed_signers;
 
 pub use allowed_signers::AllowedSigner;
@@ -122,16 +123,8 @@ fn decrypt(key: &PrivateKey, path: &Path, ask: Passphrase) -> Result<PrivateKey>
 }
 
 pub fn sign_with_agent(msg: &[u8], namespace: &str, sock: &Path, wanted: Option<&PublicKey>) -> Result<Signed> {
-    let mut client = ssh_agent_client_rs::Client::connect(sock).context("connecting")?;
-    let ids: Vec<PublicKey> = client
-        .list_all_identities()
-        .context("listing identities")?
-        .into_iter()
-        .filter_map(|i| match i {
-            ssh_agent_client_rs::Identity::PublicKey(k) => Some((*k).into_owned()),
-            ssh_agent_client_rs::Identity::Certificate(_) => None,
-        })
-        .collect();
+    let mut client = agent::Client::connect(sock).context("connecting")?;
+    let ids = client.list_identities().context("listing identities")?;
     let key = match wanted {
         Some(w) => {
             ids.into_iter().find(|k| k.key_data() == w.key_data()).context("the agent does not hold this key")?
@@ -223,13 +216,14 @@ pub fn lists_key(signers: &[AllowedSigner], key: &PublicKey) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ssh_key::{getrandom::SysRng, rand_core::UnwrapErr};
     use std::time::Duration;
 
     fn keypair(dir: &Path) -> (std::path::PathBuf, PublicKey) {
-        let mut k = PrivateKey::random(&mut rand_core::OsRng, ssh_key::Algorithm::Ed25519).unwrap();
+        let mut k = PrivateKey::random(&mut UnwrapErr(SysRng), ssh_key::Algorithm::Ed25519).unwrap();
         k.set_comment("tester@example");
         let p = dir.join("id_test");
-        std::fs::write(&p, k.to_openssh(LineEnding::LF).unwrap().as_bytes()).unwrap();
+        k.write_openssh_file(&p, LineEnding::LF).unwrap();
         (p, k.public_key().clone())
     }
 
@@ -256,8 +250,8 @@ mod tests {
     #[test]
     fn passphrase_protected_key_files_are_decrypted_with_the_passphrase_asked_for() {
         let d = tempfile::tempdir().unwrap();
-        let k = PrivateKey::random(&mut rand_core::OsRng, ssh_key::Algorithm::Ed25519).unwrap();
-        let enc = k.encrypt(&mut rand_core::OsRng, "correct horse").unwrap();
+        let k = PrivateKey::random(&mut UnwrapErr(SysRng), ssh_key::Algorithm::Ed25519).unwrap();
+        let enc = k.encrypt(&mut SysRng, "correct horse").unwrap();
         let p = d.path().join("id_enc");
         std::fs::write(&p, enc.to_openssh(LineEnding::LF).unwrap().as_bytes()).unwrap();
         let msg = message(DIGEST).unwrap();
@@ -376,8 +370,15 @@ mod tests {
             std::thread::sleep(Duration::from_millis(50));
         }
         let (key, pk) = keypair(d.path());
-        let private = PrivateKey::read_openssh_file(&key).unwrap();
-        ssh_agent_client_rs::Client::connect(&sock).unwrap().add_identity(&private).unwrap();
+        let add = std::process::Command::new("ssh-add")
+            .arg(&key)
+            .env("SSH_AUTH_SOCK", &sock)
+            .env_remove("SSH_ASKPASS")
+            .env_remove("SSH_ASKPASS_REQUIRE")
+            .stdin(std::process::Stdio::null())
+            .output()
+            .unwrap();
+        assert!(add.status.success(), "{}", String::from_utf8_lossy(&add.stderr));
         let msg = message(DIGEST).unwrap();
         // With --key naming the key, the agent is preferred over the file.
         let via_agent = sign(&msg, PACK_NAMESPACE, Some(&sock), Some(&key)).unwrap();
@@ -390,7 +391,13 @@ mod tests {
         // No key named: the agent's key is used.
         assert_eq!(sign(&msg, PACK_NAMESPACE, Some(&sock), None).unwrap().method, Method::Agent);
         // An agent without the named key falls back to the key file.
-        ssh_agent_client_rs::Client::connect(&sock).unwrap().remove_all_identities().unwrap();
+        let remove = std::process::Command::new("ssh-add")
+            .arg("-D")
+            .env("SSH_AUTH_SOCK", &sock)
+            .stdin(std::process::Stdio::null())
+            .output()
+            .unwrap();
+        assert!(remove.status.success(), "{}", String::from_utf8_lossy(&remove.stderr));
         assert_eq!(sign(&msg, PACK_NAMESPACE, Some(&sock), Some(&key)).unwrap().method, Method::KeyFile);
     }
 }

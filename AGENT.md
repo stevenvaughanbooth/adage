@@ -94,7 +94,8 @@ layers):
 
 ## Building
 
-Stable Rust and a C compiler (tree-sitter); Node 22 or later for the plugin, npm and web tests.
+Stable Rust and a C compiler (tree-sitter); Node 22 for the plugin, npm and web tests. The web
+apps share CI's Node major (`.node-version`); newer Node versions can change compressed assets.
 `Cargo.lock` is committed, so build and test with `--locked`.
 
 ```bash

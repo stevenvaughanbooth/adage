@@ -324,7 +324,11 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
         )),
     )?;
     o.kv("wrote", Line::new().text(out.display().to_string()))?;
-    let principal = Some(signed.key.comment())
+    let principal = signed
+        .key
+        .comment()
+        .as_str()
+        .ok()
         .filter(|c| !c.is_empty() && !c.contains(char::is_whitespace))
         .unwrap_or("adage-signer");
     o.blank()?;

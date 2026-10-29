@@ -77,31 +77,45 @@ fn frame_crc(seq: u64, len: u32, payload: &[u8]) -> u32 {
     crc32(&b)
 }
 
-fn read_slot(file: &File, idx: usize) -> Option<(u64, Vec<u8>)> {
+fn read_slot(file: &File, idx: usize) -> io::Result<Option<(u64, Vec<u8>)>> {
     let mut hdr = [0u8; HEADER];
-    pos::read_exact_at(file, &mut hdr, (idx * SLOT) as u64).ok()?;
-    if hdr[0..4] != MAGIC {
-        return None;
+    if !read_complete(file, &mut hdr, (idx * SLOT) as u64)? {
+        return Ok(None);
     }
-    let seq = u64::from_le_bytes(hdr[4..12].try_into().ok()?);
-    let len = u32::from_le_bytes(hdr[12..16].try_into().ok()?) as usize;
-    let crc = u32::from_le_bytes(hdr[16..20].try_into().ok()?);
+    if hdr[0..4] != MAGIC {
+        return Ok(None);
+    }
+    let seq = u64::from_le_bytes(hdr[4..12].try_into().unwrap());
+    let len = u32::from_le_bytes(hdr[12..16].try_into().unwrap()) as usize;
+    let crc = u32::from_le_bytes(hdr[16..20].try_into().unwrap());
     if len > SLOT - HEADER {
-        return None;
+        return Ok(None);
     }
     let mut payload = vec![0u8; len];
-    pos::read_exact_at(file, &mut payload, (idx * SLOT + HEADER) as u64).ok()?;
-    (frame_crc(seq, len as u32, &payload) == crc).then_some((seq, payload))
+    if !read_complete(file, &mut payload, (idx * SLOT + HEADER) as u64)? {
+        return Ok(None);
+    }
+    Ok((frame_crc(seq, len as u32, &payload) == crc).then_some((seq, payload)))
+}
+
+/// A short slot is recoverable corruption; an I/O failure is not evidence that the state can
+/// safely be replaced. Preserve it as an error so callers can fail open without overwriting it.
+fn read_complete(file: &File, buf: &mut [u8], off: u64) -> io::Result<bool> {
+    match pos::read_exact_at(file, buf, off) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => Ok(false),
+        Err(e) => Err(e),
+    }
 }
 
 /// The newest valid slot, and which slot index it is in.
-fn newest(file: &File) -> Option<(usize, u64, Vec<u8>)> {
-    let a = read_slot(file, 0).map(|(s, p)| (0, s, p));
-    let b = read_slot(file, 1).map(|(s, p)| (1, s, p));
-    match (a, b) {
+fn newest(file: &File) -> io::Result<Option<(usize, u64, Vec<u8>)>> {
+    let a = read_slot(file, 0)?.map(|(s, p)| (0, s, p));
+    let b = read_slot(file, 1)?.map(|(s, p)| (1, s, p));
+    Ok(match (a, b) {
         (Some(x), Some(y)) => Some(if x.1 >= y.1 { x } else { y }),
         (x, y) => x.or(y),
-    }
+    })
 }
 
 fn open(path: &Path) -> io::Result<File> {
@@ -134,7 +148,7 @@ where
 {
     let file = open(path)?;
     file.lock()?;
-    let current = newest(&file);
+    let current = newest(&file)?;
     let (target, seq, mut state) = match &current {
         Some((idx, seq, payload)) => {
             let state = serde_json::from_slice::<T>(payload).ok().or_else(rebuild).unwrap_or_default();
@@ -172,7 +186,7 @@ pub fn try_read<T: DeserializeOwned + Default>(path: &Path) -> io::Result<Option
         Err(e) => return Err(e),
     };
     file.lock_shared()?;
-    let v = match newest(&file) {
+    let v = match newest(&file)? {
         Some((_, _, p)) => serde_json::from_slice(&p).ok(),
         None if file.metadata()?.len() > 0 => None,
         None => Some(T::default()),
@@ -183,14 +197,7 @@ pub fn try_read<T: DeserializeOwned + Default>(path: &Path) -> io::Result<Option
 
 /// Read state without modifying it (shared lock).
 pub fn read<T: DeserializeOwned + Default>(path: &Path) -> io::Result<T> {
-    if !path.exists() {
-        return Ok(T::default());
-    }
-    let file = File::open(path)?;
-    file.lock_shared()?;
-    let v = newest(&file).and_then(|(_, _, p)| serde_json::from_slice(&p).ok()).unwrap_or_default();
-    file.unlock()?;
-    Ok(v)
+    Ok(try_read(path)?.unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -218,6 +225,33 @@ mod tests {
         let s: S = read(&p).unwrap();
         assert_eq!(s.n, 5);
         assert_eq!(s.v.len(), 5);
+    }
+
+    #[test]
+    fn storage_read_errors_are_not_treated_as_corrupt_state() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("x.state");
+        update::<S, _>(&p, |s| s.n = 7).unwrap();
+        // A write-only handle makes positional reads fail independently of file permissions
+        // (including when these tests run as root).
+        let file = OpenOptions::new().write(true).open(&p).unwrap();
+        assert!(read_slot(&file, 0).is_err());
+        assert!(newest(&file).is_err());
+        assert_eq!(read::<S>(&p).unwrap().n, 7);
+    }
+
+    #[test]
+    fn missing_and_truncated_state_remain_recoverable() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("x.state");
+        assert_eq!(read::<S>(&p).unwrap(), S::default());
+        assert!(!p.exists(), "reading missing state does not create it");
+        for bytes in [MAGIC.to_vec(), [MAGIC.as_slice(), &[0; HEADER - 4]].concat()] {
+            std::fs::write(&p, bytes).unwrap();
+            assert_eq!(try_read::<S>(&p).unwrap(), None);
+            update_or_rebuild::<S, _>(&p, || Some(S { n: 7, v: vec![] }), |s| s.n += 1).unwrap();
+            assert_eq!(read::<S>(&p).unwrap().n, 8);
+        }
     }
 
     #[test]
