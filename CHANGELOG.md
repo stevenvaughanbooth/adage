@@ -12,6 +12,8 @@ The development history is recorded in Git and the design documents under `docs/
 
 ### Fixed
 
+- The evidence chart wraps its baseline annotation on narrow phones, keeping the page within
+  the viewport across platform font metrics.
 - Session-state reads preserve storage I/O errors instead of treating unreadable state as
   corruption that can be rebuilt. Short spool writes report failure instead of continuing
   a partial frame across another writer's record; release-cache reads enforce their size limit

@@ -885,6 +885,8 @@ math { color: inherit; font-family: "STIX Two Math", "Cambria Math", "Latin Mode
 }
 @media (max-width: 560px) {
   .ev-rules, .ev-repro-grid, .ev-gl-stats { grid-template-columns: 1fr; }
+  /* Keep the baseline label beside its marker without widening the chart on phones. */
+  .ev-scale-same i { width: 8ch; white-space: normal; }
   .ev-dots { gap: 5px; }
   .ev-dots i { width: 12px; height: 12px; }
 }

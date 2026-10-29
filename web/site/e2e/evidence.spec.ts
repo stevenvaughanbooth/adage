@@ -169,13 +169,18 @@ test.describe("/evidence", () => {
     }
   });
 
-  test("a phone never scrolls sideways", async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/evidence");
-    await page.evaluate(() => document.querySelectorAll(".reveal").forEach((n) => n.classList.add("in")));
-    await page.evaluate(() => document.querySelectorAll("details").forEach((d) => (d.open = true)));
-    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
-  });
+  for (const width of [320, 390]) {
+    test(`a ${width}px phone never scrolls sideways`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto("/evidence");
+      // Include the asynchronously loaded chart, not just the initial placeholder.
+      await expect(page.locator(".ev-ho[data-state='result']")).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      await page.evaluate(() => document.querySelectorAll(".reveal").forEach((n) => n.classList.add("in")));
+      await page.evaluate(() => document.querySelectorAll("details").forEach((d) => (d.open = true)));
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+    });
+  }
 
   test("sections hold as scenes and nothing takes the scroll over", async ({ page }) => {
     await page.goto("/evidence");
