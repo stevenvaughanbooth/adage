@@ -88,8 +88,8 @@ roundtrip,trained}.rs` over the in-memory sample pack in `tests/common/mod.rs`. 
 `packs/` and `.claude-plugin/` for this crate. Then run the dependents: `cargo test -p
 adage-learn -p adage-hook -p adage-exec -p adage-cli -p adage-train`.
 
-Pitfalls: `ssh-key` is pinned to `=0.6.7` in the dev-dependencies to match `adage-sign`; keep
-them in step. The property tests here have no feature gate and run on every `cargo test`.
+Pitfalls: the `ssh-key` dev-dependency inherits the root workspace pin used by `adage-sign`;
+keep fixture keys and production signature types on that same version. The property tests here have no feature gate and run on every `cargo test`.
 Three things are called binding: `bind.rs` (a pack against a repository), `binding.rs` (the
 instinct-binding record the hook reads) and `instincts::bind` (detectors over declared files).
 `attest.rs` and `procedure.rs` are informational only; nothing may read them to grant a

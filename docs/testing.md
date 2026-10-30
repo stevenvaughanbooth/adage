@@ -62,11 +62,20 @@ the machine it runs on.
 
 ## What CI runs
 
-On a pull request, CI tests only the packages the change can affect (`cargo xtask affected`): the
-changed packages, the readers of changed fixtures, and every package that depends on them. A change
+On a pull request, CI narrows the main product suite using `cargo xtask affected`: changed packages,
+readers of changed fixtures, and every package that depends on them. A change
 outside every package, such as the lockfile, CI itself or an undeclared directory, tests
-everything. The architecture guards always run. Pushes to `main`, the weekly run and manual
-dispatches test everything, on every platform. `evals.yml` runs the slow eval gates, the
+everything in the product workspace (the slow `adage-eval` suites run separately). Local
+selection includes committed, staged, unstaged and untracked files, excludes ignored files,
+and preserves filenames containing non-ASCII characters or newlines. The architecture guards
+always run. The main Rust test job runs on Linux x64 for pull requests and pushes to `main`;
+pushes test the whole product workspace. A separate signing job runs `cargo test --locked -p adage-sign`
+on macOS arm64 and Windows x64 for every pull request and main push, checking OpenSSH
+interoperability and Windows agent transport. Weekly and manual runs expand the product suite
+to macOS arm64 and x64, Linux arm64 and Windows x64.
+Map and website type checks, unit/API checks and browser/accessibility suites run on every pull
+request and push to `main`, as well as weekly and manual runs. Browser failures retain test results
+and traces for diagnosis. `evals.yml` runs the slow eval gates, the
 property tests and every Python suite weekly and on dispatch. Fast Rust experiment contracts
 and native accounting/action-order fixtures also run on every PR; Linux adds all live-runner
 contracts, the training export bridge through the real canonical decoder, and cardinal

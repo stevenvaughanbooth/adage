@@ -29,5 +29,4 @@ anyhow.workspace = true
 [dev-dependencies]
 tempfile = "3"
 proptest = { version = "1", default-features = false, features = ["std"] }
-ssh-key = { version = "=0.6.7", features = ["std", "crypto", "rand_core"] }
-rand_core = { version = "0.6", features = ["getrandom"] }
+ssh-key = { workspace = true, features = ["getrandom"] }

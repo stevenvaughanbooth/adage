@@ -22,6 +22,7 @@
 use crate::Paths;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::io::Read;
 use std::path::Path;
 
 /// This build's version: every crate of the workspace carries the same one.
@@ -30,6 +31,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// At most one release check per data directory in this many milliseconds (a day), answered or
 /// not.
 pub const CHECK_EVERY_MS: u64 = 86_400_000;
+const MAX_CACHE_BYTES: usize = 64 << 10;
 
 /// The answer of the last release check.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -72,12 +74,7 @@ pub struct Failure {
 impl Latest {
     /// The cache, if there is one that parses.
     pub fn read(paths: &Paths) -> Option<Latest> {
-        let bytes = std::fs::read(paths.update_cache()).ok()?;
-        // A cache is a few hundred bytes; anything far larger is not one.
-        if bytes.len() > 64 << 10 {
-            return None;
-        }
-        serde_json::from_slice(&bytes).ok()
+        read_cache(std::fs::File::open(paths.update_cache()).ok()?)
     }
 
     /// Replace the cache atomically.
@@ -95,6 +92,17 @@ impl Latest {
     pub fn newer_than(&self, have: &str) -> Option<&Release> {
         self.latest.as_ref().filter(|r| is_newer(&r.version, have))
     }
+}
+
+/// A release cache is usually a few hundred bytes and is read on the hook path. Bound the I/O
+/// before allocating; one extra byte distinguishes a full valid cache from an oversized file.
+fn read_cache(reader: impl Read) -> Option<Latest> {
+    let mut bytes = Vec::new();
+    reader.take((MAX_CACHE_BYTES + 1) as u64).read_to_end(&mut bytes).ok()?;
+    if bytes.len() > MAX_CACHE_BYTES {
+        return None;
+    }
+    serde_json::from_slice(&bytes).ok()
 }
 
 /// A release version: `major.minor.patch`, an optional pre-release (`-rc.1`), build metadata
@@ -225,6 +233,19 @@ mod tests {
         assert_eq!(Latest::read(&paths).map(|l| l.latest), Some(None));
         std::fs::write(paths.update_cache(), "not json").unwrap();
         assert_eq!(Latest::read(&paths), None, "a malformed cache is nothing known");
+    }
+
+    #[test]
+    fn cache_reads_are_bounded_before_parsing_or_allocating_the_whole_file() {
+        let mut oversized = std::io::Cursor::new(vec![b' '; MAX_CACHE_BYTES * 4]);
+        assert_eq!(read_cache(&mut oversized), None);
+        assert_eq!(oversized.position(), (MAX_CACHE_BYTES + 1) as u64, "do not read the rest of a large cache");
+
+        let mut bytes = br#"{"checked_at":1,"have":"0.1.0"}"#.to_vec();
+        bytes.resize(MAX_CACHE_BYTES, b' ');
+        assert_eq!(read_cache(bytes.as_slice()).unwrap().checked_at, 1, "the size limit itself is valid");
+        bytes.push(b' ');
+        assert_eq!(read_cache(bytes.as_slice()), None, "valid JSON over the limit is still refused");
     }
 
     #[test]

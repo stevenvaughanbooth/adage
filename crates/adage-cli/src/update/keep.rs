@@ -131,12 +131,30 @@ pub(crate) fn newest(paths: &Paths) -> Option<(PathBuf, Previous)> {
 /// before it is used, written beside its destination and renamed into place, then checked again.
 /// Returns what was restored, by name and path.
 pub(crate) fn restore(dir: &Path, p: &Previous) -> Result<Vec<(String, PathBuf)>> {
-    // Every kept file is checked before anything is replaced: all of the set or none of it.
+    // A damaged manifest must not turn an unchecked file into a replacement. Validate the
+    // complete set before touching a destination; checking only the available hashes would
+    // discover a missing digest after the corresponding binary had already been replaced.
+    validate_restore(p)?;
+    // Every kept file is checked before anything is replaced. Publication is atomic per binary,
+    // not across the set: an I/O failure during replacement can still require a retry.
     for (name, want) in &p.sha256 {
         let kept = dir.join(exe_name(name));
         let got = sha256_file(&kept).with_context(|| format!("the kept {name} is missing from {}", dir.display()))?;
         if &got != want {
             bail!("the kept {name} in {} has changed since it was kept (sha256 {got}, not {want})", dir.display());
+        }
+    }
+    // Resolve parent directories before publishing any file. Different absolute paths can
+    // name the same directory through a symlink, so lexical uniqueness alone is insufficient.
+    let mut destinations = std::collections::BTreeSet::new();
+    for to in p.paths.values() {
+        let parent = to.parent().context("a kept path has no directory")?;
+        std::fs::create_dir_all(parent).with_context(|| format!("cannot create {}", parent.display()))?;
+        let destination = parent.canonicalize()?.join(to.file_name().context("a kept path has no filename")?);
+        // Be conservative on every platform: a manifest must also be safe on the default
+        // case-insensitive macOS/Windows filesystems, even if neither target exists yet.
+        if !destinations.insert(destination.as_os_str().to_ascii_lowercase()) {
+            bail!("invalid rollback manifest: multiple binaries share a destination");
         }
     }
     let mut done = Vec::new();
@@ -146,6 +164,11 @@ pub(crate) fn restore(dir: &Path, p: &Previous) -> Result<Vec<(String, PathBuf)>
         std::fs::create_dir_all(parent).with_context(|| format!("cannot create {}", parent.display()))?;
         let tmp = parent.join(format!(".{}.adage-restore-{}", exe_name(name), std::process::id()));
         std::fs::copy(&kept, &tmp).with_context(|| format!("cannot write in {}", parent.display()))?;
+        let got = sha256_file(&tmp)?;
+        if p.sha256.get(name) != Some(&got) {
+            let _ = std::fs::remove_file(&tmp);
+            bail!("the staged {name} does not match its kept digest; {} was not replaced", to.display());
+        }
         make_executable(&tmp)?;
         replace(&tmp, to)?;
         let got = sha256_file(to)?;
@@ -155,6 +178,32 @@ pub(crate) fn restore(dir: &Path, p: &Previous) -> Result<Vec<(String, PathBuf)>
         done.push((name.clone(), to.clone()));
     }
     Ok(done)
+}
+
+/// Manifest integrity is checked independently of the files it names. Missing or extra hashes,
+/// unknown binary names and ambiguous destinations are corruption, not a partial restore plan.
+fn validate_restore(p: &Previous) -> Result<()> {
+    if !p.paths.contains_key("adage") || !p.paths.keys().eq(p.sha256.keys()) {
+        bail!("invalid rollback manifest: each binary needs a destination and digest, including adage");
+    }
+    let mut destinations = std::collections::BTreeSet::new();
+    for (name, to) in &p.paths {
+        if !BINARIES.contains(&name.as_str()) {
+            bail!("invalid rollback manifest: unknown binary {name:?}");
+        }
+        if !to.is_absolute()
+            || to.file_name().is_none()
+            || to.components().any(|c| matches!(c, std::path::Component::ParentDir))
+            || !destinations.insert(to)
+        {
+            bail!("invalid rollback manifest: {name} needs a unique absolute destination");
+        }
+        let digest = &p.sha256[name];
+        if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+            bail!("invalid rollback manifest: {name} has an invalid SHA-256 digest");
+        }
+    }
+    Ok(())
 }
 
 /// Rename `tmp` over `to`. Windows cannot replace a running executable, but it can rename one:
@@ -219,5 +268,90 @@ mod tests {
         assert_eq!(dir(&paths, "0.1.0"), Path::new("/data/previous/0.1.0"));
         assert_eq!(dir(&paths, "../../etc"), Path::new("/data/previous/_.._.._etc"));
         assert_eq!(dir(&paths, ""), Path::new("/data/previous/_"));
+    }
+
+    #[test]
+    fn corrupt_restore_manifests_never_replace_installed_binaries() {
+        let d = tempfile::tempdir().unwrap();
+        let paths = Paths::at(d.path().join("data"));
+        let bin = d.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let exe = bin.join(exe_name("adage"));
+        let companion = bin.join(exe_name("adage-exec"));
+        std::fs::write(&exe, b"old adage").unwrap();
+        std::fs::write(&companion, b"old exec").unwrap();
+        let (kept, original) = keep(&paths, "0.1.0", "npm", "terminal", &exe, 7).unwrap();
+        std::fs::write(&exe, b"new adage").unwrap();
+        std::fs::write(&companion, b"new exec").unwrap();
+
+        let mut cases = Vec::new();
+        let mut p = original.clone();
+        p.sha256.remove("adage-exec");
+        cases.push(("missing digest", p));
+        let mut p = original.clone();
+        p.paths.remove("adage-exec");
+        cases.push(("orphan digest", p));
+        let mut p = original.clone();
+        p.paths.insert("other".into(), bin.join("other"));
+        p.sha256.insert("other".into(), "a".repeat(64));
+        cases.push(("unknown binary", p));
+        let mut p = original.clone();
+        p.paths.insert("adage-exec".into(), exe.clone());
+        cases.push(("duplicate destination", p));
+        let mut p = original.clone();
+        p.paths.insert("adage-exec".into(), PathBuf::from("relative"));
+        cases.push(("relative destination", p));
+        let mut p = original.clone();
+        p.paths.insert("adage-exec".into(), bin.join("sub").join("..").join(exe_name("adage")));
+        cases.push(("parent-relative alias", p));
+        let mut p = original.clone();
+        p.sha256.insert("adage-exec".into(), "not-a-digest".into());
+        cases.push(("invalid digest", p));
+        cases.push(("empty set", Previous::default()));
+
+        for (case, p) in cases {
+            assert!(restore(&kept, &p).unwrap_err().to_string().contains("invalid rollback manifest"), "{case}");
+            assert_eq!(std::fs::read(&exe).unwrap(), b"new adage", "{case}");
+            assert_eq!(std::fs::read(&companion).unwrap(), b"new exec", "{case}");
+            assert_eq!(std::fs::read_dir(&bin).unwrap().count(), 2, "no staging files for {case}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restore_refuses_destinations_aliased_through_parent_symlinks() {
+        let d = tempfile::tempdir().unwrap();
+        let paths = Paths::at(d.path().join("data"));
+        let bin = d.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let exe = bin.join("adage");
+        std::fs::write(&exe, b"old adage").unwrap();
+        std::fs::write(bin.join("adage-exec"), b"old exec").unwrap();
+        let (kept, mut p) = keep(&paths, "0.1.0", "npm", "terminal", &exe, 7).unwrap();
+        std::fs::write(&exe, b"new adage").unwrap();
+        let alias = d.path().join("alias");
+        std::os::unix::fs::symlink(&bin, &alias).unwrap();
+        p.paths.insert("adage-exec".into(), alias.join("adage"));
+
+        assert!(restore(&kept, &p).unwrap_err().to_string().contains("share a destination"));
+        assert_eq!(std::fs::read(&exe).unwrap(), b"new adage");
+    }
+
+    #[test]
+    fn restore_refuses_case_aliases_even_before_destination_files_exist() {
+        let d = tempfile::tempdir().unwrap();
+        let paths = Paths::at(d.path().join("data"));
+        let bin = d.path().join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let exe = bin.join(exe_name("adage"));
+        std::fs::write(&exe, b"old adage").unwrap();
+        std::fs::write(bin.join(exe_name("adage-exec")), b"old exec").unwrap();
+        let (kept, mut p) = keep(&paths, "0.1.0", "npm", "terminal", &exe, 7).unwrap();
+        let dest = d.path().join("new-bin");
+        p.paths.insert("adage".into(), dest.join(exe_name("adage")));
+        p.paths.insert("adage-exec".into(), dest.join(exe_name("adage").to_ascii_uppercase()));
+
+        assert!(restore(&kept, &p).unwrap_err().to_string().contains("share a destination"));
+        assert_eq!(std::fs::read_dir(&dest).unwrap().count(), 0, "nothing was published");
     }
 }

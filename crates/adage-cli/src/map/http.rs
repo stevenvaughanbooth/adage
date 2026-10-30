@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use std::borrow::Cow;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const MAX_HEAD: usize = 8 << 10;
 const EVENTS: usize = 400;
@@ -38,45 +38,95 @@ pub(crate) struct Request {
     pub(super) csrf: Option<String>,
     pub(super) content_type: Option<String>,
     content_length: Option<usize>,
-    invalid: bool,
     pub(super) body: Vec<u8>,
 }
 
+/// A request rejected before it reaches an application route.
+#[derive(Debug, PartialEq, Eq)]
+enum RequestError {
+    Malformed,
+    TooLarge,
+    Timeout,
+}
+
+impl RequestError {
+    fn response(&self) -> Response {
+        match self {
+            Self::Malformed => text("400 Bad Request", "bad request"),
+            Self::TooLarge => text("431 Request Header Fields Too Large", "request headers exceed 8192 bytes"),
+            Self::Timeout => text("408 Request Timeout", "request took too long"),
+        }
+    }
+}
+
+/// HTTP tokens (methods and field names) exclude whitespace, delimiters and control bytes.
+fn token(s: &str) -> bool {
+    !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b))
+}
+
 impl Request {
-    pub(crate) fn parse(head: &str) -> Request {
-        let mut lines = head.split("\r\n");
-        let mut first = lines.next().unwrap_or("").split(' ');
-        let method = first.next().unwrap_or("").to_string();
-        let target = first.next().unwrap_or("");
-        let path = target.split(['?', '#']).next().unwrap_or("").to_string();
-        let query =
-            target.split_once('?').map(|(_, q)| q.split('#').next().unwrap_or("").to_owned()).unwrap_or_default();
-        let mut r = Request { method, path, query, ..Default::default() };
+    fn parse(head: &str) -> Result<Request, RequestError> {
+        let mut lines = head.strip_suffix("\r\n\r\n").ok_or(RequestError::Malformed)?.split("\r\n");
+        let mut first = lines.next().ok_or(RequestError::Malformed)?.split(' ');
+        let method = first.next().ok_or(RequestError::Malformed)?;
+        let target = first.next().ok_or(RequestError::Malformed)?;
+        let version = first.next().ok_or(RequestError::Malformed)?;
+        if !token(method)
+            || !target.starts_with('/')
+            || target.bytes().any(|b| b.is_ascii_control() || b == b' ' || b == b'#')
+            || !matches!(version, "HTTP/1.0" | "HTTP/1.1")
+            || first.next().is_some()
+        {
+            return Err(RequestError::Malformed);
+        }
+        let (path, query) = target.split_once('?').unwrap_or((target, ""));
+        let mut r = Request { method: method.into(), path: path.into(), query: query.into(), ..Default::default() };
         let mut seen = std::collections::BTreeSet::new();
-        for (k, v) in lines.take_while(|l| !l.is_empty()).filter_map(|l| l.split_once(':')) {
-            let v = v.trim();
-            let key = k.trim().to_ascii_lowercase();
-            if !seen.insert(key.clone()) {
-                r.invalid = true;
+        for line in lines {
+            let (k, v) = line.split_once(':').ok_or(RequestError::Malformed)?;
+            if !token(k) || v.bytes().any(|b| b.is_ascii_control() && b != b'\t') {
+                return Err(RequestError::Malformed);
+            }
+            let v = v.trim_matches([' ', '\t']);
+            let key = k.to_ascii_lowercase();
+            // Never allow a duplicate field to replace the host, origin, capability or framing
+            // checked for a review mutation. Accept-Encoding is explicitly list-valued.
+            if key != "accept-encoding" && !seen.insert(key.clone()) {
+                return Err(RequestError::Malformed);
             }
             match key.as_str() {
                 "origin" => r.origin = Some(v.into()),
                 "x-adage-csrf" => r.csrf = Some(v.into()),
                 "content-type" => r.content_type = Some(v.into()),
                 "content-length" => {
-                    r.content_length = v.parse().ok();
-                    if r.content_length.is_none() {
-                        r.invalid = true;
+                    if v.is_empty() || !v.bytes().all(|b| b.is_ascii_digit()) {
+                        return Err(RequestError::Malformed);
                     }
+                    r.content_length = Some(v.parse().map_err(|_| RequestError::Malformed)?);
                 }
-                "transfer-encoding" => r.invalid = true,
-                "host" => r.host = Some(v.to_ascii_lowercase()),
-                "accept-encoding" => r.accept_encoding = Some(v.to_ascii_lowercase()),
+                "transfer-encoding" => return Err(RequestError::Malformed),
+                "host" => {
+                    if v.is_empty() {
+                        return Err(RequestError::Malformed);
+                    }
+                    r.host = Some(v.to_ascii_lowercase());
+                }
+                "accept-encoding" => {
+                    // List-valued fields may be repeated; retain every preference in wire order.
+                    let encodings = r.accept_encoding.get_or_insert_with(String::new);
+                    if !encodings.is_empty() {
+                        encodings.push(',');
+                    }
+                    encodings.push_str(&v.to_ascii_lowercase());
+                }
                 "last-event-id" => r.last_event_id = v.parse().ok(),
                 _ => {}
             }
         }
-        r
+        if r.host.is_none() {
+            return Err(RequestError::Malformed);
+        }
+        Ok(r)
     }
 
     fn head_only(&self) -> bool {
@@ -208,9 +258,6 @@ pub(crate) fn route(req: &Request, shared: &Shared) -> Reply {
     if !req.host.as_ref().is_some_and(|h| allowed.contains(h)) {
         return Reply::Full(text("403 Forbidden", "adage map answers only requests for 127.0.0.1 or localhost"));
     }
-    if req.invalid {
-        return Reply::Full(text("400 Bad Request", "invalid or duplicate request headers"));
-    }
     if req.path == "/api/v1/review" {
         return Reply::Full(super::review::respond(req, shared));
     }
@@ -291,25 +338,56 @@ pub(crate) fn route(req: &Request, shared: &Shared) -> Reply {
     Reply::Full(res)
 }
 
-/// The request head (request line and headers), or `None` if it is too large, malformed, or slow.
-fn read_head(s: &mut TcpStream) -> Option<(String, Vec<u8>)> {
+/// Read the bounded request head and retain already received body bytes separately.
+/// Resetting a socket timeout after each byte would let a slow client hold a worker forever.
+fn read_head(s: &mut TcpStream, timeout: Duration) -> Result<(String, Vec<u8>), RequestError> {
+    let deadline = Instant::now() + timeout;
     let mut buf = Vec::with_capacity(1024);
     let mut chunk = [0u8; 1024];
-    while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
-        if buf.len() > MAX_HEAD {
-            return None;
+    loop {
+        if let Some(end) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+            // A body or pipelined request received in the same read is never interpreted as headers.
+            let body = buf.split_off(end + 4);
+            let head = String::from_utf8(buf).map_err(|_| RequestError::Malformed)?;
+            return Ok((head, body));
         }
-        let n = s.read(&mut chunk).ok()?;
-        if n == 0 {
-            return None;
+        let available = MAX_HEAD - buf.len();
+        if available == 0 {
+            return Err(RequestError::TooLarge);
         }
-        buf.extend_from_slice(&chunk[..n]);
+        let limit = available.min(chunk.len());
+        let count = read_before(s, &mut chunk[..limit], deadline)?;
+        buf.extend_from_slice(&chunk[..count]);
     }
-    let end = buf.windows(4).position(|w| w == b"\r\n\r\n")? + 4;
-    if end > MAX_HEAD {
-        return None;
+}
+
+/// Read some bytes within one absolute deadline shared by every read in a head or body.
+fn read_before(s: &mut TcpStream, buffer: &mut [u8], deadline: Instant) -> Result<usize, RequestError> {
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(RequestError::Timeout);
+        }
+        s.set_read_timeout(Some(remaining)).map_err(|_| RequestError::Malformed)?;
+        match s.read(buffer) {
+            Ok(0) => return Err(RequestError::Malformed),
+            Ok(n) => return Ok(n),
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock) => {
+                return Err(RequestError::Timeout);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return Err(RequestError::Malformed),
+        }
     }
-    Some((String::from_utf8(buf[..end].to_vec()).ok()?, buf[end..].to_vec()))
+}
+
+fn read_body(s: &mut TcpStream, mut remaining: &mut [u8], timeout: Duration) -> Result<(), RequestError> {
+    let deadline = Instant::now() + timeout;
+    while !remaining.is_empty() {
+        let count = read_before(s, remaining, deadline)?;
+        remaining = &mut remaining[count..];
+    }
+    Ok(())
 }
 
 fn common_headers(content_type: &str) -> String {
@@ -346,23 +424,26 @@ pub(crate) fn busy(mut s: TcpStream) {
 }
 
 pub(crate) fn handle(mut s: TcpStream, shared: &Shared) -> std::io::Result<()> {
-    s.set_read_timeout(Some(READ_TIMEOUT))?;
     s.set_write_timeout(Some(WRITE_TIMEOUT))?;
-    let Some((head, mut body)) = read_head(&mut s) else {
-        return write(&mut s, &text("400 Bad Request", "bad request"), false);
+    let (head, mut body) = match read_head(&mut s, READ_TIMEOUT) {
+        Ok(parts) => parts,
+        Err(error) => return write(&mut s, &error.response(), false),
     };
-    let mut req = Request::parse(&head);
+    let mut req = match Request::parse(&head) {
+        Ok(req) => req,
+        Err(error) => return write(&mut s, &error.response(), false),
+    };
     if req.method == "POST" && req.path == "/api/v1/review" {
         let Some(length) = req.content_length.filter(|n| *n > 0 && *n <= 16 << 10) else {
             return write(&mut s, &text("400 Bad Request", "review requires a bounded Content-Length"), false);
         };
-        if req.invalid || body.len() > length {
+        if body.len() > length {
             return write(&mut s, &text("400 Bad Request", "invalid request body"), false);
         }
         let received = body.len();
         body.resize(length, 0);
-        if s.read_exact(&mut body[received..]).is_err() {
-            return write(&mut s, &text("400 Bad Request", "incomplete request body"), false);
+        if let Err(error) = read_body(&mut s, &mut body[received..], READ_TIMEOUT) {
+            return write(&mut s, &error.response(), false);
         }
         req.body = body;
     }
@@ -480,6 +561,151 @@ mod tests {
     use std::sync::atomic::AtomicUsize;
 
     #[test]
+    fn refuses_ambiguous_or_malformed_request_heads() {
+        for head in [
+            "GET / HTTP/1.1\r\nHost: localhost:8765\r\nHost: attacker.example\r\n\r\n",
+            "GET / HTTP/1.1\r\nHost: attacker.example\r\nHOST: localhost:8765\r\n\r\n",
+            "GET / HTTP/1.1\r\nHost : localhost:8765\r\n\r\n",
+            "GET / HTTP/1.1\r\n Host: localhost:8765\r\n\r\n",
+            "GET / HTTP/1.1\r\nHost: localhost:8765\r\nnot-a-field\r\n\r\n",
+            "GET / HTTP/1.1\r\nHost: localhost:8765\r\nX-Test: a\0b\r\n\r\n",
+            "GET / HTTP/1.1\r\nHost: localhost:8765\r\nX-Test: a\nb\r\n\r\n",
+            "GET  / HTTP/1.1\r\nHost: localhost:8765\r\n\r\n",
+            "GET / HTTP/1.1 extra\r\nHost: localhost:8765\r\n\r\n",
+            "GET / HTTP/9.0\r\nHost: localhost:8765\r\n\r\n",
+            "GET http://localhost:8765/ HTTP/1.1\r\nHost: localhost:8765\r\n\r\n",
+            "GET /#fragment HTTP/1.1\r\nHost: localhost:8765\r\n\r\n",
+            "GET / HTTP/1.1\r\nHost:\r\n\r\n",
+            "GET / HTTP/1.1\r\n\r\n",
+        ] {
+            assert_eq!(Request::parse(head).unwrap_err(), RequestError::Malformed, "{head:?}");
+        }
+        let request = Request::parse(
+            "HEAD /?q=a%20b HTTP/1.1\r\nhOsT:\tLOCALHOST:8765 \r\nAccept-Encoding: gzip\r\nAccept-Encoding: br\r\n\r\n",
+        )
+        .unwrap();
+        assert!(request.head_only());
+        assert_eq!(request.host.as_deref(), Some("localhost:8765"));
+        assert_eq!(request.accept_encoding.as_deref(), Some("gzip,br"));
+    }
+
+    #[test]
+    fn review_headers_remain_strict_and_preserve_the_capability() {
+        let prefix = "POST /api/v1/review HTTP/1.1\r\nHost: localhost:8765\r\n";
+        let fields = "Origin: http://localhost:8765\r\nX-Adage-CSRF: token\r\nContent-Type: application/json\r\nContent-Length: 42\r\n";
+        let request = Request::parse(&format!("{prefix}{fields}\r\n")).unwrap();
+        assert_eq!(request.origin.as_deref(), Some("http://localhost:8765"));
+        assert_eq!(request.csrf.as_deref(), Some("token"));
+        assert_eq!(request.content_type.as_deref(), Some("application/json"));
+        assert_eq!(request.content_length, Some(42));
+        for duplicate in fields.split("\r\n").filter(|line| !line.is_empty()) {
+            assert_eq!(
+                Request::parse(&format!("{prefix}{fields}{duplicate}\r\n\r\n")).unwrap_err(),
+                RequestError::Malformed,
+                "{duplicate}"
+            );
+        }
+        for invalid in [
+            "Content-Length: +42",
+            "Content-Length: -1",
+            "Content-Length: 4, 4",
+            "Content-Length: 18446744073709551616",
+            "Transfer-Encoding: chunked",
+        ] {
+            assert_eq!(
+                Request::parse(&format!("{prefix}{invalid}\r\n\r\n")).unwrap_err(),
+                RequestError::Malformed,
+                "{invalid}"
+            );
+        }
+    }
+
+    fn sockets() -> (TcpStream, TcpStream) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (server, _) = listener.accept().unwrap();
+        (client, server)
+    }
+
+    #[test]
+    fn request_head_limit_includes_the_terminator_and_never_parses_a_body() {
+        let prefix = "GET / HTTP/1.1\r\nHost: localhost:8765\r\nX-Padding: ";
+        for extra in [0, 1] {
+            let request = format!("{prefix}{}\r\n\r\n", "a".repeat(MAX_HEAD - prefix.len() - 4 + extra));
+            let (mut client, mut server) = sockets();
+            client.write_all(request.as_bytes()).unwrap();
+            let result = read_head(&mut server, Duration::from_secs(1));
+            if extra == 0 {
+                assert_eq!(result.unwrap().0, request);
+            } else {
+                assert_eq!(result.unwrap_err(), RequestError::TooLarge);
+            }
+        }
+
+        let head = "GET / HTTP/1.1\r\nHost: attacker.example\r\n\r\n";
+        let (mut client, mut server) = sockets();
+        client.write_all(format!("{head}Host: localhost:8765\r\n\r\n").as_bytes()).unwrap();
+        client.write_all(&[0xff]).unwrap();
+        assert_eq!(read_head(&mut server, Duration::from_secs(1)).unwrap().0, head);
+    }
+
+    #[test]
+    fn a_review_body_is_preserved_across_the_header_boundary() {
+        let expected = vec![0xff; 16 << 10];
+        let head = format!(
+            "POST /api/v1/review HTTP/1.1\r\nHost: localhost:8765\r\nContent-Length: {}\r\n\r\n",
+            expected.len()
+        );
+        let (mut client, mut server) = sockets();
+        let mut request = head.as_bytes().to_vec();
+        request.extend_from_slice(&expected);
+        client.write_all(&request).unwrap();
+        let (parsed_head, mut body) = read_head(&mut server, Duration::from_secs(1)).unwrap();
+        assert_eq!(parsed_head, head);
+        let length = Request::parse(&parsed_head).unwrap().content_length.unwrap();
+        let received = body.len();
+        body.resize(length, 0);
+        read_body(&mut server, &mut body[received..], Duration::from_secs(1)).unwrap();
+        assert_eq!(body, expected, "body bytes are retained without interpreting them as UTF-8 headers");
+    }
+
+    #[test]
+    fn slow_review_bodies_cannot_extend_the_total_body_deadline() {
+        let (mut client, mut server) = sockets();
+        let sender = std::thread::spawn(move || {
+            for _ in 0..40 {
+                std::thread::sleep(Duration::from_millis(10));
+                if client.write_all(b"a").is_err() {
+                    return;
+                }
+            }
+        });
+        let result = read_body(&mut server, &mut [0; 40], Duration::from_millis(100));
+        drop(server);
+        sender.join().unwrap();
+        assert_eq!(result.unwrap_err(), RequestError::Timeout);
+    }
+
+    #[test]
+    fn slow_clients_cannot_extend_the_total_header_deadline() {
+        let (mut client, mut server) = sockets();
+        client.write_all(b"GET / HTTP/1.1\r\nHost: localhost:8765\r\nX-Slow: ").unwrap();
+        let sender = std::thread::spawn(move || {
+            for _ in 0..40 {
+                std::thread::sleep(Duration::from_millis(10));
+                if client.write_all(b"a").is_err() {
+                    return;
+                }
+            }
+            let _ = client.write_all(b"\r\n\r\n");
+        });
+        let result = read_head(&mut server, Duration::from_millis(100));
+        drop(server);
+        sender.join().unwrap();
+        assert_eq!(result.unwrap_err(), RequestError::Timeout);
+    }
+
+    #[test]
     fn a_closed_page_is_noticed_without_a_write() {
         // An event stream's slot is freed as soon as its page goes, not at the next keep-alive.
         let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -522,7 +748,11 @@ mod tests {
     }
 
     fn req(head: &str, s: &Shared) -> Response {
-        match route(&Request::parse(head), s) {
+        let request = match Request::parse(head) {
+            Ok(request) => request,
+            Err(error) => return error.response(),
+        };
+        match route(&request, s) {
             Reply::Full(r) => r,
             Reply::Events => Response::new("SSE", "text/event-stream", Vec::new()),
         }
@@ -555,7 +785,7 @@ mod tests {
         assert_eq!(req("GET / HTTP/1.1\r\nHost: evil.example:8765\r\n\r\n", &s).status, "403 Forbidden");
         assert_eq!(req("GET / HTTP/1.1\r\nHost: localhost:8765\r\n\r\n", &s).status, "200 OK");
         assert_eq!(req("GET / HTTP/1.1\r\nHost: 127.0.0.1:9999\r\n\r\n", &s).status, "403 Forbidden");
-        assert_eq!(req("GET / HTTP/1.1\r\n\r\n", &s).status, "403 Forbidden");
+        assert_eq!(req("GET / HTTP/1.1\r\n\r\n", &s).status, "400 Bad Request");
     }
 
     #[test]

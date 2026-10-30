@@ -14,6 +14,29 @@ not to be.
 
 Adage is pre-1.0. Only the latest release receives security fixes.
 
+## Signing dependencies
+
+The workspace pins `ssh-key =0.7.0-rc.11` and locks `crypto-bigint 0.7.10`, replacing the old
+SSH dependency chain affected by
+[RUSTSEC-2026-0387](https://rustsec.org/advisories/RUSTSEC-2026-0387.html). SSH-agent IPC is a
+small internal adapter; key/signature decoding and all cryptography remain in RustCrypto.
+Requests use bounded frames and one 30-second deadline per exchange. RSA agent requests require
+SHA-512, and every returned signature is verified before it is accepted.
+
+The SSH library and its RSA backend are currently prerelease dependencies. Their resolved
+versions are committed in `Cargo.lock`; upgrades require the signing, encrypted-key and OpenSSH
+interoperability suites, the platform transport tests, `cargo deny check`, and refreshed
+third-party notices. These checks cover Ed25519, RSA and P-256/P-384/P-521 with temporary keys
+and isolated agents. Native macOS/Windows signing jobs run on every pull request in addition to
+the Linux product suite.
+
+The pre-existing exception for
+[RUSTSEC-2023-0071](https://rustsec.org/advisories/RUSTSEC-2023-0071.html) remains: RSA private-key
+operations are local and are not exposed through a network signing service. The bigint upgrade
+does not repair this separate RSA timing advisory. Any change that makes private-key operations
+remotely observable must revisit that exception and the threat model. No new advisory suppression
+was added for this migration.
+
 ## Threat model and scope
 
 Adage runs inside coding agents' hooks. Advisory routes deliver text for the agent to act on under

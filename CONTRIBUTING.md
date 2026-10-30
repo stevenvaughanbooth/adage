@@ -25,6 +25,7 @@ Read the [README](README.md), then the current [architecture](docs/architecture.
 [testing guide](docs/testing.md). The [repository map](docs/repository.md) helps locate an area;
 each crate's `AGENT.md` explains its boundaries and checks. Older design documents are indexed
 separately under [design history](docs/README.md#design-history).
+`cargo test --locked -p xtask` enforces the dependency boundaries.
 
 Before sharing a trace, remove secrets and private project content. Prefer a small synthetic
 fixture that reproduces the behavior. Do not commit raw session logs or personal Adage data.
@@ -32,7 +33,10 @@ Report security issues through [SECURITY.md](SECURITY.md), never a public issue.
 
 ## Build
 
-You need stable Rust (`rustup`), a C compiler, and Node.js 22 or later for the plugin, npm and web tests.
+You need stable Rust (`rustup`) and a C compiler for tree-sitter. Plugin, npm and web checks use
+Node.js 22; the web apps pin their pnpm version in `package.json`.
+The root `.node-version` matches CI's Node major for compatible version managers. Use that major
+when generating embedded assets: compression output can differ between Node versions.
 
 ```bash
 cargo build --workspace --locked
@@ -44,14 +48,23 @@ plugin/build.sh                        # release build of adage, adage-exec, ada
 
 ## Test
 
-CI (`.github/workflows/ci.yml`) checks pull requests on Linux x64. The full platform matrix—macOS
-arm64 and x64, Linux x64 and arm64, and Windows x64—runs weekly and on manual dispatch. Run the
-relevant checks locally before sending a change:
+CI (`.github/workflows/ci.yml`) runs Rust formatting, strict Clippy, affected-package tests,
+architecture guards and plugin checks on every pull request. Map and website checks include
+type checking, browser tests and accessibility assertions. The main Rust test job runs on Linux
+x64 for pull requests and pushes to `main`. A focused signing job also tests macOS arm64 and
+Windows x64 on every pull request and main push, covering OpenSSH interoperability and Windows
+agent transport. Weekly and manual runs expand the product suite to macOS arm64 and x64, Linux
+arm64 and Windows x64, plus the release startup gate. Slow evaluation suites run in `evals.yml`.
+
+Run the relevant checks locally before sending a change:
 
 ```bash
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked        # includes the normaliser's table-driven cases and, with node, the OpenCode plugin test
+cargo test --locked -p xtask
+cargo test --locked -p adage-exec --test no_spawn
+cargo test --workspace --exclude adage-eval --locked  # product suites, including the OpenCode plugin test with Node
+cargo test --locked -p adage-eval --lib --test paired --test experiment --test experiment_sources
 node npm/test/stage.test.mjs           # five-platform package layout, checksums and contents
 node npm/test/launcher.test.mjs        # the npm launcher, against target/debug/adage
 plugin/test/session-start.test.sh      # how the Claude Code plugin finds its three binaries (build adage-exec and adage-train too)
@@ -64,10 +77,20 @@ cargo deny check                       # licenses, advisories, bans, sources (de
 scripts/cross-check.sh                 # clippy for every release target, including Windows, from any host
 ```
 
-On a pull request, CI tests only the packages a change can affect: the changed ones, the ones whose
-tests read a changed fixture, and everything that depends on them. To see that set locally, run
-`cargo xtask affected` (against `origin/main`; `--files <paths>` to ask about specific paths). A
+On a pull request, CI narrows the main product suite to packages a change can affect: the changed
+ones, the ones whose tests read a changed fixture, and everything that depends on them. To see that
+set locally, run `cargo xtask affected` (against `origin/main`; `--files <paths>` to ask about specific paths). A
 test that reads a file outside its crate must be declared in `READS` in `xtask/src/affected.rs`.
+The local selection includes staged, unstaged and untracked files, and excludes ignored output.
+For the full suite including the slow offline evaluations, use `cargo test --workspace --locked`.
+
+For either web app, run `pnpm install --frozen-lockfile` in its directory, then `pnpm typecheck`
+and `pnpm test:e2e` (install Chromium first with `pnpm exec playwright install chromium`). The map
+also requires `pnpm test` and `pnpm drift`; the website requires `pnpm test:api` and
+`pnpm test:evidence`. After a map source change, regenerate its committed embedded assets with
+`pnpm assets` before checking drift. CI retains browser test results and traces on failure.
+If a local preview already occupies the website test port, set `ADAGE_SITE_E2E_PORT` to an unused
+port. The map supports `ADAGE_E2E_PORT` for its two consecutive fixture ports.
 
 `scripts/cross-check.sh` proves that code compiles for other targets (it stubs out the C compiler
 tree-sitter's build script needs, so it never links). Only CI proves that it links and passes tests

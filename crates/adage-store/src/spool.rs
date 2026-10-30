@@ -43,7 +43,7 @@ fn append_impl<T: Serialize>(path: &Path, record: &T, durable: bool) -> io::Resu
         std::fs::create_dir_all(dir)?;
     }
     let mut f = OpenOptions::new().create(true).append(true).open(path)?;
-    f.write_all(&buf)?;
+    write_frame(&mut f, &buf)?;
     if durable {
         f.sync_all()?;
         // Persist the directory entry as well, including any freshly created ancestors.
@@ -53,6 +53,21 @@ fn append_impl<T: Serialize>(path: &Path, record: &T, durable: bool) -> io::Resu
         }
     }
     Ok(())
+}
+
+/// An append must be one write: after a short write, another writer may already have appended
+/// its frame. Retrying the remainder would interleave the records and report a corrupt append
+/// as successful. Leave the torn frame for the tolerant reader to skip instead. An interrupted
+/// write transferred no bytes, so retrying that case is safe.
+fn write_frame(writer: &mut impl Write, frame: &[u8]) -> io::Result<()> {
+    loop {
+        match writer.write(frame) {
+            Ok(n) if n == frame.len() => return Ok(()),
+            Ok(_) => return Err(io::Error::new(io::ErrorKind::WriteZero, "incomplete spool frame append")),
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e),
+        }
+    }
 }
 
 /// Read every frame without resynchronizing or discarding corrupt, truncated, or invalid JSON
@@ -163,6 +178,70 @@ pub fn read_all<T: DeserializeOwned>(path: &Path) -> io::Result<Vec<T>> {
 mod tests {
     use super::*;
     use serde_json::{json, Value};
+
+    #[test]
+    fn a_short_append_is_reported_without_retrying_over_another_writer() {
+        struct ShortWrite {
+            bytes: Vec<u8>,
+            following: Vec<u8>,
+            writes: usize,
+        }
+        impl Write for ShortWrite {
+            fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                self.writes += 1;
+                let n = buf.len().min(HEADER + 1);
+                self.bytes.extend_from_slice(&buf[..n]);
+                if self.writes == 1 {
+                    // Another process appends between this short write and any attempted retry.
+                    self.bytes.extend_from_slice(&self.following);
+                }
+                Ok(n)
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.spool");
+        append(&p, &json!({ "writer": 1 })).unwrap();
+        let frame = std::fs::read(&p).unwrap();
+        std::fs::remove_file(&p).unwrap();
+        append(&p, &json!({ "writer": 2 })).unwrap();
+        let following = std::fs::read(&p).unwrap();
+        let mut writer = ShortWrite { bytes: Vec::new(), following, writes: 0 };
+
+        assert_eq!(write_frame(&mut writer, &frame).unwrap_err().kind(), io::ErrorKind::WriteZero);
+        assert_eq!(writer.writes, 1, "a partial frame must not be resumed");
+        assert_eq!(parse::<Value>(&writer.bytes, true).0, vec![json!({ "writer": 2 })]);
+        assert_eq!(parse::<Value>(&writer.bytes, false).0, vec![json!({ "writer": 2 })]);
+        std::fs::write(&p, &writer.bytes).unwrap();
+        assert_eq!(read_all_strict::<Value>(&p).unwrap_err().kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn an_interrupted_append_retries_the_complete_frame() {
+        struct InterruptedOnce {
+            interrupted: bool,
+            bytes: Vec<u8>,
+        }
+        impl Write for InterruptedOnce {
+            fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                if !self.interrupted {
+                    self.interrupted = true;
+                    return Err(io::ErrorKind::Interrupted.into());
+                }
+                self.bytes.extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut writer = InterruptedOnce { interrupted: false, bytes: Vec::new() };
+        write_frame(&mut writer, b"a complete frame").unwrap();
+        assert_eq!(writer.bytes, b"a complete frame");
+    }
 
     #[test]
     fn durable_records_are_strictly_read_and_torn_tails_refuse() {

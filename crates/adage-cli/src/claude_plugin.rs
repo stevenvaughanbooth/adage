@@ -68,11 +68,12 @@ pub(crate) fn target() -> &'static str {
     env!("ADAGE_BUILD_TARGET")
 }
 
-/// `name` beside `exe` (this binary, symlinks resolved), else on `PATH`; resolved.
-pub(crate) fn companion(exe: &Path, name: &str) -> Option<PathBuf> {
+/// `name` beside `exe` (this binary, symlinks resolved), else from the supplied `PATH` lookup;
+/// resolved.
+fn companion(exe: &Path, name: &str, on_path: impl Fn(&str) -> Option<PathBuf>) -> Option<PathBuf> {
     let file = format!("{name}{}", std::env::consts::EXE_SUFFIX);
     let beside = exe.parent().map(|d| d.join(&file)).filter(|p| crate::detect::executable(p));
-    beside.or_else(|| crate::detect::on_path(&file)).map(|p| p.canonicalize().unwrap_or(p))
+    beside.or_else(|| on_path(&file)).map(|p| p.canonicalize().unwrap_or(p))
 }
 
 /// The plugin directory inside the marketplace.
@@ -215,6 +216,12 @@ fn files_under(dir: &Path) -> Vec<String> {
 /// Stage the plugin from this binary (`exe`, resolved) and its companions into
 /// `$ADAGE_HOME/plugin`. Writes only there.
 pub(crate) fn stage(paths: &Paths, exe: &Path) -> Result<Staged> {
+    stage_with_path_lookup(paths, exe, crate::detect::on_path)
+}
+
+/// Keep discovery of the process's search path at the boundary, so isolated staging can supply
+/// its own lookup without changing global environment variables used by other threads.
+fn stage_with_path_lookup(paths: &Paths, exe: &Path, on_path: impl Fn(&str) -> Option<PathBuf>) -> Result<Staged> {
     if embedded().is_empty() {
         bail!("this adage was built without the Claude Code plugin's files (plugin/claude-code was not beside it)");
     }
@@ -234,7 +241,7 @@ pub(crate) fn stage(paths: &Paths, exe: &Path) -> Result<Staged> {
     let mut missing = Vec::new();
     let mut sums = Vec::new();
     for name in BINARIES {
-        let from = if name == "adage" { Some(exe.to_path_buf()) } else { companion(exe, name) };
+        let from = if name == "adage" { Some(exe.to_path_buf()) } else { companion(exe, name, &on_path) };
         let Some(from) = from else {
             missing.push(name);
             continue;
@@ -290,7 +297,7 @@ pub(crate) fn staged_matches(paths: &Paths, exe: &Path) -> bool {
     }
     let mut sums = Vec::new();
     for name in BINARIES {
-        let from = if name == "adage" { Some(exe.to_path_buf()) } else { companion(exe, name) };
+        let from = if name == "adage" { Some(exe.to_path_buf()) } else { companion(exe, name, crate::detect::on_path) };
         let Some(from) = from else { continue };
         let Ok(hash) = crate::net::sha256_file(&from) else { return false };
         let rel = format!("{}/{name}{}", target(), std::env::consts::EXE_SUFFIX);
@@ -625,11 +632,35 @@ pub(crate) mod tests {
 
     #[test]
     #[cfg(unix)]
+    fn companion_discovery_prefers_adjacent_binaries_then_uses_the_supplied_search_path() {
+        let d = tempfile::tempdir().unwrap();
+        let exe = exe_with_companions(&d.path().join("bin"), &["adage-exec"]);
+        assert_eq!(
+            companion(&exe, "adage-exec", |_| panic!("the adjacent binary wins")),
+            Some(d.path().join("bin/adage-exec").canonicalize().unwrap())
+        );
+        let fallback_exe = exe_with_companions(&d.path().join("fallback"), &["adage-train"]);
+        let fallback = fallback_exe.parent().unwrap().join("adage-train");
+        assert_eq!(
+            companion(&exe, "adage-train", |name| {
+                assert_eq!(name, "adage-train");
+                Some(fallback.clone())
+            }),
+            Some(fallback.canonicalize().unwrap())
+        );
+        assert_eq!(companion(&exe, "adage-train", |_| None), None);
+    }
+
+    #[test]
+    #[cfg(unix)]
     fn staging_writes_the_marketplace_and_is_idempotent() {
         let d = tempfile::tempdir().unwrap();
         let paths = Paths::at(d.path().join("data"));
         let exe = exe_with_companions(&d.path().join("bin"), &["adage-exec"]);
-        let s = stage(&paths, &exe).unwrap();
+        // An installed Adage on the developer's PATH must not supply a missing fixture binary.
+        // Inject the lookup instead of changing PATH while other unit tests run in parallel.
+        let stage_fixture = || stage_with_path_lookup(&paths, &exe, |_| None);
+        let s = stage_fixture().unwrap();
         assert_eq!(s.root, paths.plugin());
         assert_eq!(s.missing, vec!["adage-train"], "not beside it and not on PATH");
         let market: Value =
@@ -653,12 +684,12 @@ pub(crate) mod tests {
             )
         );
         // Again: nothing to write.
-        let again = stage(&paths, &exe).unwrap();
+        let again = stage_fixture().unwrap();
         assert_eq!(again.changed, 0, "a re-run writes nothing");
         // A file an earlier version left is removed; a changed binary is copied again.
         std::fs::write(s.plugin.join("hooks/gone.ts"), "x").unwrap();
         std::fs::write(&exe, b"#!/bin/sh\necho adage 0.2.0\n").unwrap();
-        let third = stage(&paths, &exe).unwrap();
+        let third = stage_fixture().unwrap();
         assert!(!s.plugin.join("hooks/gone.ts").exists());
         assert!(third.changed >= 2, "{third:?}");
         assert_eq!(std::fs::read(&bin).unwrap(), std::fs::read(&exe).unwrap());
@@ -740,7 +771,7 @@ pub(crate) mod tests {
     fn a_refusal_names_the_step_and_claudes_words() {
         let d = tempfile::tempdir().unwrap();
         let paths = Paths::at(d.path().join("data"));
-        let exe = exe_with_companions(&d.path().join("bin"), &[]);
+        let exe = exe_with_companions(&d.path().join("bin"), &COMPANIONS);
         let refusing = Stub {
             calls: RefCell::new(vec![]),
             answer: Box::new(|line| {

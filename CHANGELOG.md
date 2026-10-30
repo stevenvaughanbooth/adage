@@ -12,8 +12,39 @@ The development history is recorded in Git and the design documents under `docs/
 
 ### Fixed
 
+- The evidence chart wraps its baseline annotation on narrow phones, keeping the page within
+  the viewport across platform font metrics.
+- Session-state reads preserve storage I/O errors instead of treating unreadable state as
+  corruption that can be rebuilt. Short spool writes report failure instead of continuing
+  a partial frame across another writer's record; release-cache reads enforce their size limit
+  before loading the file into memory.
+- `adage map` rejects malformed or ambiguous HTTP headers, enforces its 8 KiB header limit and
+  uses an overall request-header deadline so slow clients cannot renew it indefinitely.
+- `adage update --rollback` validates the complete manifest and destination set before replacing
+  binaries, and verifies each staged copy before publication. Missing digests, unknown binaries
+  and aliased destinations are refused.
+- `cargo xtask affected` includes untracked source files and preserves Unicode and multiline
+  filenames. Invalid arguments now fail explicitly instead of accidentally selecting no tests.
 - The website's Get started page keeps the installation instructions and commands fully visible;
   the following section no longer shifts upward over them on desktop screens.
+
+### Development
+
+- Map and website type, contract, browser and accessibility checks now run on every pull request
+  and push to `main`, with job deadlines and retained failure traces. Embedded map assets are
+  checked for drift and browser tests use an explicitly locked Rust build.
+- The README links architecture decisions to their enforcing tests and includes a local demo
+  and learning-to-delivery proof. Contributor and testing instructions reflect the CI matrix.
+- Frontend builds share a pinned Node major, and integration fixtures isolate terminal settings,
+  installed companion binaries and canonical repository paths from the developer's machine.
+- Signing uses a workspace-pinned SSH prerelease and patched `crypto-bigint`, removing the
+  dependency chain affected by RUSTSEC-2026-0387 without adding an advisory suppression. The
+  existing, separate RSA exception remains documented in the security policy.
+- SSH-agent requests use bounded IPC with deadlines on Unix sockets and Windows named pipes.
+  OpenSSH interoperability tests cover every supported key algorithm, encrypted files and agent
+  signing; macOS and Windows signing checks run on every pull request.
+- Third-party notice generation normalizes line endings and trailing whitespace for reproducible
+  output across registry license files.
 
 ### Changed
 

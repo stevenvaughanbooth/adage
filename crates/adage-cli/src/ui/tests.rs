@@ -3812,7 +3812,9 @@ fn traces_condition_rejects_a_different_repository_before_switching() {
     std::fs::create_dir_all(selected.join(".git")).unwrap();
     std::fs::create_dir_all(other.join(".git")).unwrap();
     let c = ctx(Paths::at(d.path().join("adage-data")), false);
-    let expected = adage_core::repo::repo_key(&selected);
+    // The UI resolves the chosen checkout before deriving its identity. Match that spelling
+    // for this commitless fixture, whose key includes its path (e.g. /var versus /private/var).
+    let expected = adage_core::repo::repo_key(&selected.canonicalize().unwrap());
     let mismatch = app::repository_to_condition(&c, &other, Some(&expected));
     assert!(mismatch.is_err());
     assert!(mismatch.err().unwrap().to_string().contains("Choose the checkout for selected"));

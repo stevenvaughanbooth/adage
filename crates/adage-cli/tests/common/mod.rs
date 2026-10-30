@@ -24,6 +24,8 @@ pub const SCRUB: [&str; 5] = ["CLAUDE_CONFIG_DIR", "CODEX_HOME", "SSH_AUTH_SOCK"
 /// It also sets `ADAGE_UPDATE_CHECK=0`: the learner's daily release check, the one request Adage
 /// makes by itself, never reaches the network from a test unless the suite turns it back on and
 /// points it at a fixture server (`ADAGE_RELEASE_URL`).
+/// Terminal rendering is pinned to UTF-8 with automatic color detection. Suites testing other
+/// terminal capabilities override these values after scrubbing, just like Adage's own switches.
 pub fn scrub(c: &mut Command) -> &mut Command {
     for v in adage_app::person::AGENT_ENV.iter().chain(SCRUB.iter()) {
         c.env_remove(v);
@@ -33,7 +35,10 @@ pub fn scrub(c: &mut Command) -> &mut Command {
             c.env_remove(&k);
         }
     }
-    c.env("ADAGE_UPDATE_CHECK", "0")
+    for v in ["CLICOLOR_FORCE", "FORCE_COLOR", "NO_COLOR", "COLORTERM", "TERM_PROGRAM", "COLORFGBG"] {
+        c.env_remove(v);
+    }
+    c.env("ADAGE_UPDATE_CHECK", "0").env("TERM", "xterm-256color").env("LC_ALL", "C.UTF-8")
 }
 
 /// `bin`, scrubbed, run in `cwd` with `adage_home` as its data directory and automatic learning

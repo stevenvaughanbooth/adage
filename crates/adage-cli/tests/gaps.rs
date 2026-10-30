@@ -9,6 +9,7 @@ use adage_tracks::review::{Decision, Reviews};
 use adage_tracks::testkit::{self, kinds};
 use adage_tracks::*;
 use serde_json::Value;
+use ssh_key::{getrandom::SysRng, rand_core::UnwrapErr};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
@@ -81,7 +82,7 @@ fn text(o: &Output) -> String {
 }
 
 fn keygen(w: &World) -> ssh_key::PrivateKey {
-    let mut k = ssh_key::PrivateKey::random(&mut rand_core::OsRng, ssh_key::Algorithm::Ed25519).unwrap();
+    let mut k = ssh_key::PrivateKey::random(&mut UnwrapErr(SysRng), ssh_key::Algorithm::Ed25519).unwrap();
     k.set_comment("alice@example");
     std::fs::write(w.p("keys/id_ed25519"), k.to_openssh(ssh_key::LineEnding::LF).unwrap().as_bytes()).unwrap();
     std::fs::write(
@@ -249,7 +250,7 @@ fn reimport_keeps_decisions_and_proposes_changes_to_pinned_routes() {
 fn a_passphrase_protected_key_without_a_terminal_is_refused_with_a_way_forward() {
     let w = World::new();
     let k = keygen(&w);
-    let enc = k.encrypt(&mut rand_core::OsRng, "correct horse").unwrap();
+    let enc = k.encrypt(&mut SysRng, "correct horse").unwrap();
     std::fs::write(w.p("keys/id_ed25519"), enc.to_openssh(ssh_key::LineEnding::LF).unwrap().as_bytes()).unwrap();
     io::write(&w.p("sender/tracks").join(NAME), &track("1.0.0", "./scripts/wi-lookup {item}", false)).unwrap();
     let (out, key) = (w.p("out"), w.p("keys/id_ed25519"));

@@ -20,10 +20,14 @@ impl Drop for Server {
 }
 
 fn get(addr: &str, path: &str, host: &str) -> (String, String) {
+    raw_request(addr, &format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"))
+}
+
+fn raw_request(addr: &str, request: &str) -> (String, String) {
     let mut s = TcpStream::connect(addr).unwrap();
     s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
     // One write for the whole request, as a browser sends it.
-    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n").as_bytes()).unwrap();
+    s.write_all(request.as_bytes()).unwrap();
     let mut out = String::new();
     s.read_to_string(&mut out).unwrap();
     let (head, body) = out.split_once("\r\n\r\n").unwrap();
@@ -91,13 +95,33 @@ fn serves_the_map_and_its_api_from_the_binary() {
     assert!(head.starts_with("HTTP/1.1 403"), "other hosts are refused: {head}");
     let (head, _) = get(&addr, "/../etc/passwd", &addr);
     assert!(head.starts_with("HTTP/1.1 404"), "{head}");
+
+    // Neither a duplicate header nor bytes after the header boundary can replace the checked host.
+    let (head, _) =
+        raw_request(&addr, &format!("GET /graph.json HTTP/1.1\r\nHost: attacker.example\r\nHost: {addr}\r\n\r\n"));
+    assert!(head.starts_with("HTTP/1.1 400"), "duplicate hosts are malformed: {head}");
+    let (head, _) =
+        raw_request(&addr, &format!("GET /graph.json HTTP/1.1\r\nHost: attacker.example\r\n\r\nHost: {addr}\r\n\r\n"));
+    assert!(head.starts_with("HTTP/1.1 403"), "body bytes are never parsed as headers: {head}");
+    let (head, _) = raw_request(&addr, &format!("GET / HTTP/1.1 extra\r\nHost: {addr}\r\n\r\n"));
+    assert!(head.starts_with("HTTP/1.1 400"), "malformed request line: {head}");
+    let prefix = format!("GET / HTTP/1.1\r\nHost: {addr}\r\nX-Padding: ");
+    let (head, _) = raw_request(&addr, &format!("{prefix}{}", "a".repeat(8192 - prefix.len())));
+    assert!(head.starts_with("HTTP/1.1 431"), "an unterminated header at the limit is refused: {head}");
+
+    // HEAD preserves the representation metadata without sending a body or opening a live stream.
+    for path in ["/", "/api/v1/graph", "/api/v1/events"] {
+        let (head, body) = raw_request(&addr, &format!("HEAD {path} HTTP/1.1\r\nHost: {addr}\r\n\r\n"));
+        assert!(head.starts_with("HTTP/1.1 200"), "{path}: {head}");
+        assert!(body.is_empty(), "HEAD {path} must not return a body");
+    }
     assert!(!d.path().join("data").exists(), "serving is read-only");
 }
 
 #[test]
 fn keeps_serving_after_its_stdout_is_closed() {
     let d = tempfile::tempdir().unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_adage"))
+    let mut child = common::scrub(&mut Command::new(env!("CARGO_BIN_EXE_adage")))
         .args(["map", "--port", "0", "--no-open"])
         // This empty-home fixture must not inherit the developer checkout's repository identity.
         .current_dir(d.path())

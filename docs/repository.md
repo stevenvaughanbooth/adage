@@ -14,9 +14,9 @@ maps the checkout; it is not an installation prerequisite.
 | `crates/adage-runtime` | Hook-time decisions and directive rendering from fixed templates |
 | `crates/adage-hook` | The hook pipeline `adage` and `adage-exec` share: harness adapters, the no-match fast path, fail-open |
 | `crates/adage-graph` | The graph engine: the only learner |
-| `crates/adage-trace` | Canonical sessions, calls, events and harness capabilities |
-| `crates/adage-ingest` | Decode Claude Code, Codex and OpenCode histories, including supported subagent records |
-| `crates/adage-learn` | Orchestrate import, learning and writing results through the store |
+| `crates/adage-trace` | Canonical sessions, calls, events, harness capabilities and evidence identities |
+| `crates/adage-ingest` | Bounded decoding of Claude Code, Codex and OpenCode histories, including supported subagent records; format detection and repository attribution through source and locator interfaces |
+| `crates/adage-learn` | Learning orchestration, canonical corpora, mining checkpoints and publication through the `Store` interface |
 | `crates/adage-instincts` | Instincts: reflexes that ship with Adage, bound from a repository's own files |
 | `crates/adage-intent` | Prompt normalisation, the static embedding model in plain Rust (WordPiece + safetensors rows read on demand), deterministic kNN + Louvain clustering, behavioural split/merge |
 | `crates/adage-pack` | Packs (format `adage-pack/1`): validation, closure, digest, binding; the `adage-pack` inspect/verify/digest tool |
@@ -25,11 +25,11 @@ maps the checkout; it is not an installation prerequisite.
 | `crates/adage-train` | The `adage-train` binary: a skill → procedure graph → replayed, reviewed pack of reflexes (and optional skill-steered sessions) |
 | `crates/adage-eval` | `adage eval`: offline replay, benchmarks and evaluation gates |
 | `crates/adage-safety` | Independent checks on possible actions |
-| `crates/adage-app` | Shared application operations and views used by the CLI, TUI and map |
+| `crates/adage-app` | Shared application operations, review decisions and read models for the CLI, terminal UI and map |
 | `crates/adage-cli` | The `adage` binary |
 | `crates/adage-sim` | Harness simulator: seeded mock histories (`sim/fixtures/`) and native hook payloads for Claude Code, OpenCode, and Codex |
 | `crates/adage-term` | The terminal design system: tokens, capability detection, theme, glyphs and the output grammar every command prints through |
-| `xtask` | `cargo xtask tokens [--check]`: generates the terminal palette and the web map's CSS variables from the design tokens; `cargo xtask bump <version>` and `release-check`: the release's versions and workflow ([releasing](release.md)) |
+| `xtask` | Architecture, fixture and repository hygiene guards; affected-package selection; design token generation; release version and workflow checks ([releasing](release.md)) |
 | `design/` | The design tokens (`design/tokens/adage.tokens.json`, W3C DTCG), the single source for every surface ([style guide](design/style.md)) |
 | `web/map` | The map web app `adage map` serves, embedded in the binary |
 | `web/site` | The public website |

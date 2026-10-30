@@ -3,6 +3,7 @@
 
 use adage_tracks::testkit::{self, kinds};
 use adage_tracks::*;
+use ssh_key::{getrandom::SysRng, rand_core::UnwrapErr};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
@@ -72,7 +73,7 @@ fn text(o: &Output) -> String {
 }
 
 fn keygen(w: &World, name: &str) -> ssh_key::PublicKey {
-    let mut k = ssh_key::PrivateKey::random(&mut rand_core::OsRng, ssh_key::Algorithm::Ed25519).unwrap();
+    let mut k = ssh_key::PrivateKey::random(&mut UnwrapErr(SysRng), ssh_key::Algorithm::Ed25519).unwrap();
     k.set_comment("alice@example");
     let p = w.p("keys").join(name);
     std::fs::write(&p, k.to_openssh(ssh_key::LineEnding::LF).unwrap().as_bytes()).unwrap();
