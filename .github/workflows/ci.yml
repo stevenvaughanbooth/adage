@@ -91,7 +91,7 @@ jobs:
       # Node runs the OpenCode plugin test (inside `cargo test`) and the npm launcher test.
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 22.23.5
       - name: prepare the Linux staging sandbox
         if: runner.os == 'Linux'
         run: |
@@ -293,7 +293,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 22.23.5
       - name: structure and versions
         run: node scripts/check-plugin.mjs
       - name: the structure check refuses a second plugin and an on-PATH description
@@ -353,7 +353,7 @@ jobs:
           package_json_file: web/map/package.json
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 22.23.5
           cache: pnpm
           cache-dependency-path: web/map/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
@@ -400,7 +400,7 @@ jobs:
           package_json_file: web/site/package.json
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 22.23.5
           cache: pnpm
           cache-dependency-path: web/site/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
